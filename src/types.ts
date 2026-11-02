@@ -67,6 +67,9 @@ export interface SamajEvent {
 export interface AuthSession {
   method: 'Google' | 'Phone';
   name?: string;
+  email?: string;
+  photoUrl?: string;
   phone?: string;
   loggedInAt: string;
+  verified?: boolean;
 }

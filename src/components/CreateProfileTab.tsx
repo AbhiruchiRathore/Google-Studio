@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { Lock, UserCheck, ArrowRight, ShieldCheck } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Lock, UserCheck, ArrowRight, ShieldCheck, Users, Home } from 'lucide-react';
 import { MatrimonyProfile, TabType, AuthSession } from '../types';
+import { GoogleSignInModal } from './GoogleSignInModal';
 
 interface CreateProfileTabProps {
   authSession: AuthSession | null;
@@ -15,13 +16,14 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
   onAddProfile,
   onNavigateTab
 }) => {
+  const [showGoogleModal, setShowGoogleModal] = useState(false);
   const [formData, setFormData] = useState({
-    name: '',
+    name: authSession?.name || '',
     gender: 'Male' as 'Male' | 'Female',
     dob: '',
     birthTime: '',
     gotra: '',
-    phone: '',
+    phone: authSession?.phone || '',
     education: '',
     occupation: '',
     income: '',
@@ -29,10 +31,26 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
     location: '',
     bio: '',
     height: "5' 7\"",
-    photoUrl: ''
+    photoUrl: authSession?.photoUrl || '',
+    // Family Details
+    fatherName: '',
+    fatherOccupation: '',
+    motherName: '',
+    maternalGotra: '',
+    grandfatherName: '',
+    siblings: ''
   });
 
-  const [phoneInput, setPhoneInput] = useState('');
+  useEffect(() => {
+    if (authSession) {
+      setFormData(prev => ({
+        ...prev,
+        name: prev.name || authSession.name || '',
+        phone: prev.phone || authSession.phone || '',
+        photoUrl: prev.photoUrl || authSession.photoUrl || ''
+      }));
+    }
+  }, [authSession]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -51,15 +69,10 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
     return age > 0 ? age : 25;
   };
 
-  const handleQuickLogin = (method: 'Google' | 'Phone') => {
-    const session: AuthSession = {
-      method,
-      name: method === 'Google' ? 'Google User' : undefined,
-      phone: method === 'Phone' ? (phoneInput || '9826000000') : undefined,
-      loggedInAt: new Date().toISOString()
-    };
+  const handleGoogleSuccess = (session: AuthSession) => {
+    setShowGoogleModal(false);
     onLogin(session);
-    alert(`✅ Signed in successfully! You can now complete your matrimonial profile, and access the "Create Profile" and "Advertise Business" tabs.`);
+    alert(`✅ Connected with Google as ${session.name}! You can now fill out your profile details.`);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -71,6 +84,10 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
     }
 
     const calculatedAge = formData.dob ? calculateAge(formData.dob) : 26;
+
+    const familyDetailsFormatted = formData.fatherName
+      ? `Father: ${formData.fatherName} (${formData.fatherOccupation || 'Service/Business'}), Mother: ${formData.motherName || 'Homemaker'}, Grandfather: ${formData.grandfatherName || 'Respected Elder'}, Siblings: ${formData.siblings || 'Siblings'}. Maternal Gotra: ${formData.maternalGotra || 'Kshatriya'}. Native: ${formData.native}.`
+      : `Native: ${formData.native || 'Central India'}. Registered by family on Rathore Rishtey digital portal.`;
 
     const newProfile: MatrimonyProfile = {
       id: Date.now(),
@@ -90,8 +107,8 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
       city: formData.location || formData.native || 'Indore',
       state: 'Madhya Pradesh',
       location: formData.location || formData.native,
-      about: formData.bio,
-      familyDetails: `Native: ${formData.native || 'Central India'}. Registered by family on Rathore Rishtey digital portal.`,
+      about: `Maternal Gotra: ${formData.maternalGotra || 'Not specified'}. ${formData.bio}`,
+      familyDetails: familyDetailsFormatted,
       photo: formData.photoUrl.trim() !== '' 
         ? formData.photoUrl 
         : formData.gender === 'Female' 
@@ -110,6 +127,12 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
   if (!authSession) {
     return (
       <div className="space-y-6 max-w-md mx-auto py-8">
+        <GoogleSignInModal
+          isOpen={showGoogleModal}
+          onClose={() => setShowGoogleModal(false)}
+          onSuccess={handleGoogleSuccess}
+        />
+
         <div className="bg-white p-6 md:p-8 rounded-2xl border border-amber-200 shadow-xl space-y-6 text-center">
           <div className="w-16 h-16 bg-amber-100 rounded-full mx-auto flex items-center justify-center text-3xl border border-amber-300">
             <Lock className="w-8 h-8 text-amber-800" />
@@ -125,7 +148,7 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
           <div className="space-y-3 pt-2">
             <button 
               type="button"
-              onClick={() => handleQuickLogin('Google')} 
+              onClick={() => setShowGoogleModal(true)} 
               className="w-full flex items-center justify-center gap-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold py-3 px-4 rounded-xl shadow-xs transition-all text-xs cursor-pointer"
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24">
@@ -134,7 +157,7 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
                 <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.19C.43 8.1 0 9.8 0 12s.43 3.9 1.19 5.42l4.09-3.15z"/>
                 <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.23 0 3.17 2.68 1.19 6.58l4.09 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
               </svg>
-              Continue with Google
+              Continue with Google (Permissions Required)
             </button>
 
             <button 
@@ -307,6 +330,89 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
                 className="w-full border border-amber-300 rounded-lg p-2.5 text-xs" 
                 placeholder="e.g., 6 LPA" 
               />
+            </div>
+          </div>
+
+          {/* FAMILY DETAILS SECTION */}
+          <div className="p-4 bg-amber-50/60 rounded-xl border border-amber-200 space-y-3">
+            <span className="font-bold text-red-950 text-xs flex items-center gap-1.5 uppercase tracking-wide">
+              <Users className="w-4 h-4 text-amber-700" />
+              Family Details (पारिवारिक विवरण)
+            </span>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Father's Name (पिताजी का नाम)</label>
+                <input 
+                  type="text" 
+                  name="fatherName"
+                  value={formData.fatherName}
+                  onChange={handleChange}
+                  className="w-full border border-amber-300 rounded-lg p-2.5 text-xs bg-white" 
+                  placeholder="e.g. Shri Ramchandra Rathore" 
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Father's Occupation</label>
+                <input 
+                  type="text" 
+                  name="fatherOccupation"
+                  value={formData.fatherOccupation}
+                  onChange={handleChange}
+                  className="w-full border border-amber-300 rounded-lg p-2.5 text-xs bg-white" 
+                  placeholder="e.g. Business / Retired Gov Service" 
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Mother's Name</label>
+                <input 
+                  type="text" 
+                  name="motherName"
+                  value={formData.motherName}
+                  onChange={handleChange}
+                  className="w-full border border-amber-300 rounded-lg p-2.5 text-xs bg-white" 
+                  placeholder="e.g. Smt. Lata Rathore" 
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Maternal Gotra (ननिहाल गोत्र)</label>
+                <input 
+                  type="text" 
+                  name="maternalGotra"
+                  value={formData.maternalGotra}
+                  onChange={handleChange}
+                  className="w-full border border-amber-300 rounded-lg p-2.5 text-xs bg-white" 
+                  placeholder="e.g. Magroriya / Chauhan" 
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Grandfather's Name (दादाजी का नाम)</label>
+                <input 
+                  type="text" 
+                  name="grandfatherName"
+                  value={formData.grandfatherName}
+                  onChange={handleChange}
+                  className="w-full border border-amber-300 rounded-lg p-2.5 text-xs bg-white" 
+                  placeholder="e.g. Late Shri Gangadharji Rathore" 
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Siblings (भाई-बहन)</label>
+                <input 
+                  type="text" 
+                  name="siblings"
+                  value={formData.siblings}
+                  onChange={handleChange}
+                  className="w-full border border-amber-300 rounded-lg p-2.5 text-xs bg-white" 
+                  placeholder="e.g. 1 brother (married), 1 sister" 
+                />
+              </div>
             </div>
           </div>
 

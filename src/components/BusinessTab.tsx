@@ -1,14 +1,20 @@
 import React, { useState } from 'react';
-import { Store, PlusCircle, Phone, Tag, Star, X, Sparkles } from 'lucide-react';
-import { BusinessAd, TabType } from '../types';
+import { Store, PlusCircle, Phone, Tag, Star, X, Sparkles, UserPlus } from 'lucide-react';
+import { BusinessAd, TabType, AuthSession } from '../types';
 
 interface BusinessTabProps {
+  authSession: AuthSession | null;
   ads: BusinessAd[];
   onNavigateTab: (tab: TabType) => void;
   onAddQuickAd: (ad: Partial<BusinessAd>) => void;
 }
 
-export const BusinessTab: React.FC<BusinessTabProps> = ({ ads, onNavigateTab, onAddQuickAd }) => {
+export const BusinessTab: React.FC<BusinessTabProps> = ({
+  authSession,
+  ads,
+  onNavigateTab,
+  onAddQuickAd
+}) => {
   const [showQuickModal, setShowQuickModal] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [formState, setFormState] = useState({
@@ -85,12 +91,21 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({ ads, onNavigateTab, on
         </div>
 
         <div className="flex flex-col sm:flex-row gap-2 shrink-0">
-          <button 
-            onClick={() => onNavigateTab('advertise-shop')}
-            className="bg-amber-400 hover:bg-amber-300 text-red-950 font-extrabold px-5 py-3 rounded-xl shadow-lg transition-all text-sm flex items-center justify-center gap-2"
-          >
-            <PlusCircle className="w-5 h-5" /> Post Shop Advertisement
-          </button>
+          {authSession ? (
+            <button 
+              onClick={() => onNavigateTab('advertise-shop')}
+              className="bg-amber-400 hover:bg-amber-300 text-red-950 font-extrabold px-5 py-3 rounded-xl shadow-lg transition-all text-sm flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <PlusCircle className="w-5 h-5" /> Post Shop Advertisement
+            </button>
+          ) : (
+            <button 
+              onClick={() => onNavigateTab('signup')}
+              className="bg-amber-400 hover:bg-amber-300 text-red-950 font-extrabold px-5 py-3 rounded-xl shadow-lg transition-all text-sm flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <UserPlus className="w-5 h-5" /> Sign In to Advertise Shop
+            </button>
+          )}
         </div>
       </div>
 
@@ -101,7 +116,7 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({ ads, onNavigateTab, on
           <button
             key={cat}
             onClick={() => setSelectedCategory(cat)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold capitalize transition-all ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold capitalize transition-all cursor-pointer ${
               selectedCategory === cat
                 ? 'bg-red-900 text-amber-100 shadow-xs'
                 : 'bg-white border border-amber-200 text-slate-700 hover:bg-amber-50'
@@ -182,7 +197,7 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({ ads, onNavigateTab, on
         })}
       </div>
 
-      {/* QUICK AD MODAL */}
+      {/* QUICK AD MODAL (AVAILABLE FOR SIGNED IN MEMBERS) */}
       {showQuickModal && (
         <div 
           className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"

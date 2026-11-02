@@ -243,6 +243,7 @@ export const App: React.FC = () => {
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {currentTab === 'matrimony' && (
           <MatrimonyTab
+            authSession={authSession}
             profiles={profiles}
             unlockedProfiles={unlockedProfiles}
             hasRegisteredProfile={hasRegisteredProfile}
@@ -254,6 +255,7 @@ export const App: React.FC = () => {
 
         {currentTab === 'directory' && (
           <BusinessTab 
+            authSession={authSession}
             ads={ads} 
             onNavigateTab={setCurrentTab} 
             onAddQuickAd={handleAddQuickAd} 

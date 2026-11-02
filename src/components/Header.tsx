@@ -86,7 +86,7 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
               <Calendar className="w-4 h-4" /> Samaj Events
             </button>
 
-            {/* TABS REVEALED AFTER USER SIGNS IN */}
+            {/* ONLY WHEN SIGNED IN: SHOW CREATE PROFILE AND ADVERTISE SHOP TABS */}
             {authSession && (
               <>
                 <button 
@@ -108,57 +108,46 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
                       : 'bg-amber-500/10 text-amber-200 hover:bg-amber-500/20'
                   }`}
                 >
-                  <Store className="w-4 h-4 text-amber-300" /> Advertise Business
+                  <Store className="w-4 h-4 text-amber-300" /> Advertise Shop
                 </button>
               </>
             )}
-
-            <button 
-              onClick={() => handleTabClick('signup')} 
-              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs lg:text-sm font-semibold transition-all ${
-                currentTab === 'signup' 
-                  ? 'bg-amber-500 text-red-950 shadow-md font-bold' 
-                  : 'text-amber-100 hover:bg-white/10'
-              }`}
-            >
-              {authSession ? (
-                <>
-                  <UserCheck className="w-4 h-4 text-emerald-400" />
-                  <span>My Account</span>
-                </>
-              ) : (
-                <>
-                  <UserPlus className="w-4 h-4" />
-                  <span>Sign Up</span>
-                </>
-              )}
-            </button>
           </nav>
 
-          {/* Quick Action CTA or User Indicator */}
-          <div className="hidden lg:flex items-center space-x-3">
+          {/* SINGLE SIGN UP / ACCOUNT BUTTON (No duplicate) */}
+          <div className="hidden md:flex items-center space-x-3">
             {authSession ? (
-              <div className="flex items-center gap-2 bg-black/20 border border-amber-500/30 px-3 py-1.5 rounded-xl text-xs">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                <span className="text-amber-100 font-medium">
-                  {authSession.name || `+91 ${authSession.phone}`}
-                </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleTabClick('signup')}
+                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all border border-amber-500/40 ${
+                    currentTab === 'signup'
+                      ? 'bg-amber-500 text-red-950 shadow-md'
+                      : 'bg-black/30 text-amber-100 hover:bg-black/40'
+                  }`}
+                >
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                  <UserCheck className="w-4 h-4 text-emerald-400" />
+                  <span>{authSession.name || `+91 ${authSession.phone}`}</span>
+                </button>
+
                 {onLogout && (
                   <button
                     onClick={onLogout}
                     title="Sign Out"
-                    className="text-amber-200/70 hover:text-white ml-1 p-1"
+                    className="p-2 rounded-lg text-amber-200/70 hover:text-white hover:bg-white/10 transition-colors"
                   >
-                    <LogOut className="w-3.5 h-3.5" />
+                    <LogOut className="w-4 h-4" />
                   </button>
                 )}
               </div>
             ) : (
+              /* The ONLY Sign Up button on the page */
               <button 
                 onClick={() => handleTabClick('signup')} 
-                className="bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-red-950 font-bold px-4 py-2 rounded-lg text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+                className="bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-red-950 font-extrabold px-5 py-2.5 rounded-xl text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer hover:shadow-lg hover:scale-102"
               >
-                <UserPlus className="w-4 h-4" /> Sign In to Post
+                <UserPlus className="w-4 h-4" /> Sign Up / Sign In
               </button>
             )}
           </div>
@@ -212,11 +201,11 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
             <Calendar className="w-4 h-4" /> Samaj Events & News
           </button>
 
-          {/* TABS VISIBLE ONLY AFTER SIGN IN (MOBILE) */}
+          {/* VISIBLE ONLY AFTER USER SIGNS IN */}
           {authSession ? (
             <div className="pt-2 space-y-2 border-t border-amber-800/80">
               <span className="text-[10px] text-amber-300/70 uppercase tracking-wider font-bold px-3">
-                Member Actions
+                Member Features
               </span>
               <button 
                 onClick={() => handleTabClick('create-profile')} 
@@ -232,7 +221,7 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
                   currentTab === 'advertise-shop' ? 'bg-amber-500 text-red-950 font-bold' : 'text-amber-200 bg-amber-500/10'
                 }`}
               >
-                <Store className="w-4 h-4 text-amber-300" /> Advertise Business
+                <Store className="w-4 h-4 text-amber-300" /> Advertise Shop
               </button>
               <button 
                 onClick={() => handleTabClick('signup')} 
@@ -240,7 +229,7 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
                   currentTab === 'signup' ? 'bg-amber-500 text-red-950 font-bold' : 'text-amber-100'
                 }`}
               >
-                <UserCheck className="w-4 h-4 text-emerald-400" /> My Account
+                <UserCheck className="w-4 h-4 text-emerald-400" /> My Account ({authSession.name || authSession.phone})
               </button>
             </div>
           ) : (
@@ -249,7 +238,7 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
                 onClick={() => handleTabClick('signup')} 
                 className="w-full bg-amber-500 hover:bg-amber-400 text-red-950 font-bold py-2.5 rounded-md text-xs text-center flex items-center justify-center gap-1.5 shadow"
               >
-                <UserPlus className="w-4 h-4" /> Sign In to Create Profile or Advertise
+                <UserPlus className="w-4 h-4" /> Sign Up / Sign In
               </button>
             </div>
           )}

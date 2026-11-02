@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Store, Lock, ShieldCheck } from 'lucide-react';
 import { BusinessAd, TabType, AuthSession } from '../types';
+import { GoogleSignInModal } from './GoogleSignInModal';
 
 interface AdvertiseShopTabProps {
   authSession: AuthSession | null;
@@ -15,11 +16,12 @@ export const AdvertiseShopTab: React.FC<AdvertiseShopTabProps> = ({
   onAddAd,
   onNavigateTab
 }) => {
+  const [showGoogleModal, setShowGoogleModal] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
-    owner: '',
+    owner: authSession?.name || '',
     category: '',
-    phone: '',
+    phone: authSession?.phone || '',
     address: '',
     city: 'Indore',
     description: '',
@@ -35,15 +37,11 @@ export const AdvertiseShopTab: React.FC<AdvertiseShopTabProps> = ({
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleQuickLogin = (method: 'Google' | 'Phone') => {
-    const session: AuthSession = {
-      method,
-      name: method === 'Google' ? 'Google Business User' : undefined,
-      phone: method === 'Phone' ? '9826111223' : undefined,
-      loggedInAt: new Date().toISOString()
-    };
+  const handleGoogleSuccess = (session: AuthSession) => {
+    setShowGoogleModal(false);
     onLogin(session);
-    alert(`✅ Signed in successfully! You can now post your business advertisement, and access the "Advertise Business" and "Create Profile" tabs.`);
+    setFormData(prev => ({ ...prev, owner: session.name || prev.owner }));
+    alert(`✅ Connected with Google as ${session.name}! You can now submit your business listing.`);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -84,6 +82,12 @@ export const AdvertiseShopTab: React.FC<AdvertiseShopTabProps> = ({
   if (!authSession) {
     return (
       <div className="space-y-6 max-w-md mx-auto py-8">
+        <GoogleSignInModal 
+          isOpen={showGoogleModal}
+          onClose={() => setShowGoogleModal(false)}
+          onSuccess={handleGoogleSuccess}
+        />
+
         <div className="bg-white p-6 md:p-8 rounded-2xl border border-amber-200 shadow-xl space-y-6 text-center">
           <div className="w-16 h-16 bg-amber-100 rounded-full mx-auto flex items-center justify-center text-3xl border border-amber-300">
             <Lock className="w-8 h-8 text-amber-800" />
@@ -92,14 +96,14 @@ export const AdvertiseShopTab: React.FC<AdvertiseShopTabProps> = ({
           <div>
             <h2 className="text-2xl font-serif font-bold text-red-950">Sign In to Advertise Business</h2>
             <p className="text-xs text-slate-600 mt-1">
-              Please sign in to promote your business across the Rathore Samaj network. Once signed in, you will see the Advertise Business and Create Profile tabs in the top navigation.
+              Please sign in to promote your business across the Rathore Samaj network. Once signed in, you will see the Advertise Shop and Create Profile tabs in the top navigation.
             </p>
           </div>
 
           <div className="space-y-3 pt-2">
             <button 
               type="button"
-              onClick={() => handleQuickLogin('Google')} 
+              onClick={() => setShowGoogleModal(true)} 
               className="w-full flex items-center justify-center gap-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold py-3 px-4 rounded-xl shadow-xs transition-all text-xs cursor-pointer"
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24">
@@ -108,7 +112,7 @@ export const AdvertiseShopTab: React.FC<AdvertiseShopTabProps> = ({
                 <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.19C.43 8.1 0 9.8 0 12s.43 3.9 1.19 5.42l4.09-3.15z"/>
                 <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.23 0 3.17 2.68 1.19 6.58l4.09 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
               </svg>
-              Continue with Google
+              Continue with Google (Permissions Required)
             </button>
 
             <button 
@@ -278,7 +282,7 @@ export const AdvertiseShopTab: React.FC<AdvertiseShopTabProps> = ({
               name="isFeatured"
               checked={formData.isFeatured}
               onChange={handleChange}
-              className="w-4 h-4 rounded text-red-900 border-amber-400 focus:ring-amber-500" 
+              className="w-4 h-4 rounded text-red-950 border-amber-400 focus:ring-amber-500" 
             />
             <label htmlFor="isFeatured" className="text-xs font-bold text-red-950 cursor-pointer">
               ⭐ Highlight as Featured Top Banner Shop (Special Placement)
