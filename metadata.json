@@ -1,0 +1,8 @@
+{
+  "name": "Rathore Rishtey - Matrimony & Directory",
+  "description": "Digital matrimony biodata directory, community business network, e-booklet and events portal for Rathore Samaj.",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

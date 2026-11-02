@@ -1,0 +1,284 @@
+import { MatrimonyProfile, BusinessAd, SamajEvent } from '../types';
+
+export const INITIAL_PROFILES: MatrimonyProfile[] = [
+  {
+    id: 1,
+    name: "Kirankumar Omprakash Rathore",
+    age: 32,
+    gender: "Male",
+    gotra: "Kadamaiyye",
+    city: "Akot",
+    state: "Maharashtra",
+    education: "Graduate (B. A.) and I.T.I.",
+    profession: "Technician at Mahavitaran (M.S.E.B.)",
+    income: "₹50,000/month",
+    height: "5' 5\"",
+    familyDetails: "Father: Retired from Gov Service, Mother: Homemaker",
+    photo: "/KiranKumar.png",
+    verified: true,
+    contact: "+91 7875923666, +91 7887368878",
+    about: "Maternal Gotra: Katasare. Siblings: 1 younger brother (unmarried), 1 younger sister (married)."
+  },
+  {
+    id: 2,
+    name: "Ritik Solanki",
+    age: 26,
+    gender: "Male",
+    gotra: "Rewtiya Solanki",
+    city: "Ratlam",
+    state: "Madhya Pradesh",
+    education: "B.Tech in Computer Science Engineering",
+    profession: "Software Developer at Planful, Indore (M.P.)",
+    income: "16+ LPA",
+    height: "5' 8\"",
+    familyDetails: "Father: Service at Ambika Solvex Limited, Mother: Homemaker",
+    photo: "/RitikSolanki.png",
+    verified: true,
+    contact: "+91 7987910135, +91 9770141683",
+    about: "Maternal Gotra: Chaturbhuj Chauhan. Sibling: 1 younger brother (Software Engineer at LTIMindtree)."
+  },
+  {
+    id: 3,
+    name: "Sidharth Sahu",
+    age: 32,
+    gender: "Male",
+    gotra: "Teli (Sahu)",
+    city: "Bangalore",
+    state: "Karnataka",
+    education: "BTech in Electronics & Communication Engineering",
+    profession: "Technical Officer (Group 'B' Gazetted Officer) at DRDO",
+    income: "13-15 LPA",
+    height: "5' 7\"",
+    familyDetails: "Father: Businessman, Mother: Housewife",
+    photo: "/SidharthSahu.png",
+    verified: true,
+    contact: "+91 7808454036, +91 9608559909",
+    about: "Simple & practical person with a positive attitude. Hobbies include travelling, bike riding, listening to music, and health & fitness."
+  },
+  {
+    id: 4,
+    name: "Durgeshkumar Gangadhar Rathore",
+    age: 36,
+    gender: "Male",
+    gotra: "Kadamaiye",
+    city: "Akot",
+    state: "Maharashtra",
+    education: "BA, DCHN (Diploma in Computer hardware & networking)",
+    profession: "JIO Dealership Office / Farming (Oranges)",
+    income: "₹6,00,000/annum",
+    height: "5' 7\"",
+    familyDetails: "Father: Late Gangadharji Rathore, Mother: Smt. Lata Gangadharji Rathore",
+    photo: "/DurgeshKumar.png",
+    verified: true,
+    contact: "+91 9922310841",
+    about: "Maternal Gotra: Magroriya. Siblings: 1 brother (married), 1 sister (married). Birth name is Sudhanshu."
+  },
+  {
+    id: 5,
+    name: "Dipika Rathore",
+    age: 26,
+    gender: "Female",
+    gotra: "Thanpagar",
+    city: "Indore",
+    state: "Madhya Pradesh",
+    education: "BCOM COMPUTER",
+    profession: "Computer teacher",
+    income: "Not specified",
+    height: "5' 7\"",
+    familyDetails: "Father: Late Shiv prasad Rathore, Mother: Sangita Rathore (House wife), Siblings: 1 Brother",
+    photo: "/Dipika.png",
+    verified: true,
+    contact: "+91 9691193190",
+    about: "Place of Birth: Satwas. Rashi: Meen. Caste: Teli."
+  },
+  {
+    id: 6,
+    name: "Shivam Rathor",
+    age: 28,
+    gender: "Male",
+    gotra: "Jhalwasiya",
+    city: "Baran",
+    state: "Rajasthan",
+    education: "BTech",
+    profession: "Software Developer",
+    income: "Not specified",
+    height: "5' 8\"",
+    familyDetails: "Father: Satyanarayan Rathor (Business - Grain Merchant & Farm), Mother: Rekha Rathor (Homemaker)",
+    photo: "/Shivam.jpeg",
+    verified: true,
+    contact: "+91 9166670283, +91 7878679409",
+    about: "Maternal Gotra: Magroniya. Siblings: 1 sister (Srashti Rathor - MCom), 1 brother (Siddhant Rathor - Msc Pursuing)."
+  },
+  {
+    id: 7,
+    name: "Jatin Rathore",
+    age: 29,
+    gender: "Male",
+    gotra: "Roja",
+    city: "Khandwa",
+    state: "Madhya Pradesh",
+    education: "B.Com",
+    profession: "Accounting Work",
+    income: "Not specified",
+    height: "5' 5\"",
+    familyDetails: "Father: Ashok Rathore (Business), Mother: Sunita Rathore (Housewife)",
+    photo: "/Jatin.png",
+    verified: true,
+    contact: "+91 9826355061",
+    about: "Caste: Teli. Birthplace: Nashik Maharashtra. Weight: 63kg. Siblings: 2 sisters. Email: jatinrathore1076@gmail.com."
+  }
+];
+
+export const INITIAL_ADS: BusinessAd[] = [
+  {
+    id: 1,
+    title: "Rathore Saree & Textile Emporium",
+    owner: "Rameshwar Rathore",
+    category: "Clothing & Retail",
+    city: "Indore",
+    address: "142, Rajwada Main Market, Indore",
+    phone: "+91 98261 11223",
+    tagline: "Exclusive Silk Sarees, Bridal Lehengas & Designer Suits for all occasions.",
+    offer: "10% Discount for Rathore Samaj Members!",
+    rating: "4.9 ★",
+    isFeatured: true,
+    banner: "https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    id: 2,
+    title: "Shree Rathore Hardware & Electronics",
+    owner: "Suresh Rathore",
+    category: "Hardware & Home Imprv.",
+    city: "Ujjain",
+    address: "45, Freeganj Tower Road, Ujjain",
+    phone: "+91 94250 55443",
+    tagline: "Wholesale & Retail in Quality Electricals, Sanitaryware & Paints.",
+    offer: "Free Delivery within 15 km",
+    rating: "4.8 ★",
+    isFeatured: false,
+    banner: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80"
+  },
+  {
+    id: 3,
+    title: "Rathore Jewels & Silver Palace",
+    owner: "Kailashchand Rathore",
+    category: "Jewelry & Gold",
+    city: "Khargone",
+    address: "Sarafa Bazar, Main Road, Khargone",
+    phone: "+91 98263 77889",
+    tagline: "Hallmark 916 Gold, Silver Ornaments & Custom Bridal Sets with traditional craftsmanship.",
+    offer: "Zero Making Charges on Silver Items for Samaj Members",
+    rating: "5.0 ★",
+    isFeatured: true,
+    banner: "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?auto=format&fit=crop&w=600&q=80"
+  }
+];
+
+export const INITIAL_EVENTS: SamajEvent[] = [
+  {
+    id: 1,
+    title: "Rathore Samaj Yuva-Yuvati Parichay Sammelan (Khargone)",
+    date: "29th November 2026",
+    time: "9:00 AM - 6:00 PM",
+    location: "Khargone, Madhya Pradesh",
+    venue: "Samaj Bhavan & Manglik Parisar, Khargone",
+    organizedBy: "Rathore Samaj Samiti Khargone",
+    badge: "Upcoming Mega Meet",
+    description: "Organizer: Ramchandra Rathod, President, Rathore Samaj Khargone. Please submit the biodatas of eligible youth urgently using the official link. Contact Persons: Mishrilal Rathod (7987882684), Lucky Rathod (9977093942), Rajendra Rathod (9826352291), Dr. Lakesh Rathod (8770487572).",
+    link: "https://rathodsamaj.easyissimple.com/panjiyan"
+  },
+  {
+    id: 2,
+    title: "Jeevansathi Mahasangam Parichay Sammelan 2027",
+    date: "10th January 2027",
+    time: "10:00 AM - 5:00 PM",
+    location: "Khargone, Madhya Pradesh",
+    venue: "District Stadium Ground, Khargone",
+    organizedBy: "Kshatriya Rathod Samaj Executive Committee, District Khargone",
+    badge: "Annual Sammelan",
+    description: "Organizer: Kshatriya Rathod Samaj Executive Committee, District Khargone. Grand publication of the special 'Jeevansathi Mahasangam' souvenir directory featuring 500+ profiles. Contact Persons: Mishrilal Rathod (7987882684), Lucky Rathod (9977093942), Rajendra Rathod (9826352291), Dr. Lakesh Rathod (8770487572).",
+    link: "https://docs.google.com/forms/d/e/1FAIpQLSfJhKvaxrB367ppqDqS67sNk67A5cO1s_D05fUWEu3k5gj5Wg/viewform"
+  },
+  {
+    id: 3,
+    title: "Var-Vadhu Parichay Sammelan 2026",
+    date: "15th November 2026",
+    time: "10:00 AM - 5:00 PM",
+    location: "Indore, Madhya Pradesh",
+    venue: "Abhay Prashal Auditorium, Race Course Road, Indore",
+    organizedBy: "Akhil Bharatiya Rathore Samaj Samiti",
+    badge: "Grand Event",
+    description: "Annual grand matrimonial meet up for eligible Rathore boys and girls. Registration required before 10th Nov. Live stage introductions and printed directory distribution.",
+    link: "https://rathodsamaj.easyissimple.com/panjiyan"
+  }
+];
+
+export const BOOKLET_PAGES = [
+  {
+    page: 1,
+    title: "Cover Page - Rathore Samaj Patrika 2026",
+    subtitle: "वार्षिक वैवाहिक स्मारिका एवं व्यापार निर्देशिका",
+    content: [
+      "अखिल भारतीय राठौर समाज - मध्य प्रदेश एवं महाराष्ट्र प्रान्त",
+      "संरक्षक: श्री रामचंद्रजी राठौड़ (अध्यक्ष)",
+      "प्रकाशन वर्ष: 2026-27 | 25वां रजत जयंती संस्करण",
+      "कुल प्रविष्टियां: 450+ विवाह योग्य युवक-युवतियों के बायोडाटा",
+      "विशेष प्रायोजक: स्थानीय राठौर बंधुओं के प्रतिष्ठित व्यापारिक प्रतिष्ठान"
+    ],
+    note: "Digital e-Book copy preserved and synchronized with real-time app listings."
+  },
+  {
+    page: 2,
+    title: "अध्यक्षीय संदेश एवं कार्यकारिणी सूची",
+    subtitle: "समाज एकता एवं डिजिटल युग में रिश्तों की सुगमता",
+    content: [
+      "परम आदरणीय राठौर समाज बंधुओं,",
+      "जय वीर दुर्गादास राठौड़! समाज के सभी अभिभावकों की सुविधा हेतु इस वर्ष हमने पारंपरिक मुद्रित पुस्तक के साथ-साथ 'राठौर रिश्ते' डिजिटल पोर्टल का शुभारंभ किया है।",
+      "मुख्य कार्यकारिणी सदस्य:",
+      "• श्री मिश्रीलाल राठौड़ (मार्गदर्शक, खरगोन) - 7987882684",
+      "• श्री लकी राठौड़ (संयोजक, बामनाला) - 9977093942",
+      "• श्री राजेंद्र राठौड़ (सचिव, कसरावद) - 9826352291",
+      "• डॉ. लोकेश राठौड़ (प्रवक्ता, खरगोन) - 8770487572"
+    ],
+    note: "समाज के किसी भी कार्य हेतु कार्यकारिणी से सीधे संपर्क कर सकते हैं।"
+  },
+  {
+    page: 3,
+    title: "योग्य वर सूची (Grooms Section Index)",
+    subtitle: "उच्च शिक्षित, शासकीय सेवा एवं व्यवसाय में कार्यरत युवा",
+    content: [
+      "1. किरणकुमार राठौर (अकोट) - M.S.E.B. टेक्नीशियन | गोत्र: कदम्मईये | संपर्क: 7875923666",
+      "2. रितिक सोलंकी (रतलाम) - B.Tech CS, सॉफ्टवेयर इंजीनियर (16+ LPA) | गोत्र: रेवतिया सोलंकी",
+      "3. सिद्धार्थ साहु (बैंगलोर) - B.Tech ECE, वैज्ञानिक अधिकारी DRDO (ग्रुप B) | गोत्र: तेली (साहु)",
+      "4. दुर्गेशकुमार राठौर (अकोट) - व्यवसाय एवं कृषि | गोत्र: कदम्मईये",
+      "5. शिवम राठौर (बारां) - B.Tech, सॉफ्टवेयर डेवलपर | गोत्र: झालवासिया",
+      "6. जतिन राठौर (खंडवा) - B.Com, अकाउंटिंग कार्य | गोत्र: रोजा"
+    ],
+    note: "सम्पूर्ण विवरण एवं संपर्क नंबर हेतु 'Matrimony Bios' टैब देखें।"
+  },
+  {
+    page: 4,
+    title: "योग्य वधु सूची (Brides Section Index)",
+    subtitle: "संस्कारी एवं उच्च शिक्षित युवतियों का संक्षिप्त परिचय",
+    content: [
+      "1. दीपिका राठौर (इंदौर) - B.Com Computer, कंप्यूटर शिक्षिका | गोत्र: थानपगार | संपर्क: 9691193190",
+      "2. अंकिता राठौर (भोपाल) - MCA, आईटी एनालिस्ट | गोत्र: कटसरे",
+      "3. पूजा राठौर (उज्जैन) - B.Ed, M.Sc गणित, प्राध्यापिका | गोत्र: चौहान",
+      "4. साक्षी सोलंकी (खंडवा) - MBA HR, कॉर्पोरेट एग्जीक्यूटिव | गोत्र: मग्रोरिया",
+      "5. नेहा राठौर (धार) - BDS डेंटल सर्जन | गोत्र: राठौर"
+    ],
+    note: "सत्यापित परिवारों के बायोडाटा सीधे ऐप पर सुरक्षित रूप से उपलब्ध हैं।"
+  },
+  {
+    page: 5,
+    title: "राठौर व्यापार निर्देशिका (Business Directory)",
+    subtitle: "स्वजातीय बंधुओं के स्थानीय व्यापार को प्राथमिकता दें",
+    content: [
+      "• राठौर साड़ी एवं टेक्सटाइल एम्पोरियम - राजवाड़ा, इंदौर (10% समाज विशेष छूट)",
+      "• श्री राठौर हार्डवेयर एवं इलेक्ट्रॉनिक्स - फ्रीगंज, उज्जैन (15 किमी तक निःशुल्क डिलीवरी)",
+      "• राठौर ज्वैलर्स एवं सिल्वर पैलेस - सराफा बाजार, खरगोन (सिल्वर मेकिंग चार्ज फ्री)",
+      "• सोलंकी ऑटो पार्ट्स एवं सर्विस सेंटर - महू-नीमच रोड, रतलाम"
+    ],
+    note: "अपनी दुकान या प्रतिष्ठान का विज्ञापन प्रकाशित करने हेतु 'Advertise Shop' टैब चुनें।"
+  }
+];

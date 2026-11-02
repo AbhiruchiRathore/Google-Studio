@@ -1,0 +1,165 @@
+import React, { useState } from 'react';
+import { BookOpen, FileText, Search, ChevronLeft, ChevronRight, CheckCircle2, Download, Printer } from 'lucide-react';
+import { TabType } from '../types';
+import { BOOKLET_PAGES } from '../data/mockData';
+
+interface BookletTabProps {
+  onNavigateTab: (tab: TabType) => void;
+}
+
+export const BookletTab: React.FC<BookletTabProps> = ({ onNavigateTab }) => {
+  const [currentPage, setCurrentPage] = useState(0);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadSuccess, setDownloadSuccess] = useState(false);
+
+  const handleDownloadPDF = () => {
+    setDownloading(true);
+    setTimeout(() => {
+      setDownloading(false);
+      setDownloadSuccess(true);
+      setTimeout(() => setDownloadSuccess(false), 4000);
+    }, 1200);
+  };
+
+  const pageData = BOOKLET_PAGES[currentPage];
+
+  return (
+    <div className="space-y-6">
+      {/* HEADER SECTION */}
+      <div className="bg-white rounded-2xl shadow-xl border border-amber-200 p-6 md:p-8 space-y-6">
+        <div className="text-center max-w-2xl mx-auto">
+          <span className="bg-amber-100 text-amber-900 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
+            Interactive Directory
+          </span>
+          <h2 className="text-3xl font-serif font-bold text-red-950 mt-2">
+            Annual Rathore Samaj E-Booklet
+          </h2>
+          <p className="text-xs text-slate-600 mt-2">
+            Flip through the digitized pages of our community directory, just like the traditional printed book handed out by samiti adhyaksh.
+          </p>
+        </div>
+
+        {/* HERO E-BOOK CARD */}
+        <div className="bg-amber-900/10 border-2 border-dashed border-amber-400/50 rounded-2xl p-6 md:p-10 flex flex-col items-center justify-center text-center space-y-4">
+          <BookOpen className="w-16 h-16 text-red-900 animate-bounce" />
+          <div className="space-y-1">
+            <h4 className="font-serif font-bold text-lg text-slate-900">
+              Rathore Samaj Patrika 2026 (Digital Edition)
+            </h4>
+            <p className="text-xs text-slate-500">
+              Contains 450+ Matrimonial Profiles & 120 Local Business Sponsor Ads
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-3 justify-center pt-2">
+            <button 
+              onClick={handleDownloadPDF}
+              disabled={downloading}
+              className="bg-red-900 hover:bg-red-800 disabled:opacity-60 text-amber-100 text-xs font-bold px-5 py-2.5 rounded-xl shadow transition-all flex items-center gap-2 cursor-pointer"
+            >
+              {downloading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-amber-100 border-t-transparent rounded-full animate-spin" />
+                  Generating PDF (45 MB)...
+                </>
+              ) : downloadSuccess ? (
+                <>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  PDF Downloaded!
+                </>
+              ) : (
+                <>
+                  <FileText className="w-4 h-4" />
+                  Download Printable PDF
+                </>
+              )}
+            </button>
+
+            <button 
+              onClick={() => onNavigateTab('matrimony')} 
+              className="bg-amber-400 hover:bg-amber-300 text-red-950 text-xs font-bold px-5 py-2.5 rounded-xl shadow transition-all flex items-center gap-2 cursor-pointer"
+            >
+              <Search className="w-4 h-4" /> Search Digitized Records
+            </button>
+          </div>
+        </div>
+
+        {/* INTERACTIVE BOOKLET READER VIEWPORT */}
+        <div className="border border-amber-300/80 rounded-2xl overflow-hidden bg-amber-50/30 p-4 sm:p-6 space-y-4">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-b border-amber-200/80 pb-3">
+            <div className="flex items-center gap-2">
+              <span className="font-serif font-bold text-red-950 text-sm">
+                📖 Page {currentPage + 1} of {BOOKLET_PAGES.length}
+              </span>
+              <span className="text-[11px] bg-amber-200/70 text-amber-950 px-2 py-0.5 rounded-md font-semibold">
+                {pageData.title.split('-')[0]}
+              </span>
+            </div>
+
+            {/* Quick Page Jump Buttons */}
+            <div className="flex flex-wrap gap-1.5 justify-center">
+              {BOOKLET_PAGES.map((p, idx) => (
+                <button
+                  key={p.page}
+                  onClick={() => setCurrentPage(idx)}
+                  className={`px-2.5 py-1 text-xs rounded-lg font-medium transition-all ${
+                    currentPage === idx
+                      ? 'bg-red-900 text-amber-100 font-bold shadow-xs'
+                      : 'bg-white border border-amber-200 text-slate-700 hover:bg-amber-100'
+                  }`}
+                >
+                  Pg {p.page}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* BOOKLET PAGE CONTAINER (PAPER STYLING) */}
+          <div className="bg-amber-50/80 border-2 border-amber-300 rounded-xl p-6 md:p-10 shadow-inner min-h-[380px] flex flex-col justify-between relative">
+            <div className="space-y-4">
+              <div className="border-b-2 border-red-900/20 pb-3 text-center sm:text-left">
+                <h3 className="text-xl md:text-2xl font-serif font-bold text-red-950">
+                  {pageData.title}
+                </h3>
+                <p className="text-xs font-semibold text-amber-800 mt-0.5">
+                  {pageData.subtitle}
+                </p>
+              </div>
+
+              <div className="space-y-2.5 py-2">
+                {pageData.content.map((line, idx) => (
+                  <p key={idx} className="text-xs md:text-sm text-slate-800 leading-relaxed font-sans">
+                    {line}
+                  </p>
+                ))}
+              </div>
+            </div>
+
+            <div className="pt-6 border-t border-amber-200 flex flex-col sm:flex-row justify-between items-center text-xs text-slate-500 gap-2">
+              <span className="italic text-[11px] text-amber-900 font-medium">
+                💡 {pageData.note}
+              </span>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage(Math.max(0, currentPage - 1))}
+                  disabled={currentPage === 0}
+                  className="p-1.5 rounded-lg border border-amber-300 disabled:opacity-40 hover:bg-amber-200/50 text-red-950 flex items-center gap-1 text-xs font-bold"
+                >
+                  <ChevronLeft className="w-4 h-4" /> Previous
+                </button>
+                <button
+                  onClick={() => setCurrentPage(Math.min(BOOKLET_PAGES.length - 1, currentPage + 1))}
+                  disabled={currentPage === BOOKLET_PAGES.length - 1}
+                  className="p-1.5 rounded-lg border border-amber-300 disabled:opacity-40 hover:bg-amber-200/50 text-red-950 flex items-center gap-1 text-xs font-bold"
+                >
+                  Next <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
