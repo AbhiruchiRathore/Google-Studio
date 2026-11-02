@@ -134,24 +134,24 @@ export const AdvertiseShopTab: React.FC<AdvertiseShopTabProps> = ({
 
   return (
     <div className="space-y-6 max-w-2xl mx-auto py-4">
-      <div className="bg-white p-6 rounded-2xl border border-amber-200 shadow-sm space-y-4">
-        <div className="flex justify-between items-center border-b border-amber-100 pb-3">
+      <div className="bg-white p-6 sm:p-8 rounded-3xl border border-stone-200/90 shadow-sm space-y-5">
+        <div className="flex justify-between items-center border-b border-stone-100 pb-3">
           <div>
             <div className="flex items-center gap-2">
-              <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
-                <ShieldCheck className="w-3 h-3" /> Signed In
+              <span className="bg-emerald-50 text-emerald-800 text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1 border border-emerald-200">
+                <ShieldCheck className="w-3 h-3 text-emerald-600" /> Signed In
               </span>
-              <span className="text-xs text-slate-500">
+              <span className="text-xs text-stone-500">
                 {authSession.name || `+91 ${authSession.phone}`}
               </span>
             </div>
-            <h2 className="text-xl font-serif font-bold text-red-950 mt-1">🏪 Advertise Your Shop / Business</h2>
-            <p className="text-xs text-slate-500">Promote your business across the Rathore Samaj network.</p>
+            <h2 className="text-2xl font-serif font-bold text-stone-900 mt-1">Advertise Your Business</h2>
+            <p className="text-xs text-stone-500 font-light">Promote your shop & exclusive Samaj member offers across our community network.</p>
           </div>
           <button 
             type="button"
             onClick={() => onNavigateTab('directory')} 
-            className="text-xs text-slate-500 hover:text-red-900 font-bold p-1 cursor-pointer"
+            className="text-xs text-stone-400 hover:text-stone-700 font-semibold p-1.5 rounded-lg hover:bg-stone-100 cursor-pointer transition-colors"
           >
             Cancel ✕
           </button>
@@ -291,9 +291,9 @@ export const AdvertiseShopTab: React.FC<AdvertiseShopTabProps> = ({
 
           <button 
             type="submit" 
-            className="w-full bg-red-900 hover:bg-red-800 text-white font-bold py-3 rounded-xl text-xs shadow-lg transition-all cursor-pointer"
+            className="w-full bg-gradient-to-r from-[#380812] to-[#540e1b] hover:from-[#24050b] hover:to-[#380812] text-amber-200 font-bold py-3.5 rounded-xl text-xs sm:text-sm shadow-md transition-all cursor-pointer border border-amber-400/30 hover:scale-[1.01]"
           >
-            Publish Business Ad
+            Publish Business Ad to Directory
           </button>
         </form>
       </div>

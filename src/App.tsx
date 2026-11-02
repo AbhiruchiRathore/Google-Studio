@@ -10,6 +10,7 @@ import { EventsTab } from './components/EventsTab';
 import { SignUpTab } from './components/SignUpTab';
 import { CreateProfileTab } from './components/CreateProfileTab';
 import { AdvertiseShopTab } from './components/AdvertiseShopTab';
+import { FamilyDetailsTab } from './components/FamilyDetailsTab';
 import { WhatsAppShare } from './components/WhatsAppShare';
 import { Footer } from './components/Footer';
 
@@ -227,7 +228,7 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-amber-50/40 text-slate-800 font-sans flex flex-col selection:bg-amber-200 selection:text-red-950">
+    <div className="min-h-screen bg-[#FAF8F5] text-stone-800 font-sans flex flex-col selection:bg-amber-100 selection:text-amber-950">
       {/* Navigation Header */}
       <Header 
         currentTab={currentTab} 
@@ -236,11 +237,16 @@ export const App: React.FC = () => {
         onLogout={handleLogout}
       />
 
-      {/* Hero Banner Announcement */}
-      <HeroBanner />
+      {/* Hero Banner Showcase (Homepage Only) */}
+      {currentTab === 'matrimony' && (
+        <HeroBanner 
+          onNavigateTab={setCurrentTab}
+          authSession={authSession}
+        />
+      )}
 
       {/* Main Container Content */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {currentTab === 'matrimony' && (
           <MatrimonyTab
             authSession={authSession}
@@ -299,6 +305,15 @@ export const App: React.FC = () => {
             onLogin={handleLogin}
             onAddAd={handleAddAd} 
             onNavigateTab={setCurrentTab} 
+          />
+        )}
+
+        {currentTab === 'family-details' && (
+          <FamilyDetailsTab
+            authSession={authSession}
+            onNavigateTab={setCurrentTab}
+            onAddQuickProfile={handleAddQuickProfile}
+            hasRegisteredProfile={hasRegisteredProfile}
           />
         )}
       </main>

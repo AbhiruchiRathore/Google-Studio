@@ -5,7 +5,8 @@ export type TabType =
   | 'events' 
   | 'signup' 
   | 'create-profile' 
-  | 'advertise-shop';
+  | 'advertise-shop'
+  | 'family-details';
 
 export type GenderType = 'all' | 'Male' | 'Female';
 

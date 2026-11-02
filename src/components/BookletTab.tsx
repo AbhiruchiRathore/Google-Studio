@@ -26,27 +26,29 @@ export const BookletTab: React.FC<BookletTabProps> = ({ onNavigateTab }) => {
   return (
     <div className="space-y-6">
       {/* HEADER SECTION */}
-      <div className="bg-white rounded-2xl shadow-xl border border-amber-200 p-6 md:p-8 space-y-6">
-        <div className="text-center max-w-2xl mx-auto">
-          <span className="bg-amber-100 text-amber-900 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
-            Interactive Directory
+      <div className="bg-white rounded-3xl shadow-sm border border-stone-200/90 p-6 md:p-8 space-y-6">
+        <div className="text-center max-w-2xl mx-auto space-y-2">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-400/10 border border-amber-400/30 text-amber-900 text-xs font-semibold">
+            Interactive Community Patrika
           </span>
-          <h2 className="text-3xl font-serif font-bold text-red-950 mt-2">
+          <h2 className="text-3xl font-serif font-bold text-stone-900">
             Annual Rathore Samaj E-Booklet
           </h2>
-          <p className="text-xs text-slate-600 mt-2">
+          <p className="text-xs sm:text-sm text-stone-500 font-light">
             Flip through the digitized pages of our community directory, just like the traditional printed book handed out by samiti adhyaksh.
           </p>
         </div>
 
         {/* HERO E-BOOK CARD */}
-        <div className="bg-amber-900/10 border-2 border-dashed border-amber-400/50 rounded-2xl p-6 md:p-10 flex flex-col items-center justify-center text-center space-y-4">
-          <BookOpen className="w-16 h-16 text-red-900 animate-bounce" />
+        <div className="bg-gradient-to-r from-[#24050b] via-[#380812] to-[#24050b] text-white border border-amber-500/30 rounded-2xl p-6 md:p-10 flex flex-col items-center justify-center text-center space-y-4 shadow-md">
+          <div className="w-16 h-16 rounded-2xl bg-amber-400/20 border border-amber-400/40 text-amber-300 flex items-center justify-center">
+            <BookOpen className="w-8 h-8" />
+          </div>
           <div className="space-y-1">
-            <h4 className="font-serif font-bold text-lg text-slate-900">
+            <h4 className="font-serif font-bold text-lg text-amber-100">
               Rathore Samaj Patrika 2026 (Digital Edition)
             </h4>
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-stone-300 font-light">
               Contains 450+ Matrimonial Profiles & 120 Local Business Sponsor Ads
             </p>
           </div>
@@ -55,16 +57,16 @@ export const BookletTab: React.FC<BookletTabProps> = ({ onNavigateTab }) => {
             <button 
               onClick={handleDownloadPDF}
               disabled={downloading}
-              className="bg-red-900 hover:bg-red-800 disabled:opacity-60 text-amber-100 text-xs font-bold px-5 py-2.5 rounded-xl shadow transition-all flex items-center gap-2 cursor-pointer"
+              className="bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500 hover:from-amber-300 hover:to-amber-400 disabled:opacity-60 text-stone-950 text-xs font-bold px-5 py-2.5 rounded-xl shadow transition-all flex items-center gap-2 cursor-pointer"
             >
               {downloading ? (
                 <>
-                  <div className="w-4 h-4 border-2 border-amber-100 border-t-transparent rounded-full animate-spin" />
+                  <div className="w-4 h-4 border-2 border-stone-950 border-t-transparent rounded-full animate-spin" />
                   Generating PDF (45 MB)...
                 </>
               ) : downloadSuccess ? (
                 <>
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  <CheckCircle2 className="w-4 h-4 text-emerald-800" />
                   PDF Downloaded!
                 </>
               ) : (
@@ -77,9 +79,9 @@ export const BookletTab: React.FC<BookletTabProps> = ({ onNavigateTab }) => {
 
             <button 
               onClick={() => onNavigateTab('matrimony')} 
-              className="bg-amber-400 hover:bg-amber-300 text-red-950 text-xs font-bold px-5 py-2.5 rounded-xl shadow transition-all flex items-center gap-2 cursor-pointer"
+              className="bg-white/10 hover:bg-white/20 border border-amber-400/30 text-amber-200 text-xs font-semibold px-5 py-2.5 rounded-xl transition-all flex items-center gap-2 cursor-pointer"
             >
-              <Search className="w-4 h-4" /> Search Digitized Records
+              <Search className="w-4 h-4 text-amber-400" /> Search Digitized Records
             </button>
           </div>
         </div>

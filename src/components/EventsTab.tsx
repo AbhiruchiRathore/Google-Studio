@@ -51,45 +51,46 @@ export const EventsTab: React.FC<EventsTabProps> = ({ events, onAddEvent }) => {
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-center gap-4 text-center sm:text-left py-2">
-        <div className="max-w-2xl">
-          <h2 className="text-3xl font-serif font-bold text-red-950">Samaj Sammelans & News</h2>
-          <p className="text-xs text-slate-600 mt-1">
-            Stay updated with upcoming matrimonial meets, adhyaksh notices, and community gatherings.
+        <div className="max-w-2xl space-y-1">
+          <h2 className="text-3xl font-serif font-bold text-stone-900">Samaj Sammelans & News</h2>
+          <p className="text-xs sm:text-sm text-stone-500 font-light">
+            Stay updated with upcoming matrimonial meets, adhyaksh notices, and community gatherings across regions.
           </p>
         </div>
 
         <button
           onClick={() => setShowAddModal(true)}
-          className="bg-red-900 hover:bg-red-800 text-amber-100 font-bold px-4 py-2.5 rounded-xl text-xs shadow-md flex items-center gap-2 shrink-0 cursor-pointer transition-colors"
+          className="bg-gradient-to-r from-[#380812] to-[#540e1b] hover:from-[#24050b] hover:to-[#380812] text-amber-200 font-semibold px-4 py-2.5 rounded-xl text-xs shadow-sm flex items-center gap-2 shrink-0 cursor-pointer border border-amber-500/20 transition-all hover:scale-102"
         >
-          <PlusCircle className="w-4 h-4" /> Post Event Notice
+          <PlusCircle className="w-4 h-4 text-amber-300" /> Post Event Notice
         </button>
       </div>
       
       {/* EVENTS GRID */}
       {events.length === 0 ? (
-        <p className="text-xs text-slate-500 text-center py-8">No community events posted right now.</p>
+        <p className="text-xs text-stone-500 text-center py-8">No community events posted right now.</p>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {events.map((ev, idx) => (
             <div 
               key={ev.id || idx}
-              className="bg-white p-5 rounded-2xl border border-amber-200/80 shadow-sm space-y-3 border-l-4 border-l-red-900 hover:shadow-md transition-shadow"
+              className="bg-white p-6 rounded-2xl border border-stone-200/80 shadow-xs space-y-3.5 border-l-4 border-l-[#380812] hover:shadow-md hover:border-amber-400/50 transition-all"
             >
               <div className="flex justify-between items-start gap-2">
-                <h4 className="font-bold text-slate-900 text-sm font-serif">{ev.title}</h4>
-                <span className="bg-red-50 text-red-900 text-[10px] font-bold px-2.5 py-1 rounded-full border border-red-200 shrink-0">
+                <h4 className="font-bold text-stone-900 text-base font-serif">{ev.title}</h4>
+                <span className="text-[11px] font-semibold text-amber-900 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-200/60 shrink-0">
                   {ev.date}
                 </span>
               </div>
 
-              <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600 font-medium">
-                <span className="flex items-center gap-1">
+              {/* ZERO-PILL METADATA LINE */}
+              <div className="flex flex-wrap items-center gap-3 text-xs text-stone-600 font-medium">
+                <span className="flex items-center gap-1.5">
                   <MapPin className="w-3.5 h-3.5 text-amber-700 shrink-0" />
                   {ev.location}
                 </span>
                 {ev.time && (
-                  <span className="flex items-center gap-1 text-slate-500">
+                  <span className="flex items-center gap-1.5 text-stone-500">
                     <Calendar className="w-3.5 h-3.5 text-amber-700 shrink-0" />
                     {ev.time}
                   </span>
@@ -97,7 +98,7 @@ export const EventsTab: React.FC<EventsTabProps> = ({ events, onAddEvent }) => {
               </div>
 
               <div 
-                className="text-xs text-slate-700 leading-relaxed font-sans space-y-1"
+                className="text-xs text-stone-600 leading-relaxed font-sans space-y-1"
                 dangerouslySetInnerHTML={{ __html: ev.description }}
               />
               
@@ -107,7 +108,7 @@ export const EventsTab: React.FC<EventsTabProps> = ({ events, onAddEvent }) => {
                     href={ev.link} 
                     target="_blank" 
                     rel="noopener noreferrer"
-                    className="text-xs bg-red-900 hover:bg-red-800 text-white font-bold px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5 shadow"
+                    className="text-xs bg-gradient-to-r from-amber-400 to-amber-300 text-stone-950 font-bold px-3.5 py-2 rounded-xl inline-flex items-center gap-1.5 shadow-xs cursor-pointer hover:scale-102 transition-transform"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />
                     Register via Official Form Link

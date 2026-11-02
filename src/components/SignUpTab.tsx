@@ -206,32 +206,32 @@ export const SignUpTab: React.FC<SignUpTabProps> = ({
   if (authSession) {
     return (
       <div className="space-y-6 max-w-lg mx-auto py-6">
-        <div className="bg-white p-6 md:p-8 rounded-2xl border border-amber-200 shadow-xl space-y-6 text-center">
-          <div className="w-16 h-16 bg-emerald-100 rounded-full mx-auto flex items-center justify-center text-3xl border border-emerald-300">
+        <div className="bg-white p-6 md:p-8 rounded-3xl border border-stone-200/90 shadow-sm space-y-6 text-center">
+          <div className="w-16 h-16 bg-emerald-50 rounded-2xl mx-auto flex items-center justify-center text-3xl border border-emerald-200">
             {authSession.photoUrl ? (
-              <img src={authSession.photoUrl} alt={authSession.name} className="w-full h-full rounded-full object-cover" />
+              <img src={authSession.photoUrl} alt={authSession.name} className="w-full h-full rounded-2xl object-cover" />
             ) : (
               <CheckCircle2 className="w-8 h-8 text-emerald-700" />
             )}
           </div>
 
           <div>
-            <h2 className="text-2xl font-serif font-bold text-red-950">
+            <h2 className="text-2xl font-serif font-bold text-stone-900">
               Welcome, {authSession.name || 'Samaj Member'}
             </h2>
-            <p className="text-xs text-slate-600 mt-1">
+            <p className="text-xs text-stone-500 mt-1">
               Verified via {authSession.method} {authSession.email ? `(${authSession.email})` : `(+91 ${authSession.phone})`}
             </p>
           </div>
 
           {/* Member navigation unlocked announcement */}
-          <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 p-4 rounded-xl text-left space-y-1.5">
-            <p className="text-xs font-bold text-red-950 flex items-center gap-1.5">
-              <Sparkles className="w-4 h-4 text-amber-600 shrink-0" />
+          <div className="bg-amber-50/70 border border-amber-200/80 p-4 rounded-2xl text-left space-y-1.5">
+            <p className="text-xs font-bold text-stone-900 flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4 text-amber-700 shrink-0" />
               Member Tabs Unlocked in Navigation
             </p>
-            <p className="text-xs text-slate-600 leading-relaxed">
-              You can now see and open <strong className="text-red-900">Create Profile</strong> and <strong className="text-red-900">Advertise Shop</strong> directly from the top navigation bar.
+            <p className="text-xs text-stone-600 leading-relaxed font-light">
+              You can now see and open <strong className="text-stone-900 font-semibold">Create Profile</strong> and <strong className="text-stone-900 font-semibold">Advertise Shop</strong> directly from the top navigation bar.
             </p>
           </div>
 
@@ -321,14 +321,14 @@ export const SignUpTab: React.FC<SignUpTabProps> = ({
         onSuccess={handleGoogleSuccess}
       />
 
-      <div className="bg-white p-6 md:p-8 rounded-2xl border border-amber-200 shadow-xl space-y-6 text-center">
+      <div className="bg-white p-6 md:p-8 rounded-3xl border border-stone-200/90 shadow-sm space-y-6 text-center">
         <div>
-          <div className="w-14 h-14 bg-amber-100 rounded-full mx-auto flex items-center justify-center text-2xl mb-2 border border-amber-300">
+          <div className="w-14 h-14 bg-amber-400/10 rounded-2xl mx-auto flex items-center justify-center text-2xl mb-2 border border-amber-400/30 text-amber-800">
             🔐
           </div>
-          <h2 className="text-2xl font-serif font-bold text-red-950">Welcome to Rathore Rishtey</h2>
-          <p className="text-xs text-slate-600 mt-1">
-            Sign in to view matrimonial profiles, publish family biodatas, and promote your business.
+          <h2 className="text-2xl font-serif font-bold text-stone-900">Welcome to Rathore Rishtey</h2>
+          <p className="text-xs text-stone-500 mt-1 font-light">
+            Sign in to view matrimonial biodatas, register family details, and promote your business.
           </p>
         </div>
 
@@ -337,7 +337,7 @@ export const SignUpTab: React.FC<SignUpTabProps> = ({
           <button 
             type="button"
             onClick={() => setShowGoogleModal(true)} 
-            className="w-full flex items-center justify-center gap-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold py-3 px-4 rounded-xl shadow-xs transition-all text-xs cursor-pointer hover:border-slate-400 group"
+            className="w-full flex items-center justify-center gap-3 bg-white border border-stone-300 hover:bg-stone-50 text-stone-700 font-semibold py-3 px-4 rounded-xl shadow-xs transition-all text-xs cursor-pointer hover:border-stone-400 group"
           >
             <svg className="w-4 h-4 shrink-0 group-hover:scale-105 transition-transform" viewBox="0 0 24 24">
               <path fill="#4285F4" d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"/>
@@ -349,20 +349,20 @@ export const SignUpTab: React.FC<SignUpTabProps> = ({
           </button>
 
           <div className="relative flex py-1 items-center">
-            <div className="flex-grow border-t border-slate-200"></div>
-            <span className="flex-shrink mx-4 text-slate-400 text-[11px] font-medium tracking-wide">
+            <div className="flex-grow border-t border-stone-200"></div>
+            <span className="flex-shrink mx-4 text-stone-400 text-[11px] font-medium tracking-wide">
               OR USE PHONE OTP
             </span>
-            <div className="flex-grow border-t border-slate-200"></div>
+            <div className="flex-grow border-t border-stone-200"></div>
           </div>
 
           {/* REAL PHONE NUMBER + OTP SYSTEM */}
           {!otpSent ? (
             <form onSubmit={handleRequestOtp} className="space-y-3 text-left">
               <div>
-                <label className="block font-bold text-slate-700 mb-1 text-xs">Mobile Number *</label>
+                <label className="block font-bold text-stone-700 mb-1 text-xs">Mobile Number *</label>
                 <div className="flex gap-2">
-                  <span className="bg-amber-50 border border-amber-300 rounded-xl px-3 py-2.5 text-xs font-bold text-slate-700 flex items-center">
+                  <span className="bg-stone-50 border border-stone-200 rounded-xl px-3 py-2.5 text-xs font-bold text-stone-700 flex items-center">
                     +91
                   </span>
                   <input 
@@ -372,15 +372,15 @@ export const SignUpTab: React.FC<SignUpTabProps> = ({
                     required 
                     placeholder="10-digit mobile number" 
                     maxLength={10} 
-                    className="w-full p-2.5 border border-amber-300 rounded-xl focus:ring-2 focus:ring-amber-500 bg-amber-50/30 text-xs" 
+                    className="w-full p-2.5 border border-stone-200 rounded-xl focus:ring-2 focus:ring-amber-500/50 bg-stone-50/50 text-xs" 
                   />
                 </div>
               </div>
               <button 
                 type="submit" 
-                className="w-full bg-red-900 hover:bg-red-800 text-amber-100 font-bold py-3 rounded-xl shadow-lg transition-all text-xs cursor-pointer flex items-center justify-center gap-2"
+                className="w-full bg-gradient-to-r from-[#380812] to-[#540e1b] hover:from-[#24050b] hover:to-[#380812] text-amber-200 font-bold py-3 rounded-xl shadow-md transition-all text-xs cursor-pointer flex items-center justify-center gap-2 border border-amber-500/20 hover:scale-[1.01]"
               >
-                <Phone className="w-4 h-4" />
+                <Phone className="w-4 h-4 text-amber-300" />
                 Send Real Verification Code (OTP)
               </button>
             </form>

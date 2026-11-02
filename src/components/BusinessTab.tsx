@@ -77,16 +77,17 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({
   return (
     <div className="space-y-6">
       {/* HERO BANNER SECTION */}
-      <div className="bg-gradient-to-r from-red-950 via-rose-950 to-amber-950 rounded-2xl p-6 text-white shadow-xl flex flex-col md:flex-row justify-between items-center gap-4 border border-amber-500/30">
-        <div>
-          <span className="bg-amber-400 text-red-950 text-xs font-extrabold px-3 py-1 rounded-full uppercase tracking-wider">
-            Rathore Samaj Business Network
+      <div className="bg-gradient-to-r from-[#24050b] via-[#380812] to-[#24050b] rounded-3xl p-6 sm:p-8 text-white shadow-xl flex flex-col md:flex-row justify-between items-center gap-6 border border-amber-500/30">
+        <div className="space-y-2 text-center md:text-left">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-400/10 border border-amber-400/30 text-amber-300 text-xs font-semibold">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Rathore Samaj Business Network</span>
           </span>
-          <h2 className="text-2xl font-bold font-serif text-amber-100 mt-2">
-            Promote Your Shop & Services
+          <h2 className="text-2xl sm:text-3xl font-bold font-serif text-amber-50">
+            Promote Your Business & Shop
           </h2>
-          <p className="text-xs text-amber-200/80 mt-1 max-w-xl">
-            Reach thousands of Rathore Samaj families across cities. Replace traditional booklet ads with interactive digital business listings.
+          <p className="text-xs sm:text-sm text-stone-300 max-w-xl font-light leading-relaxed">
+            Reach thousands of Rathore Samaj families across MP, Rajasthan, and Maharashtra. Replace outdated printed booklets with live interactive digital storefronts.
           </p>
         </div>
 
@@ -94,32 +95,34 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({
           {authSession ? (
             <button 
               onClick={() => onNavigateTab('advertise-shop')}
-              className="bg-amber-400 hover:bg-amber-300 text-red-950 font-extrabold px-5 py-3 rounded-xl shadow-lg transition-all text-sm flex items-center justify-center gap-2 cursor-pointer"
+              className="bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-stone-950 font-bold px-5 py-3 rounded-xl shadow-lg transition-all text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer hover:scale-102"
             >
-              <PlusCircle className="w-5 h-5" /> Post Shop Advertisement
+              <PlusCircle className="w-4 h-4 text-stone-950" />
+              <span>Post Shop Advertisement</span>
             </button>
           ) : (
             <button 
               onClick={() => onNavigateTab('signup')}
-              className="bg-amber-400 hover:bg-amber-300 text-red-950 font-extrabold px-5 py-3 rounded-xl shadow-lg transition-all text-sm flex items-center justify-center gap-2 cursor-pointer"
+              className="bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-stone-950 font-bold px-5 py-3 rounded-xl shadow-lg transition-all text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer hover:scale-102"
             >
-              <UserPlus className="w-5 h-5" /> Sign In to Advertise Shop
+              <UserPlus className="w-4 h-4 text-stone-950" />
+              <span>Sign In to Post Shop Ad</span>
             </button>
           )}
         </div>
       </div>
 
-      {/* CATEGORY FILTER PILLS */}
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-bold text-slate-700 mr-1">Categories:</span>
+      {/* CATEGORY FILTER BAR */}
+      <div className="flex flex-wrap items-center gap-2 bg-white p-3 rounded-2xl border border-stone-200/90 shadow-xs">
+        <span className="text-xs font-bold text-stone-700 ml-2 mr-1">Categories:</span>
         {categories.map(cat => (
           <button
             key={cat}
             onClick={() => setSelectedCategory(cat)}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold capitalize transition-all cursor-pointer ${
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold capitalize transition-all cursor-pointer ${
               selectedCategory === cat
-                ? 'bg-red-900 text-amber-100 shadow-xs'
-                : 'bg-white border border-amber-200 text-slate-700 hover:bg-amber-50'
+                ? 'bg-[#380812] text-amber-200 shadow-xs'
+                : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
             }`}
           >
             {cat === 'all' ? 'All Businesses' : cat}
@@ -135,48 +138,47 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({
           return (
             <div 
               key={ad.id} 
-              className="bg-white rounded-2xl shadow-md border border-amber-200/80 overflow-hidden flex flex-col justify-between hover:shadow-xl transition-all duration-300 group"
+              className="bg-white rounded-2xl shadow-sm border border-stone-200/80 overflow-hidden flex flex-col justify-between hover:shadow-xl hover:border-amber-400/50 transition-all duration-300 group"
             >
               <div>
-                <div className="relative h-44 bg-slate-100 overflow-hidden">
+                <div className="relative h-44 bg-stone-100 overflow-hidden">
                   <img 
                     src={bannerUrl} 
                     alt={ad.title} 
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
                   />
-                  <div className="absolute top-3 left-3 bg-red-950/90 text-amber-300 text-xs font-bold px-2.5 py-1 rounded-md shadow-xs">
+                  <div className="absolute top-3 left-3 bg-[#24050b]/90 text-amber-300 text-xs font-semibold px-2.5 py-1 rounded-md shadow-xs border border-amber-500/30 backdrop-blur-xs">
                     {ad.category}
                   </div>
                   {ad.isFeatured && (
-                    <div className="absolute top-3 right-3 bg-amber-400 text-red-950 text-xs font-bold px-2.5 py-1 rounded-md shadow flex items-center gap-1">
-                      <Star className="w-3.5 h-3.5 fill-red-950" /> Featured Shop
+                    <div className="absolute top-3 right-3 bg-gradient-to-r from-amber-400 to-amber-300 text-stone-950 text-xs font-bold px-2.5 py-1 rounded-md shadow flex items-center gap-1">
+                      <Star className="w-3.5 h-3.5 fill-stone-950" /> Featured
                     </div>
                   )}
                 </div>
 
                 <div className="p-5">
-                  <div className="flex justify-between items-start">
-                    <h3 className="font-bold text-lg text-slate-900 font-serif mb-1 leading-snug">
-                      {ad.title}
-                    </h3>
-                  </div>
+                  <h3 className="font-bold text-lg text-stone-900 font-serif mb-1 leading-snug group-hover:text-[#380812] transition-colors">
+                    {ad.title}
+                  </h3>
 
-                  <p className="text-xs font-semibold text-amber-800 mb-2">
-                    Owner: {ad.owner} {ad.city ? `• ${ad.city}` : ''}
+                  {/* ZERO-PILL METADATA LINE */}
+                  <p className="text-xs text-stone-600 font-medium mb-2.5">
+                    Owner: {ad.owner} {ad.city ? `· ${ad.city}` : ''}
                   </p>
 
-                  <p className="text-xs text-slate-600 mb-3 leading-relaxed">
+                  <p className="text-xs text-stone-600 mb-3 leading-relaxed">
                     {ad.tagline || ad.description}
                   </p>
 
                   {ad.address && (
-                    <p className="text-[11px] text-slate-500 mb-3 flex items-center gap-1">
+                    <p className="text-[11px] text-stone-500 mb-3">
                       📍 {ad.address}
                     </p>
                   )}
 
                   {ad.offer && (
-                    <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs p-2 rounded-lg font-semibold mb-3 flex items-center gap-1.5">
+                    <div className="bg-emerald-50 border border-emerald-200/80 text-emerald-800 text-xs p-2.5 rounded-xl font-semibold mb-3 flex items-center gap-1.5">
                       <Tag className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                       <span>{ad.offer}</span>
                     </div>
@@ -187,9 +189,9 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({
               <div className="p-5 pt-0">
                 <a 
                   href={`tel:${ad.phone}`} 
-                  className="w-full bg-slate-900 hover:bg-red-950 text-amber-200 font-bold py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 transition-colors shadow-sm"
+                  className="w-full bg-gradient-to-r from-[#380812] to-[#540e1b] hover:from-[#24050b] hover:to-[#380812] text-amber-200 font-semibold py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-xs border border-amber-500/20 cursor-pointer"
                 >
-                  <Phone className="w-3.5 h-3.5" /> Call Shop Owner ({ad.phone})
+                  <Phone className="w-3.5 h-3.5 text-amber-300" /> Call Owner ({ad.phone})
                 </a>
               </div>
             </div>
