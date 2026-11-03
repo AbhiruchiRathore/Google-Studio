@@ -4,11 +4,24 @@ export type TabType =
   | 'booklet' 
   | 'events' 
   | 'signup' 
+  | 'dashboard'
   | 'create-profile' 
   | 'advertise-shop'
   | 'family-details';
 
 export type GenderType = 'all' | 'Male' | 'Female';
+
+export type ProfileStatus = 'active' | 'draft' | 'archived';
+export type VisibilitySetting = 'public' | 'verified_only' | 'private';
+
+export interface UserMediaAsset {
+  id: string;
+  url: string;
+  title: string;
+  type: 'avatar' | 'cover' | 'gallery' | 'document';
+  uploadedAt: string;
+  size?: string;
+}
 
 export interface MatrimonyProfile {
   id: number | string;
@@ -26,6 +39,15 @@ export interface MatrimonyProfile {
   birthTime?: string;
   familyDetails?: string;
   photo?: string;
+  coverPhoto?: string;
+  gallery?: string[];
+  socialLinks?: {
+    linkedin?: string;
+    instagram?: string;
+    website?: string;
+  };
+  visibility?: VisibilitySetting;
+  status?: ProfileStatus;
   verified?: boolean;
   contact: string;
   phone?: string;
@@ -33,6 +55,7 @@ export interface MatrimonyProfile {
   native?: string;
   location?: string;
   createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface BusinessAd {
@@ -47,9 +70,13 @@ export interface BusinessAd {
   offer?: string;
   rating?: string;
   isFeatured?: boolean;
+  status?: 'active' | 'draft' | 'paused';
+  viewsCount?: number;
+  inquiriesCount?: number;
   banner?: string;
   description?: string;
   createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface SamajEvent {
