@@ -201,7 +201,7 @@ export default function SignUpTab() {
         {/* Login Link */}
         <div className="border border-gray-200 rounded-full py-3 text-center">
           <span className="text-xs text-gray-600 font-medium">Already have an account?</span>
-          <a href="/login" className="text-xs text-cyan-600 font-bold ml-1 hover:underline">Login ></a>
+          <a href="/login" className="text-xs text-cyan-600 font-bold ml-1 hover:underline">Login &gt;</a>
         </div>
       </div>
 
