@@ -7,7 +7,7 @@ import { MatrimonyTab } from './components/MatrimonyTab';
 import { BusinessTab } from './components/BusinessTab';
 import { BookletTab } from './components/BookletTab';
 import { EventsTab } from './components/EventsTab';
-import { SignUpTab } from './components/SignUpTab';
+import SignUpTab from './components/SignUpTab';
 import { CreateProfileTab } from './components/CreateProfileTab';
 import { AdvertiseShopTab } from './components/AdvertiseShopTab';
 import { FamilyDetailsTab } from './components/FamilyDetailsTab';
