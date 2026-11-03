@@ -257,3 +257,11 @@ export default function SignUpTab({
 
               <button type="submit" disabled={loading} className="w-full bg-emerald-700 hover:bg-emerald-800 text-white font-bold py-3.5 rounded-xl text-xs cursor-pointer shadow-sm transition-all">
                 {loading ? 'Verifying...' : 'Verify OTP & Access Directory'}
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
