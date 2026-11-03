@@ -47,7 +47,7 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ onNavigateTab, authSessi
           {/* Quick Action Buttons */}
           <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
             <button
-              onClick={() => onNavigateTab && onNavigateTab('Sign In')}
+              onClick={() => onNavigateTab && onNavigateTab('signup')}
               className="bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-stone-950 font-bold px-6 py-2.5 rounded-xl text-xs sm:text-sm shadow-lg transition-all flex items-center gap-2 cursor-pointer hover:scale-102"
             >
               <Users className="w-4 h-4 text-stone-950" />
