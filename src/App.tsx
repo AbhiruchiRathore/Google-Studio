@@ -11,6 +11,7 @@ import SignUpTab from './components/SignUpTab';
 import { CreateProfileTab } from './components/CreateProfileTab';
 import { AdvertiseShopTab } from './components/AdvertiseShopTab';
 import { FamilyDetailsTab } from './components/FamilyDetailsTab';
+import { DashboardTab } from './components/DashboardTab';
 import { WhatsAppShare } from './components/WhatsAppShare';
 import { Footer } from './components/Footer';
 
@@ -208,6 +209,72 @@ export const App: React.FC = () => {
     }
   };
 
+  // Profile update handler
+  const handleUpdateProfile = (updatedProfile: MatrimonyProfile) => {
+    setProfiles(prev => prev.map(p => p.id === updatedProfile.id ? updatedProfile : p));
+    try {
+      const stored = localStorage.getItem('samaj_profiles');
+      const userProfiles: MatrimonyProfile[] = stored ? JSON.parse(stored) : [];
+      const index = userProfiles.findIndex(p => p.id === updatedProfile.id);
+      if (index >= 0) {
+        userProfiles[index] = updatedProfile;
+      } else {
+        userProfiles.unshift(updatedProfile);
+      }
+      localStorage.setItem('samaj_profiles', JSON.stringify(userProfiles));
+    } catch (e) {
+      console.error("Error updating profile:", e);
+    }
+  };
+
+  // Profile deletion handler
+  const handleDeleteProfile = (id: number | string) => {
+    setProfiles(prev => prev.filter(p => p.id !== id));
+    try {
+      const stored = localStorage.getItem('samaj_profiles');
+      if (stored) {
+        const userProfiles: MatrimonyProfile[] = JSON.parse(stored);
+        const remaining = userProfiles.filter(p => p.id !== id);
+        localStorage.setItem('samaj_profiles', JSON.stringify(remaining));
+      }
+    } catch (e) {
+      console.error("Error deleting profile:", e);
+    }
+  };
+
+  // Business Ad update handler
+  const handleUpdateAd = (updatedAd: BusinessAd) => {
+    setAds(prev => prev.map(a => a.id === updatedAd.id ? updatedAd : a));
+    try {
+      const stored = localStorage.getItem('samaj_ads');
+      const userAds: BusinessAd[] = stored ? JSON.parse(stored) : [];
+      const index = userAds.findIndex(a => a.id === updatedAd.id);
+      if (index >= 0) {
+        userAds[index] = updatedAd;
+      } else {
+        userAds.unshift(updatedAd);
+      }
+      localStorage.setItem('samaj_ads', JSON.stringify(userAds));
+    } catch (e) {
+      console.error("Error updating ad:", e);
+    }
+  };
+
+  // Business Ad deletion handler
+  const handleDeleteAd = (id: number | string) => {
+    setAds(prev => prev.filter(a => a.id !== id));
+    try {
+      const stored = localStorage.getItem('samaj_ads');
+      if (stored) {
+        const userAds: BusinessAd[] = JSON.parse(stored);
+        const remaining = userAds.filter(a => a.id !== id);
+        localStorage.setItem('samaj_ads', JSON.stringify(remaining));
+      }
+    } catch (e) {
+      console.error("Error deleting ad:", e);
+    }
+  };
+
   // Auth handlers
   const handleLogin = (session: AuthSession) => {
     setAuthSession(session);
@@ -216,6 +283,8 @@ export const App: React.FC = () => {
     } catch (e) {
       console.error(e);
     }
+    // After login, smoothly navigate to the member dashboard
+    setCurrentTab('dashboard');
   };
 
   const handleLogout = () => {
@@ -225,10 +294,11 @@ export const App: React.FC = () => {
     } catch (e) {
       console.error(e);
     }
+    setCurrentTab('matrimony');
   };
 
   return (
-    <div className="min-h-screen bg-[#FAF8F5] text-stone-800 font-sans flex flex-col selection:bg-amber-100 selection:text-amber-950">
+    <div className="min-h-screen bg-[#FDFBF7] text-stone-800 font-sans flex flex-col selection:bg-rose-100 selection:text-rose-950">
       {/* Navigation Header */}
       <Header 
         currentTab={currentTab} 
@@ -256,6 +326,22 @@ export const App: React.FC = () => {
             onUnlockProfile={handleUnlockProfile}
             onNavigateTab={setCurrentTab}
             onAddQuickProfile={handleAddQuickProfile}
+          />
+        )}
+
+        {currentTab === 'dashboard' && (
+          <DashboardTab
+            authSession={authSession}
+            profiles={profiles}
+            onUpdateProfile={handleUpdateProfile}
+            onAddProfile={handleAddProfile}
+            onDeleteProfile={handleDeleteProfile}
+            ads={ads}
+            onUpdateAd={handleUpdateAd}
+            onAddAd={handleAddAd}
+            onDeleteAd={handleDeleteAd}
+            onNavigateTab={setCurrentTab}
+            onLogout={handleLogout}
           />
         )}
 
