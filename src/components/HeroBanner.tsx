@@ -55,15 +55,15 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ onNavigateTab, authSessi
             </button>
 
             <button
-              onClick={() => onNavigateTab && onNavigateTab('family-details')}
+              onClick={() => onNavigateTab && onNavigateTab('signup')}
               className="bg-white/10 hover:bg-white/20 text-amber-200 border border-amber-400/40 font-semibold px-5 py-2.5 rounded-xl text-xs sm:text-sm transition-all flex items-center gap-2 cursor-pointer backdrop-blur-xs"
             >
               <HeartHandshake className="w-4 h-4 text-amber-300" />
-              <span>Add Family Details (पारिवारिक विवरण)</span>
+              <span>Create Profile (अपना बायोडाटा बनाएं)</span>
             </button>
 
             <button
-              onClick={() => onNavigateTab && onNavigateTab('booklet')}
+              onClick={() => onNavigateTab && onNavigateTab('signup')}
               className="text-stone-300 hover:text-amber-300 font-medium px-4 py-2 text-xs sm:text-sm flex items-center gap-1.5 transition-colors cursor-pointer"
             >
               <BookOpen className="w-4 h-4 text-amber-400" />
