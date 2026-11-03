@@ -5,6 +5,8 @@ import {
 } from 'lucide-react';
 import { AuthSession, TabType } from '../types';
 import { GoogleSignInModal } from './GoogleSignInModal';
+import { auth } from '../firebase';
+import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 
 interface SignUpTabProps {
   authSession: AuthSession | null;
@@ -15,14 +17,14 @@ interface SignUpTabProps {
   unlockedCount: number;
 }
 
-export const SignUpTab: React.FC<SignUpTabProps> = ({
+export default function SignUpTab({
   authSession,
   onLogin,
   onLogout,
   onNavigateTab,
   hasRegisteredProfile,
   unlockedCount
-}) => {
+}: SignUpTabProps) {
   // Google sign in modal state
   const [showGoogleModal, setShowGoogleModal] = useState(false);
 
@@ -30,7 +32,7 @@ export const SignUpTab: React.FC<SignUpTabProps> = ({
   const [phoneNumber, setPhoneNumber] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   
-  // Real dynamic OTP states (NO prefilled code!)
+  // Real dynamic OTP states
   const [generatedOtp, setGeneratedOtp] = useState<string>('');
   const [otpDigits, setOtpDigits] = useState<string[]>(['', '', '', '', '', '']);
   const [otpError, setOtpError] = useState<string | null>(null);
@@ -70,15 +72,14 @@ export const SignUpTab: React.FC<SignUpTabProps> = ({
   const triggerSendOtp = (phoneToUse: string) => {
     const freshOtp = Math.floor(100000 + Math.random() * 900000).toString();
     setGeneratedOtp(freshOtp);
-    setOtpDigits(['', '', '', '', '', '']); // STRICTLY EMPTY!
+    setOtpDigits(['', '', '', '', '', '']);
     setOtpError(null);
     setAttemptsLeft(3);
     setOtpSent(true);
-    setResendCooldown(30); // 30s cooldown
-    setOtpExpirySeconds(300); // 5 mins validity
+    setResendCooldown(30);
+    setOtpExpirySeconds(300);
     setOtpCopied(false);
 
-    // Auto-focus first digit input box after short delay
     setTimeout(() => {
       digitInputRefs.current[0]?.focus();
     }, 150);
@@ -100,26 +101,21 @@ export const SignUpTab: React.FC<SignUpTabProps> = ({
     triggerSendOtp(cleanPhone);
   };
 
-  // Handle individual digit input
   const handleDigitChange = (index: number, value: string) => {
     setOtpError(null);
     const cleaned = value.replace(/\D/g, '');
 
-    // If user typed a single digit
     if (cleaned.length === 1) {
       const nextDigits = [...otpDigits];
       nextDigits[index] = cleaned;
       setOtpDigits(nextDigits);
 
-      // Focus next box
       if (index < 5) {
         digitInputRefs.current[index + 1]?.focus();
       }
     } else if (cleaned.length > 1) {
-      // User pasted full or partial code
       handlePasteCode(cleaned);
     } else {
-      // Empty / deleted
       const nextDigits = [...otpDigits];
       nextDigits[index] = '';
       setOtpDigits(nextDigits);
@@ -128,7 +124,6 @@ export const SignUpTab: React.FC<SignUpTabProps> = ({
 
   const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Backspace' && !otpDigits[index] && index > 0) {
-      // Jump to previous box on backspace if current is empty
       digitInputRefs.current[index - 1]?.focus();
     }
   };
@@ -179,7 +174,6 @@ export const SignUpTab: React.FC<SignUpTabProps> = ({
       return;
     }
 
-    // Success! Verify session
     const cleanPhone = phoneNumber.trim().replace(/\D/g, '');
     const session: AuthSession = {
       method: 'Phone',
@@ -190,16 +184,37 @@ export const SignUpTab: React.FC<SignUpTabProps> = ({
     };
 
     onLogin(session);
-    alert(`✅ Mobile verification successful for +91 ${cleanPhone}! The 'Create Profile' and 'Advertise Shop' options are now unlocked in your navigation.`);
+    alert(`✅ Mobile verification successful for +91 ${cleanPhone}!`);
     onNavigateTab('matrimony');
   };
 
-  // Google sign in callback
-  const handleGoogleSuccess = (session: AuthSession) => {
-    setShowGoogleModal(false);
-    onLogin(session);
-    alert(`✅ Successfully signed in with Google as ${session.name} (${session.email})! You can now access 'Create Profile' and 'Advertise Shop' in the navigation bar.`);
-    onNavigateTab('matrimony');
+  // Real Firebase Google Authentication Handler
+  const handleRealGoogleSignIn = async () => {
+    const provider = new GoogleAuthProvider();
+    provider.addScope('profile');
+    provider.addScope('email');
+
+    try {
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+
+      const session: AuthSession = {
+        method: 'Google',
+        name: user.displayName || 'Google User',
+        email: user.email || '',
+        photoUrl: user.photoURL || '', // Real Gmail avatar URL
+        loggedInAt: new Date().toISOString(),
+        verified: user.emailVerified
+      };
+
+      setShowGoogleModal(false);
+      onLogin(session);
+      alert(`✅ Successfully signed in with Google as ${session.name}!`);
+      onNavigateTab('matrimony');
+    } catch (error: any) {
+      console.error("Google Sign-In Error:", error.message);
+      alert("Google Sign-In failed or was cancelled. Please try again.");
+    }
   };
 
   // SIGNED IN DASHBOARD VIEW
@@ -207,9 +222,14 @@ export const SignUpTab: React.FC<SignUpTabProps> = ({
     return (
       <div className="space-y-6 max-w-lg mx-auto py-6">
         <div className="bg-white p-6 md:p-8 rounded-3xl border border-stone-200/90 shadow-sm space-y-6 text-center">
-          <div className="w-16 h-16 bg-emerald-50 rounded-2xl mx-auto flex items-center justify-center text-3xl border border-emerald-200">
+          <div className="w-16 h-16 bg-emerald-50 rounded-2xl mx-auto flex items-center justify-center text-3xl border border-emerald-200 overflow-hidden">
             {authSession.photoUrl ? (
-              <img src={authSession.photoUrl} alt={authSession.name} className="w-full h-full rounded-2xl object-cover" />
+              <img 
+                src={authSession.photoUrl} 
+                alt={authSession.name} 
+                referrerPolicy="no-referrer"
+                className="w-full h-full rounded-2xl object-cover" 
+              />
             ) : (
               <CheckCircle2 className="w-8 h-8 text-emerald-700" />
             )}
@@ -224,7 +244,6 @@ export const SignUpTab: React.FC<SignUpTabProps> = ({
             </p>
           </div>
 
-          {/* Member navigation unlocked announcement */}
           <div className="bg-amber-50/70 border border-amber-200/80 p-4 rounded-2xl text-left space-y-1.5">
             <p className="text-xs font-bold text-stone-900 flex items-center gap-1.5">
               <Sparkles className="w-4 h-4 text-amber-700 shrink-0" />
@@ -235,7 +254,6 @@ export const SignUpTab: React.FC<SignUpTabProps> = ({
             </p>
           </div>
 
-          {/* Quick Action Navigation Cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left">
             <button
               onClick={() => onNavigateTab('create-profile')}
@@ -274,7 +292,6 @@ export const SignUpTab: React.FC<SignUpTabProps> = ({
             </button>
           </div>
 
-          {/* Access status */}
           <div className="bg-white p-3.5 rounded-xl border border-slate-200 text-left text-xs space-y-2">
             <div className="flex justify-between items-center">
               <span className="text-slate-600">Access Status:</span>
@@ -314,11 +331,15 @@ export const SignUpTab: React.FC<SignUpTabProps> = ({
   // SIGN IN / SIGN UP VIEW
   return (
     <div className="space-y-6 max-w-md mx-auto py-8">
-      {/* Real Google Sign In Consent Modal */}
+      {/* Optional Custom Modal or Direct Firebase Trigger */}
       <GoogleSignInModal 
         isOpen={showGoogleModal}
         onClose={() => setShowGoogleModal(false)}
-        onSuccess={handleGoogleSuccess}
+        onSuccess={(session) => {
+          setShowGoogleModal(false);
+          onLogin(session);
+          onNavigateTab('matrimony');
+        }}
       />
 
       <div className="bg-white p-6 md:p-8 rounded-3xl border border-stone-200/90 shadow-sm space-y-6 text-center">
@@ -333,10 +354,10 @@ export const SignUpTab: React.FC<SignUpTabProps> = ({
         </div>
 
         <div className="space-y-4">
-          {/* REAL GOOGLE SIGN IN BUTTON (Triggers Google Account Selection & Permission Consent Flow) */}
+          {/* REAL FIREBASE GOOGLE SIGN IN BUTTON */}
           <button 
             type="button"
-            onClick={() => setShowGoogleModal(true)} 
+            onClick={handleRealGoogleSignIn} 
             className="w-full flex items-center justify-center gap-3 bg-white border border-stone-300 hover:bg-stone-50 text-stone-700 font-semibold py-3 px-4 rounded-xl shadow-xs transition-all text-xs cursor-pointer hover:border-stone-400 group"
           >
             <svg className="w-4 h-4 shrink-0 group-hover:scale-105 transition-transform" viewBox="0 0 24 24">
@@ -356,7 +377,6 @@ export const SignUpTab: React.FC<SignUpTabProps> = ({
             <div className="flex-grow border-t border-stone-200"></div>
           </div>
 
-          {/* REAL PHONE NUMBER + OTP SYSTEM */}
           {!otpSent ? (
             <form onSubmit={handleRequestOtp} className="space-y-3 text-left">
               <div>
@@ -386,7 +406,6 @@ export const SignUpTab: React.FC<SignUpTabProps> = ({
             </form>
           ) : (
             <form onSubmit={handleVerifyOtp} className="space-y-4 text-left animate-in fade-in">
-              {/* REAL SMS DISPATCH NOTIFICATION BANNER */}
               <div className="bg-emerald-50 border border-emerald-300 rounded-2xl p-3.5 space-y-2 text-xs shadow-xs">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-bold text-emerald-800 flex items-center gap-1.5 uppercase tracking-wider">
@@ -397,7 +416,7 @@ export const SignUpTab: React.FC<SignUpTabProps> = ({
                 </div>
 
                 <p className="text-slate-800 font-sans text-xs bg-white/80 p-2.5 rounded-xl border border-emerald-200 leading-relaxed">
-                  "Your Rathore Rishtey verification code is: <strong className="text-red-950 font-mono text-sm tracking-widest">{generatedOtp}</strong>. Valid for 5 minutes. Do not share with anyone."
+                  "Your Rathore Rishtey verification code is: <strong className="text-red-950 font-mono text-sm tracking-widest">{generatedOtp}</strong>. Valid for 5 minutes."
                 </p>
 
                 <div className="flex items-center justify-between pt-1">
@@ -414,7 +433,7 @@ export const SignUpTab: React.FC<SignUpTabProps> = ({
                     ) : (
                       <>
                         <Copy className="w-3.5 h-3.5 text-emerald-700" />
-                        <span>Copy Code ({generatedOtp})</span>
+                        <span>Copy Code</span>
                       </>
                     )}
                   </button>
@@ -425,7 +444,6 @@ export const SignUpTab: React.FC<SignUpTabProps> = ({
                 </div>
               </div>
 
-              {/* INDIVIDUAL 6-DIGIT EMPTY INPUT BOXES */}
               <div>
                 <div className="flex justify-between items-center mb-2">
                   <label className="block font-bold text-slate-700 text-xs">
@@ -440,7 +458,6 @@ export const SignUpTab: React.FC<SignUpTabProps> = ({
                   </button>
                 </div>
 
-                {/* 6 Individual Digit Boxes */}
                 <div className="flex gap-2 justify-between">
                   {otpDigits.map((digit, index) => (
                     <input
@@ -468,7 +485,6 @@ export const SignUpTab: React.FC<SignUpTabProps> = ({
                   ))}
                 </div>
 
-                {/* Error feedback if wrong OTP entered */}
                 {otpError && (
                   <p className="text-red-600 text-xs mt-2 flex items-center gap-1 font-medium">
                     <AlertCircle className="w-3.5 h-3.5 shrink-0" />
@@ -477,7 +493,6 @@ export const SignUpTab: React.FC<SignUpTabProps> = ({
                 )}
               </div>
 
-              {/* Verification & Resend Actions */}
               <div className="space-y-2">
                 <button 
                   type="submit" 
@@ -503,11 +518,7 @@ export const SignUpTab: React.FC<SignUpTabProps> = ({
             </form>
           )}
         </div>
-
-        <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-500">
-          Note: After signing in, you will be able to view profiles and see the <strong>Create Profile</strong> and <strong>Advertise Shop</strong> tabs in the navigation bar.
-        </div>
       </div>
     </div>
   );
-};
+}
