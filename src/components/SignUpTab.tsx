@@ -60,7 +60,7 @@ export default function SignUpTab({
 
   return (
     <div className="space-y-6 max-w-md mx-auto py-8 px-4">
-      <GoogleSignInModal isOpen={showGoogleModal} onClose={() => setShowGoogleModal(false)} onSuccess={(session) => { onLogin(session); onNavigateTab('matrimony'); }} />
+      <GoogleSignInModal isOpen={showGoogleModal} onClose={() => setShowGoogleModal(false)} onSuccess={(session) => { onLogin(session); onNavigateTab('dashboard'); }} />
 
       <div className="bg-white p-6 md:p-8 rounded-3xl border border-stone-200/90 shadow-sm space-y-6 text-center">
         <div>
