@@ -115,7 +115,7 @@ export const App: React.FC = () => {
         } catch (e) {
           console.error(e);
         }
-        //setCurrentTab('dashboard');
+        setCurrentTab('dashboard');
       }
     });
     return () => unsubscribe();
