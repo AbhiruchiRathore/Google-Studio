@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { LogOut, CheckCircle2 } from 'lucide-react';
 import { AuthSession, TabType } from '../types';
 import { GoogleSignInModal } from './GoogleSignInModal';
 import { auth } from '../firebase';
-import { GoogleAuthProvider, signInWithRedirect, getRedirectResult } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithRedirect } from 'firebase/auth';
 
 interface SignUpTabProps {
   authSession: AuthSession | null;
@@ -22,32 +22,7 @@ export default function SignUpTab({
 }: SignUpTabProps) {
   const [showGoogleModal, setShowGoogleModal] = useState(false);
 
-  // Handle the redirect result when the user comes back from Google's login flow
-  useEffect(() => {
-    getRedirectResult(auth)
-      .then((result) => {
-        if (result && result.user) {
-          const user = result.user;
-          const session: AuthSession = {
-            method: 'Google',
-            name: user.displayName || 'Google User',
-            email: user.email || '',
-            photoUrl: user.photoURL || '',
-            loggedInAt: new Date().toISOString(),
-            verified: user.emailVerified
-          };
-
-          setShowGoogleModal(false);
-          onLogin(session);
-          onNavigateTab('matrimony');
-        }
-      })
-      .catch((error: any) => {
-        console.error("Google Redirect Auth Error:", error.message);
-      });
-  }, [onLogin, onNavigateTab]);
-
-  // Real Google Sign-In via Redirect (Compatible with Android WebViews)
+  // Universal Google Sign-In via Redirect (Works on both Web and Android APK WebViews)
   const handleRealGoogleSignIn = async () => {
     const provider = new GoogleAuthProvider();
     provider.addScope('profile');
