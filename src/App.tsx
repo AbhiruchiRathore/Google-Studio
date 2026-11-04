@@ -14,6 +14,8 @@ import { FamilyDetailsTab } from './components/FamilyDetailsTab';
 import { DashboardTab } from './components/DashboardTab';
 import { WhatsAppShare } from './components/WhatsAppShare';
 import { Footer } from './components/Footer';
+import { auth } from './firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 
 export const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<TabType>('matrimony');
@@ -25,7 +27,6 @@ export const App: React.FC = () => {
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          // Merge user custom profiles at top, then unique default profiles
           const userIds = new Set(parsed.map(p => p.id));
           const remainingDefaults = INITIAL_PROFILES.filter(p => !userIds.has(p.id));
           return [...parsed, ...remainingDefaults];
@@ -96,6 +97,30 @@ export const App: React.FC = () => {
     return null;
   });
 
+  // Global Auth Listener to handle Redirect returns across Web & APK WebView
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        const session: AuthSession = {
+          method: 'Google',
+          name: user.displayName || 'Google User',
+          email: user.email || '',
+          photoUrl: user.photoURL || '',
+          loggedInAt: new Date().toISOString(),
+          verified: user.emailVerified
+        };
+        setAuthSession(session);
+        try {
+          localStorage.setItem('user_auth_session', JSON.stringify(session));
+        } catch (e) {
+          console.error(e);
+        }
+        setCurrentTab('dashboard');
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
   // Has registered profile
   const [hasRegisteredProfile, setHasRegisteredProfile] = useState<boolean>(() => {
     try {
@@ -110,7 +135,6 @@ export const App: React.FC = () => {
     return false;
   });
 
-  // Handle Unlocking a Profile Contact
   const handleUnlockProfile = (id: number | string) => {
     setUnlockedProfiles(prev => {
       if (prev.includes(id)) return prev;
@@ -124,7 +148,6 @@ export const App: React.FC = () => {
     });
   };
 
-  // Handle Adding a Full Profile
   const handleAddProfile = (newProfile: MatrimonyProfile) => {
     setProfiles(prev => [newProfile, ...prev]);
     setHasRegisteredProfile(true);
@@ -138,7 +161,6 @@ export const App: React.FC = () => {
     }
   };
 
-  // Handle Adding a Quick Profile from Modal
   const handleAddQuickProfile = (partial: Partial<MatrimonyProfile>) => {
     const newProfile: MatrimonyProfile = {
       id: Date.now(),
@@ -163,7 +185,6 @@ export const App: React.FC = () => {
     handleAddProfile(newProfile);
   };
 
-  // Handle Adding a Business Ad
   const handleAddAd = (newAd: BusinessAd) => {
     setAds(prev => [newAd, ...prev]);
     try {
@@ -176,7 +197,6 @@ export const App: React.FC = () => {
     }
   };
 
-  // Handle Adding Quick Ad
   const handleAddQuickAd = (partial: Partial<BusinessAd>) => {
     const newAd: BusinessAd = {
       id: Date.now(),
@@ -196,7 +216,6 @@ export const App: React.FC = () => {
     handleAddAd(newAd);
   };
 
-  // Handle Adding an Event
   const handleAddEvent = (newEvent: SamajEvent) => {
     setEvents(prev => [newEvent, ...prev]);
     try {
@@ -209,7 +228,6 @@ export const App: React.FC = () => {
     }
   };
 
-  // Profile update handler
   const handleUpdateProfile = (updatedProfile: MatrimonyProfile) => {
     setProfiles(prev => prev.map(p => p.id === updatedProfile.id ? updatedProfile : p));
     try {
@@ -227,7 +245,6 @@ export const App: React.FC = () => {
     }
   };
 
-  // Profile deletion handler
   const handleDeleteProfile = (id: number | string) => {
     setProfiles(prev => prev.filter(p => p.id !== id));
     try {
@@ -242,7 +259,6 @@ export const App: React.FC = () => {
     }
   };
 
-  // Business Ad update handler
   const handleUpdateAd = (updatedAd: BusinessAd) => {
     setAds(prev => prev.map(a => a.id === updatedAd.id ? updatedAd : a));
     try {
@@ -260,7 +276,6 @@ export const App: React.FC = () => {
     }
   };
 
-  // Business Ad deletion handler
   const handleDeleteAd = (id: number | string) => {
     setAds(prev => prev.filter(a => a.id !== id));
     try {
@@ -275,7 +290,6 @@ export const App: React.FC = () => {
     }
   };
 
-  // Auth handlers
   const handleLogin = (session: AuthSession) => {
     setAuthSession(session);
     try {
@@ -283,7 +297,6 @@ export const App: React.FC = () => {
     } catch (e) {
       console.error(e);
     }
-    // After login, smoothly navigate to the member dashboard
     setCurrentTab('dashboard');
   };
 
@@ -291,6 +304,7 @@ export const App: React.FC = () => {
     setAuthSession(null);
     try {
       localStorage.removeItem('user_auth_session');
+      auth.signOut();
     } catch (e) {
       console.error(e);
     }
@@ -299,7 +313,6 @@ export const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-[#FDFBF7] text-stone-800 font-sans flex flex-col selection:bg-rose-100 selection:text-rose-950">
-      {/* Navigation Header */}
       <Header 
         currentTab={currentTab} 
         onSelectTab={setCurrentTab} 
@@ -307,7 +320,6 @@ export const App: React.FC = () => {
         onLogout={handleLogout}
       />
 
-      {/* Hero Banner Showcase (Homepage Only) */}
       {currentTab === 'matrimony' && (
         <HeroBanner 
           onNavigateTab={setCurrentTab}
@@ -315,7 +327,6 @@ export const App: React.FC = () => {
         />
       )}
 
-      {/* Main Container Content */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {currentTab === 'matrimony' && (
           <MatrimonyTab
@@ -404,10 +415,7 @@ export const App: React.FC = () => {
         )}
       </main>
 
-      {/* Floating WhatsApp Share Button */}
       <WhatsAppShare />
-
-      {/* Global Footer */}
       <Footer onNavigateTab={setCurrentTab} />
     </div>
   );
