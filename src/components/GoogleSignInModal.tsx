@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Check, Shield, AlertCircle, ArrowLeft, ExternalLink, Loader2 } from 'lucide-react';
 import { AuthSession } from '../types';
 
@@ -27,6 +27,13 @@ export const GoogleSignInModal: React.FC<GoogleSignInModalProps> = ({
 
   const [customEmail, setCustomEmail] = useState('');
   const [customName, setCustomName] = useState('');
+
+  // Reset to initial step when opened
+  useEffect(() => {
+    if (isOpen) {
+      setStep('choose');
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -63,7 +70,7 @@ export const GoogleSignInModal: React.FC<GoogleSignInModalProps> = ({
         verified: true
       };
       onSuccess(session);
-    }, 1200);
+    }, 500);
   };
 
   return (
