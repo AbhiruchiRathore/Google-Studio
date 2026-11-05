@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { 
   Search, GraduationCap, Briefcase, Eye, Phone, X, ShieldAlert, Sparkles, 
   UserPlus, Lock, ShieldCheck, ArrowRight, Users, Home, Heart, MapPin, 
-  MessageCircle, CheckCircle2, ChevronRight, Award
+  MessageCircle, CheckCircle2, ChevronRight, Award, Share2, Compass
 } from 'lucide-react';
 import { MatrimonyProfile, GenderType, TabType, AuthSession } from '../types';
 
@@ -14,6 +14,7 @@ interface MatrimonyTabProps {
   onUnlockProfile: (id: number | string) => void;
   onNavigateTab: (tab: TabType) => void;
   onAddQuickProfile: (profile: Partial<MatrimonyProfile>) => void;
+  onSelectKundaliProfile?: (profileId: number | string, gender: 'Male' | 'Female') => void;
 }
 
 const FREE_LIMIT = 3;
@@ -25,12 +26,85 @@ export const MatrimonyTab: React.FC<MatrimonyTabProps> = ({
   hasRegisteredProfile,
   onUnlockProfile,
   onNavigateTab,
-  onAddQuickProfile
+  onAddQuickProfile,
+  onSelectKundaliProfile
 }) => {
   const [search, setSearch] = useState('');
   const [genderFilter, setGenderFilter] = useState<GenderType>('all');
   const [gotraFilter, setGotraFilter] = useState('');
   const [cityFilter, setCityFilter] = useState('');
+
+  // Persistent Likes State (works for existing and future profiles)
+  const [likedProfiles, setLikedProfiles] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem('samaj_liked_profiles');
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  const [likeCounts, setLikeCounts] = useState<Record<string, number>>(() => {
+    try {
+      const stored = localStorage.getItem('samaj_profile_likes_counts');
+      return stored ? JSON.parse(stored) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const getProfileLikes = (id: number | string) => {
+    const key = id.toString();
+    if (likeCounts[key] !== undefined) return likeCounts[key];
+    const numId = typeof id === 'number' ? id : parseInt(id as string, 10) || 5;
+    return ((numId * 13 + 17) % 38) + 8;
+  };
+
+  const toggleLikeProfile = (id: number | string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const key = id.toString();
+    const isLiked = likedProfiles.has(key);
+    const newSet = new Set(likedProfiles);
+    const currentCount = getProfileLikes(id);
+    const newCounts = { ...likeCounts };
+
+    if (isLiked) {
+      newSet.delete(key);
+      newCounts[key] = Math.max(0, currentCount - 1);
+    } else {
+      newSet.add(key);
+      newCounts[key] = currentCount + 1;
+    }
+
+    setLikedProfiles(newSet);
+    setLikeCounts(newCounts);
+    try {
+      localStorage.setItem('samaj_liked_profiles', JSON.stringify(Array.from(newSet)));
+      localStorage.setItem('samaj_profile_likes_counts', JSON.stringify(newCounts));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const shareProfileWhatsApp = (p: MatrimonyProfile, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const text = `🚩 *Rathore Rishtey - Matrimonial Biodata* 🚩
+
+*Candidate:* ${p.name}
+*Age & Height:* ${p.age} Yrs · ${p.height || "5' 6\""}
+*Gotra:* ${p.gotra}
+*City & State:* ${p.city}, ${p.state || 'India'}
+*Education:* ${p.education}
+${p.profession ? `*Profession:* ${p.profession}\n` : ''}${p.income ? `*Income:* ${p.income}\n` : ''}*Family:* ${p.familyDetails || 'Reputed Rathore Samaj Family'}
+${p.about ? `*About:* ${p.about}\n` : ''}*Contact:* ${p.contact}
+
+✨ *View full profile & Kundali Milan on Rathore Rishtey Portal:*
+https://svayaa.com/
+_Powered by Svayaa.com_`;
+
+    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank');
+  };
 
   // Selected Profile for Biodata Modal
   const [selectedProfileId, setSelectedProfileId] = useState<number | string | null>(null);
@@ -338,6 +412,16 @@ export const MatrimonyTab: React.FC<MatrimonyTabProps> = ({
                     <ShieldCheck className="w-3 h-3 text-amber-400" />
                     <span>Gotra: {p.gotra}</span>
                   </div>
+
+                  {/* Quick Floating Like Button on Photo */}
+                  <button
+                    onClick={(e) => toggleLikeProfile(p.id, e)}
+                    className="absolute top-3 right-3 bg-white/90 hover:bg-white text-stone-800 p-1.5 rounded-full shadow-md backdrop-blur-xs transition-transform hover:scale-110 cursor-pointer flex items-center gap-1 text-[11px] font-bold px-2"
+                    title={likedProfiles.has(p.id.toString()) ? "Liked" : "Like profile"}
+                  >
+                    <Heart className={`w-3.5 h-3.5 ${likedProfiles.has(p.id.toString()) ? 'fill-rose-500 text-rose-500' : 'text-stone-600'}`} />
+                    <span className={likedProfiles.has(p.id.toString()) ? 'text-rose-600' : 'text-stone-700'}>{getProfileLikes(p.id)}</span>
+                  </button>
                 </div>
 
                 {/* Content Column */}
@@ -385,7 +469,40 @@ export const MatrimonyTab: React.FC<MatrimonyTabProps> = ({
                       className="flex-1 bg-gradient-to-r from-[#380812] to-[#540e1b] hover:from-[#24050b] hover:to-[#380812] text-amber-200 text-xs font-semibold py-2.5 px-3 rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer border border-amber-500/20"
                     >
                       <Eye className="w-3.5 h-3.5 text-amber-300" />
-                      <span>View Full Biodata</span>
+                      <span>View Biodata</span>
+                    </button>
+
+                    {onSelectKundaliProfile && (
+                      <button
+                        onClick={() => onSelectKundaliProfile(p.id, p.gender)}
+                        title="Kundali Milan (३६ गुण)"
+                        className="bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300/80 text-xs font-semibold py-2.5 px-2.5 sm:px-3 rounded-xl transition-all cursor-pointer flex items-center gap-1 shrink-0"
+                      >
+                        <Compass className="w-3.5 h-3.5 text-amber-700" />
+                        <span className="hidden sm:inline">Milan</span>
+                      </button>
+                    )}
+
+                    <button
+                      onClick={(e) => toggleLikeProfile(p.id, e)}
+                      title={likedProfiles.has(p.id.toString()) ? "Liked" : "Like biodata"}
+                      className={`py-2.5 px-2.5 sm:px-3 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
+                        likedProfiles.has(p.id.toString())
+                          ? 'bg-rose-50 border-rose-300 text-rose-700'
+                          : 'bg-stone-50 hover:bg-stone-100 border-stone-200 text-stone-700'
+                      }`}
+                    >
+                      <Heart className={`w-3.5 h-3.5 ${likedProfiles.has(p.id.toString()) ? 'fill-rose-500 text-rose-500' : 'text-stone-500'}`} />
+                      <span>{getProfileLikes(p.id)}</span>
+                    </button>
+
+                    <button
+                      onClick={(e) => shareProfileWhatsApp(p, e)}
+                      title="Share biodata on WhatsApp"
+                      className="bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 text-xs font-semibold py-2.5 px-2.5 sm:px-3 rounded-xl transition-all cursor-pointer flex items-center gap-1 shrink-0"
+                    >
+                      <Share2 className="w-3.5 h-3.5 text-emerald-600" />
+                      <span className="hidden sm:inline">Share</span>
                     </button>
                   </div>
                 </div>
@@ -495,7 +612,28 @@ export const MatrimonyTab: React.FC<MatrimonyTabProps> = ({
                     </div>
                   )}
 
-                  {/* Contact details */}
+                  {/* Kundali Milan Shortcut */}
+                  {onSelectKundaliProfile && (
+                    <button
+                      onClick={() => {
+                        const candidateId = activeProfile.id;
+                        const candidateGender = activeProfile.gender;
+                        handleCloseModal();
+                        onSelectKundaliProfile(candidateId, candidateGender);
+                      }}
+                      className="w-full bg-gradient-to-r from-amber-500/15 via-amber-400/20 to-amber-500/15 hover:from-amber-500/25 hover:to-amber-400/30 border border-amber-300 text-amber-950 font-bold p-3 rounded-xl flex items-center justify-between text-xs transition-all cursor-pointer group shadow-2xs"
+                    >
+                      <span className="flex items-center gap-2">
+                        <Compass className="w-4 h-4 text-amber-700 group-hover:rotate-45 transition-transform" />
+                        <span>Match Kundali with {activeProfile.name} (वैदिक ३६ गुण मिलान)</span>
+                      </span>
+                      <span className="text-[11px] bg-[#380812] text-amber-200 px-2.5 py-1 rounded-lg font-semibold">
+                        Check Milan →
+                      </span>
+                    </button>
+                  )}
+
+                  {/* Contact & Social Sharing Details */}
                   <div className="bg-emerald-50 border border-emerald-300 p-4 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                     <div>
                       <span className="text-[10px] text-emerald-800 font-bold uppercase tracking-wider">
@@ -503,7 +641,29 @@ export const MatrimonyTab: React.FC<MatrimonyTabProps> = ({
                       </span>
                       <p className="text-emerald-950 font-extrabold text-sm mt-0.5">{activeProfile.contact}</p>
                     </div>
-                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                    <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                      <button
+                        onClick={(e) => toggleLikeProfile(activeProfile.id, e)}
+                        className={`px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 border transition-all cursor-pointer ${
+                          likedProfiles.has(activeProfile.id.toString())
+                            ? 'bg-rose-50 border-rose-300 text-rose-700'
+                            : 'bg-white border-stone-300 text-stone-700 hover:bg-stone-100'
+                        }`}
+                        title="Like biodata"
+                      >
+                        <Heart className={`w-3.5 h-3.5 ${likedProfiles.has(activeProfile.id.toString()) ? 'fill-rose-500 text-rose-500' : 'text-stone-500'}`} />
+                        <span>{getProfileLikes(activeProfile.id)}</span>
+                      </button>
+
+                      <button
+                        onClick={(e) => shareProfileWhatsApp(activeProfile, e)}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3 py-2 rounded-lg text-xs flex items-center justify-center gap-1.5 shadow-xs cursor-pointer transition-colors"
+                        title="Share on WhatsApp"
+                      >
+                        <Share2 className="w-3.5 h-3.5" />
+                        <span>WhatsApp</span>
+                      </button>
+
                       <a 
                         href={`tel:${activeProfile.contact.split(',')[0].trim()}`} 
                         className="flex-1 sm:flex-initial bg-emerald-700 hover:bg-emerald-800 text-white font-semibold px-4 py-2 rounded-lg text-xs flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"

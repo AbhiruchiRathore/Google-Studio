@@ -3,7 +3,7 @@ import { Share2 } from 'lucide-react';
 
 export const WhatsAppShare: React.FC = () => {
   const shareText = encodeURIComponent(
-    "Download the digital Rathore Rishtey app to view community biodatas and local shop offers instead of the paper book! Check it out here: " + window.location.href
+    `🚩 *Rathore Rishtey (राठौड़ रिश्ते) - Digital Samaj Portal* 🚩\n\n✨ Verified Matrimonial Biodatas\n✨ Vedic 36-Guna Kundali Milan (वैदिक कुंडली मिलान)\n✨ Business & Shop Directory\n✨ Digital Samaj E-Booklet\n\n👉 Join and explore now: https://svayaa.com/\n_Powered by Svayaa.com_`
   );
 
   return (

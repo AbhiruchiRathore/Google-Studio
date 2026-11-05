@@ -45,6 +45,12 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateTab }) => {
               Matrimony Bios
             </button>
             <button 
+              onClick={() => { onNavigateTab('kundali'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} 
+              className="hover:text-amber-300 font-semibold text-amber-200/90 cursor-pointer transition-colors"
+            >
+              Kundali Milan (३६ गुण)
+            </button>
+            <button 
               onClick={() => { onNavigateTab('directory'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} 
               className="hover:text-amber-300 cursor-pointer transition-colors"
             >
@@ -71,9 +77,21 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateTab }) => {
           </div>
         </div>
 
-        {/* Bottom Copyright */}
-        <div className="text-center text-[11px] text-stone-500 pt-6 border-t border-white/5">
-          © 2026 Rathore Rishtey Digital Portal. Dedicated to Rathore Samaj Samiti & community families.
+        {/* Bottom Copyright & Powered by Svayaa */}
+        <div className="flex flex-col sm:flex-row justify-between items-center text-[11px] text-stone-500 pt-6 border-t border-white/5 gap-3 text-center sm:text-left">
+          <div>
+            © 2026 Rathore Rishtey Digital Portal. Dedicated to Rathore Samaj Samiti & community families.
+          </div>
+          <div>
+            <a 
+              href="https://svayaa.com/" 
+              target="_blank" 
+              rel="noopener noreferrer" 
+              className="text-amber-300 hover:text-amber-200 font-medium underline decoration-amber-400/60 hover:decoration-amber-300 transition-colors"
+            >
+              Powered by Svayaa
+            </a>
+          </div>
         </div>
       </div>
     </footer>

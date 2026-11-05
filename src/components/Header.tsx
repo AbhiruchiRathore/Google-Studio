@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   ShieldCheck, Users, Store, BookOpen, Calendar, 
   UserPlus, PlusCircle, Menu, X, UserCheck, LogOut, Crown, Sparkles, HeartHandshake,
-  LayoutDashboard
+  LayoutDashboard, Compass
 } from 'lucide-react';
 import { TabType, AuthSession } from '../types';
 
@@ -66,6 +66,22 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
               <HeartHandshake className="w-4 h-4 text-amber-300" />
               <span>Matrimony Bios</span>
               {currentTab === 'matrimony' && (
+                <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-gradient-to-r from-amber-300 via-amber-200 to-amber-300 rounded-full" />
+              )}
+            </button>
+
+            <button 
+              onClick={() => handleTabClick('kundali')} 
+              className={`relative flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs lg:text-sm font-medium transition-all ${
+                currentTab === 'kundali' 
+                  ? 'text-amber-200 font-semibold bg-white/12 shadow-xs' 
+                  : 'text-rose-100 hover:text-amber-200 hover:bg-white/5'
+              }`}
+            >
+              <Compass className="w-4 h-4 text-amber-300" />
+              <span>Kundali Milan</span>
+              <span className="text-[10px] bg-amber-400 text-stone-950 font-extrabold px-1.5 py-0.2 rounded-md">३६ गुण</span>
+              {currentTab === 'kundali' && (
                 <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-gradient-to-r from-amber-300 via-amber-200 to-amber-300 rounded-full" />
               )}
             </button>
@@ -167,7 +183,7 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
             )}
           </nav>
 
-          {/* SINGLE SIGN UP / ACCOUNT BUTTON (No duplicate) */}
+          {/* Account Actions */}
           <div className="hidden md:flex items-center space-x-3">
             {authSession ? (
               <div className="flex items-center gap-2">
@@ -206,7 +222,7 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
           </div>
 
           {/* Mobile Menu Toggle Button */}
-          <div className="md:hidden flex items-center">
+          <div className="md:hidden flex items-center gap-2">
             <button 
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)} 
               className="p-2 rounded-lg text-amber-200 hover:text-white hover:bg-white/10 cursor-pointer"
@@ -228,6 +244,17 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
             }`}
           >
             <HeartHandshake className="w-4 h-4 text-amber-300" /> Matrimony Bios
+          </button>
+          <button 
+            onClick={() => handleTabClick('kundali')} 
+            className={`w-full text-left px-3.5 py-2.5 rounded-xl font-medium text-sm flex items-center justify-between ${
+              currentTab === 'kundali' ? 'bg-amber-300 text-[#4c0d1b] font-bold' : 'text-rose-100'
+            }`}
+          >
+            <span className="flex items-center gap-2.5">
+              <Compass className="w-4 h-4 text-amber-300" /> Kundali Milan
+            </span>
+            <span className="text-[10px] bg-amber-400 text-stone-950 font-extrabold px-1.5 py-0.2 rounded-md">३६ गुण</span>
           </button>
           <button 
             onClick={() => handleTabClick('directory')} 

@@ -1,6 +1,7 @@
 export type TabType = 
   | 'matrimony' 
   | 'directory' 
+  | 'kundali'
   | 'booklet' 
   | 'events' 
   | 'signup' 

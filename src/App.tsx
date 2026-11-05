@@ -12,6 +12,7 @@ import { CreateProfileTab } from './components/CreateProfileTab';
 import { AdvertiseShopTab } from './components/AdvertiseShopTab';
 import { FamilyDetailsTab } from './components/FamilyDetailsTab';
 import { DashboardTab } from './components/DashboardTab';
+import { KundaliMilanTab } from './components/KundaliMilanTab';
 import { WhatsAppShare } from './components/WhatsAppShare';
 import { Footer } from './components/Footer';
 import { auth } from './firebase';
@@ -19,6 +20,18 @@ import { onAuthStateChanged, signOut } from 'firebase/auth';
 
 export const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<TabType>('matrimony');
+  const [kundaliBoyId, setKundaliBoyId] = useState<number | string | null>(null);
+  const [kundaliGirlId, setKundaliGirlId] = useState<number | string | null>(null);
+
+  const handleSelectKundaliProfile = (id: number | string, gender: 'Male' | 'Female') => {
+    if (gender === 'Male') {
+      setKundaliBoyId(id);
+    } else {
+      setKundaliGirlId(id);
+    }
+    setCurrentTab('kundali');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   // Matrimony Profiles State
   const [profiles, setProfiles] = useState<MatrimonyProfile[]>(() => {
@@ -343,6 +356,16 @@ export const App: React.FC = () => {
             onUnlockProfile={handleUnlockProfile}
             onNavigateTab={setCurrentTab}
             onAddQuickProfile={handleAddQuickProfile}
+            onSelectKundaliProfile={handleSelectKundaliProfile}
+          />
+        )}
+
+        {currentTab === 'kundali' && (
+          <KundaliMilanTab
+            profiles={profiles}
+            onNavigateTab={setCurrentTab}
+            preselectedBoyId={kundaliBoyId}
+            preselectedGirlId={kundaliGirlId}
           />
         )}
 

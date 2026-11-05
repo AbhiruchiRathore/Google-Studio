@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Store, PlusCircle, Phone, Tag, Star, X, Sparkles, UserPlus } from 'lucide-react';
+import { Store, PlusCircle, Phone, Tag, Star, X, Sparkles, UserPlus, Heart, Share2 } from 'lucide-react';
 import { BusinessAd, TabType, AuthSession } from '../types';
 
 interface BusinessTabProps {
@@ -27,6 +27,75 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({
     offer: 'Special Samaj Member Discount',
     tier: 'free' as 'free' | 'featured'
   });
+
+  // Persistent Likes State (works for existing and future ads)
+  const [likedAds, setLikedAds] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem('samaj_liked_ads');
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+
+  const [adLikeCounts, setAdLikeCounts] = useState<Record<string, number>>(() => {
+    try {
+      const stored = localStorage.getItem('samaj_ad_likes_counts');
+      return stored ? JSON.parse(stored) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const getAdLikes = (id: number | string) => {
+    const key = id.toString();
+    if (adLikeCounts[key] !== undefined) return adLikeCounts[key];
+    const numId = typeof id === 'number' ? id : parseInt(id as string, 10) || 3;
+    return ((numId * 17 + 23) % 45) + 12;
+  };
+
+  const toggleLikeAd = (id: number | string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const key = id.toString();
+    const isLiked = likedAds.has(key);
+    const newSet = new Set(likedAds);
+    const currentCount = getAdLikes(id);
+    const newCounts = { ...adLikeCounts };
+
+    if (isLiked) {
+      newSet.delete(key);
+      newCounts[key] = Math.max(0, currentCount - 1);
+    } else {
+      newSet.add(key);
+      newCounts[key] = currentCount + 1;
+    }
+
+    setLikedAds(newSet);
+    setAdLikeCounts(newCounts);
+    try {
+      localStorage.setItem('samaj_liked_ads', JSON.stringify(Array.from(newSet)));
+      localStorage.setItem('samaj_ad_likes_counts', JSON.stringify(newCounts));
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const shareAdWhatsApp = (ad: BusinessAd, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const text = `🛍️ *Rathore Samaj Business Directory* 🛍️
+
+*${ad.title}*
+*Category:* ${ad.category}
+*Owner:* ${ad.owner} ${ad.city ? `(${ad.city})` : ''}
+${ad.tagline || ad.description ? `*About:* ${ad.tagline || ad.description}\n` : ''}${ad.offer ? `🎁 *Special Offer:* ${ad.offer}\n` : ''}${ad.address ? `📍 *Address:* ${ad.address}\n` : ''}📞 *Contact:* ${ad.phone}
+
+✨ *Connect with Rathore Samaj businesses on our community portal:*
+https://svayaa.com/
+_Powered by Svayaa.com_`;
+
+    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank');
+  };
 
   const categories = ['all', 'Clothing & Retail', 'Hardware & Home Imprv.', 'Jewelry & Gold'];
 
@@ -155,6 +224,16 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({
                       <Star className="w-3.5 h-3.5 fill-stone-950" /> Featured
                     </div>
                   )}
+
+                  {/* Quick Floating Like Button on Banner */}
+                  <button
+                    onClick={(e) => toggleLikeAd(ad.id, e)}
+                    className="absolute bottom-3 right-3 bg-white/95 hover:bg-white text-stone-800 p-1.5 rounded-full shadow-md backdrop-blur-xs transition-transform hover:scale-110 cursor-pointer flex items-center gap-1 text-[11px] font-bold px-2"
+                    title={likedAds.has(ad.id.toString()) ? "Liked" : "Like business ad"}
+                  >
+                    <Heart className={`w-3.5 h-3.5 ${likedAds.has(ad.id.toString()) ? 'fill-rose-500 text-rose-500' : 'text-stone-600'}`} />
+                    <span className={likedAds.has(ad.id.toString()) ? 'text-rose-600' : 'text-stone-700'}>{getAdLikes(ad.id)}</span>
+                  </button>
                 </div>
 
                 <div className="p-5">
@@ -186,7 +265,31 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({
                 </div>
               </div>
 
-              <div className="p-5 pt-0">
+              <div className="p-5 pt-0 space-y-2.5">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={(e) => toggleLikeAd(ad.id, e)}
+                    title={likedAds.has(ad.id.toString()) ? "Liked" : "Like this business ad"}
+                    className={`py-2 px-2.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+                      likedAds.has(ad.id.toString())
+                        ? 'bg-rose-50 border-rose-300 text-rose-700'
+                        : 'bg-stone-50 hover:bg-stone-100 border-stone-200 text-stone-700'
+                    }`}
+                  >
+                    <Heart className={`w-3.5 h-3.5 ${likedAds.has(ad.id.toString()) ? 'fill-rose-500 text-rose-500' : 'text-stone-500'}`} />
+                    <span>{getAdLikes(ad.id)}</span>
+                  </button>
+
+                  <button
+                    onClick={(e) => shareAdWhatsApp(ad, e)}
+                    title="Share business ad on WhatsApp"
+                    className="flex-1 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 text-xs font-semibold py-2 px-3 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <Share2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Share on WhatsApp</span>
+                  </button>
+                </div>
+
                 <a 
                   href={`tel:${ad.phone}`} 
                   className="w-full bg-gradient-to-r from-[#380812] to-[#540e1b] hover:from-[#24050b] hover:to-[#380812] text-amber-200 font-semibold py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-xs border border-amber-500/20 cursor-pointer"
