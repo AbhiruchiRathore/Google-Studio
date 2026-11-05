@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
 import { 
   LogOut, CheckCircle2, Copy, Check, ExternalLink, 
-  AlertTriangle, RefreshCw, Sparkles, HelpCircle,
-  Eye, EyeOff, Lock, User, KeyRound
+  AlertTriangle, RefreshCw, Sparkles, HelpCircle 
 } from 'lucide-react';
 import { AuthSession, TabType } from '../types';
 import { GoogleSignInModal } from './GoogleSignInModal';
 import { auth } from '../firebase';
-import { GoogleAuthProvider, signInWithRedirect, signInWithPopup } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithRedirect, signInWithPopup, signOut } from 'firebase/auth';
 
 interface SignUpTabProps {
   authSession: AuthSession | null;
@@ -21,17 +20,20 @@ interface SignUpTabProps {
 /**
  * Authentication Method 1: Desktop Browser
  * Uses signInWithPopup() for instant authentication without page navigation.
+ * Uses prompt: 'select_account' so users are prompted to choose their account every time after logout.
  */
 export const signInWithDesktopBrowser = async (
   onSuccess?: (session: AuthSession) => void
 ): Promise<AuthSession | undefined> => {
+  // Ensure any previous session in Firebase client is cleared
+  await signOut(auth).catch(() => {});
+
   const provider = new GoogleAuthProvider();
   provider.addScope('profile');
   provider.addScope('email');
-  // Forces Google to require password / fresh credentials rather than silently reusing SSO session
+  // Forces Google account selection prompt every time user logs in after logout
   provider.setCustomParameters({ 
-    prompt: 'login select_account',
-    max_age: '0'
+    prompt: 'select_account'
   });
 
   try {
@@ -59,15 +61,18 @@ export const signInWithDesktopBrowser = async (
 /**
  * Authentication Method 2: Android APK (WebView)
  * Uses signInWithRedirect() preserving the currently working Android WebView flow.
+ * Uses prompt: 'select_account' so users are prompted to choose an account on Android as well.
  */
 export const signInWithAndroidWebView = async (): Promise<void> => {
+  // Ensure any previous session in Firebase client is cleared
+  await signOut(auth).catch(() => {});
+
   const provider = new GoogleAuthProvider();
   provider.addScope('profile');
   provider.addScope('email');
-  // Forces Google in Android WebView to demand password / credentials upon re-login
+  // Forces Google account selection prompt in Android WebView
   provider.setCustomParameters({ 
-    prompt: 'login select_account',
-    max_age: '0'
+    prompt: 'select_account'
   });
 
   try {
@@ -99,12 +104,6 @@ export default function SignUpTab({
   const [unauthorizedDomain, setUnauthorizedDomain] = useState<string | null>(null);
   const [copiedDomain, setCopiedDomain] = useState(false);
   const [isSigningIn, setIsSigningIn] = useState(false);
-
-  // Direct Password Sign-In states
-  const [memberIdentifier, setMemberIdentifier] = useState('');
-  const [memberPassword, setMemberPassword] = useState('');
-  const [showMemberPassword, setShowMemberPassword] = useState(false);
-  const [passwordError, setPasswordError] = useState('');
 
   // Dispatches to Desktop browser (signInWithPopup) or Android APK WebView (signInWithRedirect)
   const handleGoogleSignIn = async () => {
@@ -140,69 +139,6 @@ export default function SignUpTab({
 
   const handleModalSuccess = (session: AuthSession) => {
     setShowGoogleModal(false);
-    onLogin(session);
-    onNavigateTab('dashboard');
-  };
-
-  // Direct Password Verification & Login
-  const handleDirectPasswordLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    const idKey = memberIdentifier.trim().toLowerCase();
-    if (!idKey || !memberPassword.trim()) {
-      setPasswordError("Please enter both ID (Email or Phone) and your password.");
-      return;
-    }
-    if (memberPassword.length < 6) {
-      setPasswordError("Password must be at least 6 characters.");
-      return;
-    }
-
-    try {
-      const stored = localStorage.getItem('samaj_account_passwords');
-      const passwords: Record<string, string> = stored ? JSON.parse(stored) : {};
-
-      // Check if password exists for this ID
-      if (passwords[idKey]) {
-        if (passwords[idKey] !== memberPassword) {
-          setPasswordError("Incorrect password. Please verify your credentials or use Google sign-in.");
-          return;
-        }
-      } else {
-        // Save initial password for this account
-        passwords[idKey] = memberPassword;
-        localStorage.setItem('samaj_account_passwords', JSON.stringify(passwords));
-      }
-    } catch (err) {
-      console.error("Error verifying password:", err);
-    }
-
-    // Lookup member name if registered profile exists
-    let memberName = memberIdentifier.split('@')[0];
-    try {
-      const storedProfiles = localStorage.getItem('samaj_profiles');
-      if (storedProfiles) {
-        const list = JSON.parse(storedProfiles);
-        const match = list.find((p: any) => 
-          p.contact?.includes(memberIdentifier) || 
-          p.name?.toLowerCase() === idKey
-        );
-        if (match) memberName = match.name;
-      }
-    } catch (err) {
-      console.error(err);
-    }
-
-    const session: AuthSession = {
-      method: 'Google',
-      name: memberName || 'Samaj Member',
-      email: memberIdentifier.includes('@') ? memberIdentifier : `${memberIdentifier}@rathorerishtey.org`,
-      photoUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80',
-      loggedInAt: new Date().toISOString(),
-      verified: true
-    };
-
-    setPasswordError('');
-    setMemberPassword('');
     onLogin(session);
     onNavigateTab('dashboard');
   };
@@ -261,80 +197,8 @@ export default function SignUpTab({
                 <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
               </svg>
             )}
-            <span>{isSigningIn ? "Connecting to Google..." : "Continue with Google (Password Required)"}</span>
+            <span>{isSigningIn ? "Connecting to Google..." : "Continue with Google"}</span>
           </button>
-
-          {/* Divider */}
-          <div className="relative flex items-center justify-center my-3">
-            <div className="border-t border-stone-200 w-full"></div>
-            <span className="bg-white px-3 text-[10px] uppercase font-bold text-stone-400 tracking-wider absolute">
-              or sign in with password
-            </span>
-          </div>
-
-          {/* Option 2: Direct ID & Password Authentication */}
-          <form onSubmit={handleDirectPasswordLogin} className="space-y-3 text-left">
-            <div>
-              <label className="block text-[11px] font-bold text-stone-700 mb-1">
-                Google ID / Email / Phone
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  value={memberIdentifier}
-                  onChange={(e) => {
-                    setMemberIdentifier(e.target.value);
-                    setPasswordError('');
-                  }}
-                  placeholder="e.g. abhiruchirathore97@gmail.com"
-                  required
-                  className="w-full py-2.5 px-3.5 border rounded-xl border-stone-300 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-xs outline-none bg-stone-50/50"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-bold text-stone-700 mb-1">
-                Account Password
-              </label>
-              <div className="relative">
-                <input
-                  type={showMemberPassword ? "text" : "password"}
-                  value={memberPassword}
-                  onChange={(e) => {
-                    setMemberPassword(e.target.value);
-                    setPasswordError('');
-                  }}
-                  placeholder="Enter your account password"
-                  required
-                  className="w-full py-2.5 px-3.5 pr-10 border rounded-xl border-stone-300 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 text-xs outline-none bg-stone-50/50"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowMemberPassword(!showMemberPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600 p-1 cursor-pointer"
-                  aria-label={showMemberPassword ? "Hide password" : "Show password"}
-                >
-                  {showMemberPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                </button>
-              </div>
-            </div>
-
-            {passwordError && (
-              <div className="text-red-600 text-xs flex items-center gap-1.5 pt-0.5">
-                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                <span>{passwordError}</span>
-              </div>
-            )}
-
-            <button
-              type="submit"
-              className="w-full bg-[#540e1b] hover:bg-[#380812] active:bg-black text-amber-100 font-bold py-3 rounded-xl text-xs transition-all shadow-sm cursor-pointer flex items-center justify-center gap-1.5"
-            >
-              <Lock className="w-3.5 h-3.5" />
-              <span>Sign In with Password</span>
-            </button>
-          </form>
 
           {/* Domain Authorization Diagnostic & Solution Panel */}
           {unauthorizedDomain && (

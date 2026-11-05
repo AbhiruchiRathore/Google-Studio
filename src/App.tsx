@@ -15,7 +15,7 @@ import { DashboardTab } from './components/DashboardTab';
 import { WhatsAppShare } from './components/WhatsAppShare';
 import { Footer } from './components/Footer';
 import { auth } from './firebase';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
 
 export const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<TabType>('matrimony');
@@ -115,7 +115,12 @@ export const App: React.FC = () => {
         } catch (e) {
           console.error(e);
         }
-        setCurrentTab('dashboard');
+        setCurrentTab(prev => (prev === 'signup' ? 'dashboard' : prev));
+      } else {
+        const stored = localStorage.getItem('user_auth_session');
+        if (!stored) {
+          setAuthSession(null);
+        }
       }
     });
     return () => unsubscribe();
@@ -300,15 +305,16 @@ export const App: React.FC = () => {
     setCurrentTab('dashboard');
   };
 
-  const handleLogout = () => {
-    setAuthSession(null);
+  const handleLogout = async () => {
     try {
       localStorage.removeItem('user_auth_session');
-      auth.signOut();
+      sessionStorage.clear();
+      setAuthSession(null);
+      await signOut(auth);
     } catch (e) {
-      console.error(e);
+      console.error("Logout error:", e);
     }
-    setCurrentTab('matrimony');
+    setCurrentTab('signup');
   };
 
   return (

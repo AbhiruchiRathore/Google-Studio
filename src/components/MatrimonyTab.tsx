@@ -40,8 +40,8 @@ export const MatrimonyTab: React.FC<MatrimonyTabProps> = ({
       const q = search.toLowerCase().trim();
       const matchSearch = !q || 
         p.name.toLowerCase().includes(q) || 
-        p.profession.toLowerCase().includes(q) || 
-        p.education.toLowerCase().includes(q) ||
+        (p.profession && p.profession.toLowerCase().includes(q)) || 
+        (p.education && p.education.toLowerCase().includes(q)) ||
         (p.familyDetails && p.familyDetails.toLowerCase().includes(q)) ||
         (p.about && p.about.toLowerCase().includes(q));
 
@@ -358,17 +358,21 @@ export const MatrimonyTab: React.FC<MatrimonyTabProps> = ({
 
                     {/* Education & Profession */}
                     <div className="mt-4 space-y-2 text-xs text-stone-600">
-                      <div className="flex items-center gap-2">
-                        <GraduationCap className="w-4 h-4 text-amber-700 shrink-0" />
-                        <span className="line-clamp-1 font-medium text-stone-700">{p.education}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Briefcase className="w-4 h-4 text-amber-700 shrink-0" />
-                        <span className="line-clamp-1 font-medium text-stone-700">{p.profession}</span>
-                      </div>
-                      {p.income && (
+                      {p.education && p.education.trim() !== '' && (
+                        <div className="flex items-center gap-2">
+                          <GraduationCap className="w-4 h-4 text-amber-700 shrink-0" />
+                          <span className="line-clamp-1 font-medium text-stone-700">{p.education}</span>
+                        </div>
+                      )}
+                      {p.profession && p.profession.trim() !== '' && p.profession !== '---' && p.profession !== 'Not specified' && (
+                        <div className="flex items-center gap-2">
+                          <Briefcase className="w-4 h-4 text-amber-700 shrink-0" />
+                          <span className="line-clamp-1 font-medium text-stone-700">{p.profession}</span>
+                        </div>
+                      )}
+                      {p.income && p.income.trim() !== '' && p.income !== '---' && p.income !== 'Not specified' && (
                         <div className="text-[11px] text-emerald-800 font-semibold pl-6">
-                          Annual: {p.income}
+                          Income: {p.income}
                         </div>
                       )}
                     </div>
@@ -449,23 +453,27 @@ export const MatrimonyTab: React.FC<MatrimonyTabProps> = ({
                     <p className="text-xs text-stone-600 font-medium">
                       Age: {activeProfile.age} Yrs {activeProfile.dob ? `(DOB: ${activeProfile.dob})` : ''} · Height: {activeProfile.height || "5' 6\""} · {activeProfile.gender}
                     </p>
-                    <p className="text-xs text-emerald-800 font-bold">
-                      Package / Income: {activeProfile.income || 'Competitive / As discussed'}
-                    </p>
+                    {activeProfile.income && activeProfile.income.trim() !== '' && activeProfile.income !== '---' && activeProfile.income !== 'Not specified' && (
+                      <p className="text-xs text-emerald-800 font-bold">
+                        Package / Income: {activeProfile.income}
+                      </p>
+                    )}
                   </div>
                 </div>
 
                 {/* Details box */}
                 <div className="space-y-3 border-t border-stone-100 pt-3 text-xs max-h-[48vh] overflow-y-auto pr-1">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-stone-50 p-3.5 rounded-xl border border-stone-200/80">
+                  <div className={`grid grid-cols-1 ${activeProfile.profession && activeProfile.profession.trim() !== '' && activeProfile.profession !== '---' && activeProfile.profession !== 'Not specified' ? 'sm:grid-cols-2' : ''} gap-2.5 bg-stone-50 p-3.5 rounded-xl border border-stone-200/80`}>
                     <div>
                       <span className="text-stone-500 font-medium">Education:</span>
                       <p className="font-semibold text-stone-800 mt-0.5">{activeProfile.education}</p>
                     </div>
-                    <div>
-                      <span className="text-stone-500 font-medium">Profession:</span>
-                      <p className="font-semibold text-stone-800 mt-0.5">{activeProfile.profession}</p>
-                    </div>
+                    {activeProfile.profession && activeProfile.profession.trim() !== '' && activeProfile.profession !== '---' && activeProfile.profession !== 'Not specified' && (
+                      <div>
+                        <span className="text-stone-500 font-medium">Profession:</span>
+                        <p className="font-semibold text-stone-800 mt-0.5">{activeProfile.profession}</p>
+                      </div>
+                    )}
                   </div>
 
                   {activeProfile.familyDetails && (
