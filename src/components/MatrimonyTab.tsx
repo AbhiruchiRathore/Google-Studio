@@ -447,7 +447,7 @@ export const MatrimonyTab: React.FC<MatrimonyTabProps> = ({
                       {activeProfile.name}
                     </h2>
                     <p className="text-xs text-stone-600 font-medium">
-                      Age: {activeProfile.age} Yrs · Height: {activeProfile.height || "5' 6\""} · {activeProfile.gender}
+                      Age: {activeProfile.age} Yrs {activeProfile.dob ? `(DOB: ${activeProfile.dob})` : ''} · Height: {activeProfile.height || "5' 6\""} · {activeProfile.gender}
                     </p>
                     <p className="text-xs text-emerald-800 font-bold">
                       Package / Income: {activeProfile.income || 'Competitive / As discussed'}

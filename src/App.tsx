@@ -25,11 +25,11 @@ export const App: React.FC = () => {
     try {
       const stored = localStorage.getItem('samaj_profiles');
       if (stored) {
-        const parsed = JSON.parse(stored);
+        const parsed: MatrimonyProfile[] = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          const userIds = new Set(parsed.map(p => p.id));
-          const remainingDefaults = INITIAL_PROFILES.filter(p => !userIds.has(p.id));
-          return [...parsed, ...remainingDefaults];
+          const defaultIds = new Set(INITIAL_PROFILES.map(p => p.id));
+          const customProfiles = parsed.filter(p => !defaultIds.has(p.id));
+          return [...customProfiles, ...INITIAL_PROFILES];
         }
       }
     } catch (e) {
