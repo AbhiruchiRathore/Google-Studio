@@ -51,6 +51,12 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateTab }) => {
               Kundali Milan (३६ गुण)
             </button>
             <button 
+              onClick={() => { onNavigateTab('guest-list'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} 
+              className="hover:text-amber-300 cursor-pointer transition-colors"
+            >
+              Guest List (अतिथि सूची)
+            </button>
+            <button 
               onClick={() => { onNavigateTab('directory'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} 
               className="hover:text-amber-300 cursor-pointer transition-colors"
             >
@@ -73,6 +79,12 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateTab }) => {
               className="hover:text-amber-300 cursor-pointer transition-colors"
             >
               Add Family Details
+            </button>
+            <button 
+              onClick={() => { onNavigateTab('admin'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} 
+              className="hover:text-amber-300 text-stone-400 font-medium cursor-pointer transition-colors"
+            >
+              Admin Portal
             </button>
           </div>
         </div>

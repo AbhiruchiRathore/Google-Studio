@@ -2,9 +2,11 @@ import React, { useState, useMemo } from 'react';
 import { 
   Search, GraduationCap, Briefcase, Eye, Phone, X, ShieldAlert, Sparkles, 
   UserPlus, Lock, ShieldCheck, ArrowRight, Users, Home, Heart, MapPin, 
-  MessageCircle, CheckCircle2, ChevronRight, Award, Share2, Compass
+  MessageCircle, CheckCircle2, ChevronRight, Award, Share2, Compass,
+  MessageSquare, UserCheck, Flame
 } from 'lucide-react';
-import { MatrimonyProfile, GenderType, TabType, AuthSession } from '../types';
+import { MatrimonyProfile, GenderType, TabType, AuthSession, ProfileAdmirer } from '../types';
+import { ChatModal } from './ChatModal';
 
 interface MatrimonyTabProps {
   authSession: AuthSession | null;
@@ -33,6 +35,63 @@ export const MatrimonyTab: React.FC<MatrimonyTabProps> = ({
   const [genderFilter, setGenderFilter] = useState<GenderType>('all');
   const [gotraFilter, setGotraFilter] = useState('');
   const [cityFilter, setCityFilter] = useState('');
+
+  // View Mode: 'all' | 'liked_by_me' | 'who_liked_me'
+  const [viewMode, setViewMode] = useState<'all' | 'liked_by_me' | 'who_liked_me'>('all');
+
+  // Active Chat Profile for interactive messaging
+  const [activeChatProfile, setActiveChatProfile] = useState<MatrimonyProfile | null>(null);
+
+  // Admirers: Who Liked My Profile
+  const [admirers, setAdmirers] = useState<ProfileAdmirer[]>(() => {
+    try {
+      const stored = localStorage.getItem('samaj_profile_admirers');
+      if (stored) return JSON.parse(stored);
+    } catch (e) {
+      console.error(e);
+    }
+    return [
+      {
+        id: 'adm-1',
+        admirerName: 'Vikramaditya Singh Rathore',
+        admirerGotra: 'Pindoriya',
+        admirerCity: 'Indore, MP',
+        admirerAge: 28,
+        admirerEducation: 'B.Tech, IIT Bombay',
+        admirerProfession: 'Senior Software Architect',
+        admirerPhoto: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80',
+        admirerPhone: '9826012345',
+        likedAt: '2 hours ago',
+        message: 'Respectful greetings. We liked your family biodata and wish to discuss matrimonial alliance.'
+      },
+      {
+        id: 'adm-2',
+        admirerName: 'Harshwardhan Kishor Rathore',
+        admirerGotra: 'Indruke',
+        admirerCity: 'Nanded, MH',
+        admirerAge: 27,
+        admirerEducation: 'Chartered Accountant (CA)',
+        admirerProfession: 'Financial Consultant',
+        admirerPhoto: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=400&q=80',
+        admirerPhone: '9420348499',
+        likedAt: 'Yesterday',
+        message: 'Family matches our Gotra criteria. Requesting parent-to-parent conversation.'
+      },
+      {
+        id: 'adm-3',
+        admirerName: 'Rajveer Pradeep Rathore',
+        admirerGotra: 'Shekhawat',
+        admirerCity: 'Beed, MH',
+        admirerAge: 29,
+        admirerEducation: 'B.E., M.B.A.',
+        admirerProfession: 'Business Enterprise Partner',
+        admirerPhoto: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=400&q=80',
+        admirerPhone: '9359607476',
+        likedAt: '3 days ago',
+        message: 'Auspicious alliance inquiry. Please connect on chat or phone.'
+      }
+    ];
+  });
 
   // Persistent Likes State (works for existing and future profiles)
   const [likedProfiles, setLikedProfiles] = useState<Set<string>>(() => {
@@ -111,6 +170,11 @@ _Powered by Svayaa.com_`;
 
   const filteredProfiles = useMemo(() => {
     return profiles.filter(p => {
+      // If user selected "Profiles I Liked", filter by likedProfiles
+      if (viewMode === 'liked_by_me' && !likedProfiles.has(p.id.toString())) {
+        return false;
+      }
+
       const q = search.toLowerCase().trim();
       const matchSearch = !q || 
         p.name.toLowerCase().includes(q) || 
@@ -125,7 +189,7 @@ _Powered by Svayaa.com_`;
 
       return matchSearch && matchGender && matchGotra && matchCity;
     });
-  }, [profiles, search, genderFilter, gotraFilter, cityFilter]);
+  }, [profiles, search, genderFilter, gotraFilter, cityFilter, viewMode, likedProfiles]);
 
   const activeProfile = useMemo(() => {
     if (selectedProfileId === null) return null;
@@ -258,7 +322,47 @@ _Powered by Svayaa.com_`;
   // IF USER IS SIGNED IN: Full profiles view
   return (
     <div className="space-y-6">
-      {/* SEARCH & FILTERS SECTION */}
+      {/* PRIMARY VIEWS: ALL BIODATAS / PROFILES I LIKED / WHO LIKED MY PROFILE */}
+      <div className="flex flex-wrap items-center gap-2 bg-white p-2.5 rounded-2xl border border-stone-200/90 shadow-xs">
+        <button
+          onClick={() => setViewMode('all')}
+          className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
+            viewMode === 'all'
+              ? 'bg-[#380812] text-amber-200 shadow-xs'
+              : 'text-stone-700 hover:bg-stone-100'
+          }`}
+        >
+          <Users className="w-4 h-4" />
+          <span>All Bios ({profiles.length})</span>
+        </button>
+
+        <button
+          onClick={() => setViewMode('liked_by_me')}
+          className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
+            viewMode === 'liked_by_me'
+              ? 'bg-rose-700 text-white shadow-xs'
+              : 'text-rose-800 bg-rose-50/70 hover:bg-rose-100 border border-rose-200/60'
+          }`}
+        >
+          <Heart className={`w-4 h-4 ${viewMode === 'liked_by_me' ? 'fill-white text-white' : 'fill-rose-500 text-rose-500'}`} />
+          <span>Profiles I Liked ({likedProfiles.size})</span>
+        </button>
+
+        <button
+          onClick={() => setViewMode('who_liked_me')}
+          className={`flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
+            viewMode === 'who_liked_me'
+              ? 'bg-amber-600 text-white shadow-xs'
+              : 'text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-300/70'
+          }`}
+        >
+          <Sparkles className="w-4 h-4 text-amber-500" />
+          <span>Who Liked My Profile ({admirers.length})</span>
+        </button>
+      </div>
+
+      {/* SEARCH & FILTERS SECTION (WHEN IN ALL OR LIKED VIEW) */}
+      {viewMode !== 'who_liked_me' && (
       <div className="bg-white rounded-2xl shadow-sm border border-stone-200/90 p-5 sm:p-6 space-y-4">
         <div className="flex flex-col lg:flex-row gap-4 justify-between items-stretch lg:items-center">
           
@@ -344,6 +448,131 @@ _Powered by Svayaa.com_`;
           </button>
         </div>
       </div>
+      )}
+
+      {/* WHO LIKED MY PROFILE SECTION */}
+      {viewMode === 'who_liked_me' && (
+        <div className="space-y-4">
+          <div className="bg-gradient-to-r from-amber-50 via-amber-100/40 to-stone-50 p-5 sm:p-6 rounded-3xl border border-amber-300/80 shadow-xs flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-serif font-bold text-lg sm:text-xl text-stone-900">
+                  Who Liked My Profile (प्रोफ़ाइल प्रशंसक एवं रिश्ते प्रस्ताव)
+                </h3>
+                <span className="text-xs bg-[#380812] text-amber-200 font-bold px-2.5 py-0.5 rounded-full">
+                  {admirers.length} Samaj Families
+                </span>
+              </div>
+              <p className="text-xs text-stone-600 mt-1 max-w-2xl leading-relaxed">
+                These verified Rathore Samaj candidates & families recently liked your published profile and expressed interest in connecting for matrimonial alliance.
+              </p>
+            </div>
+            {!hasRegisteredProfile && (
+              <button
+                onClick={() => onNavigateTab('family-details')}
+                className="bg-[#380812] hover:bg-[#540e1b] text-amber-200 text-xs font-semibold px-4 py-2.5 rounded-xl transition-colors cursor-pointer shrink-0 shadow-xs flex items-center gap-1.5"
+              >
+                <Users className="w-3.5 h-3.5 text-amber-300" />
+                <span>Register Family Details for More Inquiries</span>
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {admirers.map((adm) => {
+              const candidateProfile: MatrimonyProfile = {
+                id: adm.id,
+                name: adm.admirerName,
+                age: adm.admirerAge,
+                gender: 'Male',
+                gotra: adm.admirerGotra,
+                city: adm.admirerCity,
+                education: adm.admirerEducation,
+                profession: adm.admirerProfession || 'Professional',
+                contact: adm.admirerPhone,
+                photo: adm.admirerPhoto,
+                familyDetails: `Respected Rathore family from ${adm.admirerCity}`
+              };
+
+              return (
+                <div 
+                  key={adm.id}
+                  className="bg-white rounded-3xl border border-amber-200/90 hover:border-amber-400 p-5 shadow-xs hover:shadow-xl transition-all duration-300 flex flex-col justify-between space-y-4 group"
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3.5">
+                      <img 
+                        src={adm.admirerPhoto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80"}
+                        alt={adm.admirerName}
+                        className="w-14 h-14 rounded-2xl object-cover object-top border-2 border-amber-300 shadow-xs shrink-0"
+                      />
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <h4 className="font-serif font-bold text-stone-900 text-base truncate group-hover:text-[#380812] transition-colors">
+                            {adm.admirerName}
+                          </h4>
+                          <ShieldCheck className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                        </div>
+                        <p className="text-xs text-stone-600 font-medium">
+                          Gotra: {adm.admirerGotra} · {adm.admirerCity}
+                        </p>
+                        <span className="text-[10px] text-rose-600 font-bold flex items-center gap-1 mt-0.5">
+                          <Heart className="w-3 h-3 fill-rose-500 text-rose-500" /> Liked your profile {adm.likedAt}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200/80 text-xs space-y-1">
+                      <p className="text-stone-700 font-medium">
+                        <strong>Qualification:</strong> {adm.admirerEducation}
+                      </p>
+                      {adm.admirerProfession && (
+                        <p className="text-stone-700 font-medium">
+                          <strong>Profession:</strong> {adm.admirerProfession}
+                        </p>
+                      )}
+                      {adm.message && (
+                        <div className="mt-2 pt-2 border-t border-stone-200/70 text-[11px] text-amber-950 bg-amber-50/70 p-2.5 rounded-xl italic">
+                          &quot;{adm.message}&quot;
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="pt-2 border-t border-stone-100 flex items-center gap-2">
+                    <button
+                      onClick={() => setActiveChatProfile(candidateProfile)}
+                      className="flex-1 bg-gradient-to-r from-[#380812] to-[#540e1b] hover:from-[#24050b] hover:to-[#380812] text-amber-200 text-xs font-semibold py-2.5 px-3 rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer border border-amber-500/20"
+                    >
+                      <MessageCircle className="w-3.5 h-3.5 text-amber-300" />
+                      <span>Chat with Family</span>
+                    </button>
+
+                    {onSelectKundaliProfile && (
+                      <button
+                        onClick={() => onSelectKundaliProfile(candidateProfile.id, candidateProfile.gender)}
+                        title="Kundali Milan (३६ गुण)"
+                        className="bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300/80 text-xs font-semibold py-2.5 px-3 rounded-xl transition-all cursor-pointer flex items-center gap-1 shrink-0"
+                      >
+                        <Compass className="w-3.5 h-3.5 text-amber-700" />
+                        <span className="hidden sm:inline">Milan</span>
+                      </button>
+                    )}
+
+                    <a
+                      href={`tel:${adm.admirerPhone}`}
+                      title={`Call ${adm.admirerName} (${adm.admirerPhone})`}
+                      className="p-2.5 rounded-xl border border-stone-200 bg-stone-50 hover:bg-stone-100 text-stone-700 text-xs transition-colors cursor-pointer shrink-0"
+                    >
+                      <Phone className="w-3.5 h-3.5 text-emerald-700" />
+                    </a>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* UNREGISTERED FAMILY BANNER PROMPT */}
       {!hasRegisteredProfile && (
@@ -369,8 +598,24 @@ _Powered by Svayaa.com_`;
         </div>
       )}
 
-      {/* MATRIMONY CARDS GRID */}
-      {filteredProfiles.length === 0 ? (
+      {/* MATRIMONY CARDS GRID (OR EMPTY LIKED STATE) */}
+      {viewMode === 'liked_by_me' && filteredProfiles.length === 0 ? (
+        <div className="bg-white rounded-3xl border border-stone-200 p-10 text-center space-y-4 max-w-lg mx-auto shadow-sm">
+          <div className="w-16 h-16 bg-rose-50 text-rose-600 rounded-2xl mx-auto flex items-center justify-center border border-rose-200">
+            <Heart className="w-8 h-8 fill-rose-500 text-rose-500" />
+          </div>
+          <h3 className="font-serif font-bold text-xl text-stone-900">No Liked Profiles Yet</h3>
+          <p className="text-xs text-stone-600 leading-relaxed">
+            You haven&apos;t liked any matrimonial profiles yet. Tap the heart (❤️) icon on any candidate card to save their biodata here for easy family discussions, direct chat, and Kundali Milan.
+          </p>
+          <button
+            onClick={() => setViewMode('all')}
+            className="bg-[#380812] hover:bg-[#24050b] text-amber-200 text-xs font-bold px-5 py-2.5 rounded-xl transition-colors cursor-pointer"
+          >
+            Browse All Profiles
+          </button>
+        </div>
+      ) : filteredProfiles.length === 0 ? (
         <div className="bg-white rounded-2xl border border-stone-200/90 p-12 text-center text-stone-500">
           <p className="text-base font-serif font-bold text-stone-800">No profiles found matching your search filters.</p>
           <p className="text-xs text-stone-500 mt-1">Try clearing your search keyword, gotra, or city filter.</p>
@@ -470,6 +715,16 @@ _Powered by Svayaa.com_`;
                     >
                       <Eye className="w-3.5 h-3.5 text-amber-300" />
                       <span>View Biodata</span>
+                    </button>
+
+                    {/* Direct Interactive Chat Button */}
+                    <button
+                      onClick={() => setActiveChatProfile(p)}
+                      title={`Chat with ${p.name}'s family`}
+                      className="bg-amber-100/80 hover:bg-amber-200 text-[#380812] border border-amber-300/80 text-xs font-semibold py-2.5 px-2.5 sm:px-3 rounded-xl transition-all cursor-pointer flex items-center gap-1 shrink-0"
+                    >
+                      <MessageCircle className="w-3.5 h-3.5 text-amber-900" />
+                      <span className="hidden sm:inline">Chat</span>
                     </button>
 
                     {onSelectKundaliProfile && (
@@ -643,6 +898,19 @@ _Powered by Svayaa.com_`;
                     </div>
                     <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                       <button
+                        onClick={() => {
+                          const prof = activeProfile;
+                          handleCloseModal();
+                          setActiveChatProfile(prof);
+                        }}
+                        className="bg-gradient-to-r from-[#380812] to-[#540e1b] hover:from-[#24050b] hover:to-[#380812] text-amber-200 font-semibold px-3.5 py-2 rounded-lg text-xs flex items-center justify-center gap-1.5 shadow-xs cursor-pointer border border-amber-500/20"
+                        title="Chat with candidate family"
+                      >
+                        <MessageCircle className="w-3.5 h-3.5 text-amber-300" />
+                        <span>Chat with Family</span>
+                      </button>
+
+                      <button
                         onClick={(e) => toggleLikeProfile(activeProfile.id, e)}
                         className={`px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 border transition-all cursor-pointer ${
                           likedProfiles.has(activeProfile.id.toString())
@@ -705,6 +973,16 @@ _Powered by Svayaa.com_`;
             )}
           </div>
         </div>
+      )}
+
+      {/* INTERACTIVE CHAT MODAL */}
+      {activeChatProfile && (
+        <ChatModal
+          profile={activeChatProfile}
+          authSession={authSession}
+          onClose={() => setActiveChatProfile(null)}
+          onSelectKundaliProfile={onSelectKundaliProfile}
+        />
       )}
     </div>
   );

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { TabType, MatrimonyProfile, BusinessAd, SamajEvent, AuthSession } from './types';
+import { TabType, MatrimonyProfile, BusinessAd, SamajEvent, AuthSession, AdminRuntimeConfig } from './types';
 import { INITIAL_PROFILES, INITIAL_ADS, INITIAL_EVENTS } from './data/mockData';
 import { Header } from './components/Header';
 import { HeroBanner } from './components/HeroBanner';
@@ -13,10 +13,13 @@ import { AdvertiseShopTab } from './components/AdvertiseShopTab';
 import { FamilyDetailsTab } from './components/FamilyDetailsTab';
 import { DashboardTab } from './components/DashboardTab';
 import { KundaliMilanTab } from './components/KundaliMilanTab';
+import { GuestListTab } from './components/GuestListTab';
+import { AdminDashboardTab } from './components/AdminDashboardTab';
 import { WhatsAppShare } from './components/WhatsAppShare';
 import { Footer } from './components/Footer';
 import { auth } from './firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { Sparkles } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<TabType>('matrimony');
@@ -330,6 +333,22 @@ export const App: React.FC = () => {
     setCurrentTab('signup');
   };
 
+  // Optional broadcast banner from Admin config
+  const [broadcastMessage] = useState<string | null>(() => {
+    try {
+      const stored = localStorage.getItem('samaj_admin_config');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed.isBroadcastActive && parsed.bannerBroadcastMessage) {
+          return parsed.bannerBroadcastMessage;
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return null;
+  });
+
   return (
     <div className="min-h-screen bg-[#FDFBF7] text-stone-800 font-sans flex flex-col selection:bg-rose-100 selection:text-rose-950">
       <Header 
@@ -338,6 +357,13 @@ export const App: React.FC = () => {
         authSession={authSession} 
         onLogout={handleLogout}
       />
+
+      {broadcastMessage && (
+        <div className="bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 text-stone-950 px-4 py-2 text-xs sm:text-sm font-semibold text-center border-b border-amber-600/30 shadow-xs flex items-center justify-center gap-2">
+          <Sparkles className="w-4 h-4 text-[#4c0d1b] shrink-0" />
+          <span>{broadcastMessage}</span>
+        </div>
+      )}
 
       {currentTab === 'matrimony' && (
         <HeroBanner 
@@ -431,6 +457,25 @@ export const App: React.FC = () => {
             onLogin={handleLogin}
             onAddAd={handleAddAd} 
             onNavigateTab={setCurrentTab} 
+          />
+        )}
+
+        {currentTab === 'guest-list' && (
+          <GuestListTab
+            authSession={authSession}
+            onNavigateTab={setCurrentTab}
+          />
+        )}
+
+        {currentTab === 'admin' && (
+          <AdminDashboardTab
+            profiles={profiles}
+            ads={ads}
+            onUpdateProfile={handleUpdateProfile}
+            onDeleteProfile={handleDeleteProfile}
+            onUpdateAd={handleUpdateAd}
+            onDeleteAd={handleDeleteAd}
+            onNavigateTab={setCurrentTab}
           />
         )}
 

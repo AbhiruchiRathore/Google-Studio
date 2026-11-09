@@ -2,13 +2,15 @@ export type TabType =
   | 'matrimony' 
   | 'directory' 
   | 'kundali'
+  | 'guest-list'
   | 'booklet' 
   | 'events' 
   | 'signup' 
   | 'dashboard'
   | 'create-profile' 
   | 'advertise-shop'
-  | 'family-details';
+  | 'family-details'
+  | 'admin';
 
 export type GenderType = 'all' | 'Male' | 'Female';
 
@@ -102,3 +104,65 @@ export interface AuthSession {
   loggedInAt: string;
   verified?: boolean;
 }
+
+export interface ChatMessage {
+  id: string;
+  profileId: number | string;
+  sender: 'user' | 'candidate';
+  senderName: string;
+  text: string;
+  timestamp: string;
+}
+
+export interface ProfileAdmirer {
+  id: string | number;
+  admirerProfileId?: number | string;
+  admirerName: string;
+  admirerGotra: string;
+  admirerCity: string;
+  admirerAge: number;
+  admirerEducation: string;
+  admirerProfession?: string;
+  admirerPhoto?: string;
+  admirerPhone: string;
+  likedAt: string;
+  message?: string;
+}
+
+export interface GuestItem {
+  id: string;
+  name: string;
+  phone: string;
+  address: string;
+  city?: string;
+  category?: 'Groom Side' | 'Bride Side' | 'Family/Relatives' | 'Friends' | 'Samaj Dignitaries' | 'Other';
+  membersCount: number;
+  status: 'Pending' | 'Card Sent' | 'Confirmed' | 'Declined';
+  notes?: string;
+  updatedAt?: string;
+}
+
+export interface GuestListOccasion {
+  id: string;
+  title: string;
+  date?: string;
+  venue?: string;
+  description?: string;
+  guests: GuestItem[];
+  createdAt: string;
+}
+
+export interface AdminRuntimeConfig {
+  subscriptionEnabled: boolean;
+  contactAccessMode: 'free' | 'limited_3_views' | 'subscription_required';
+  annualPlanPrice: number;
+  lifetimePlanPrice: number;
+  adsMonetizationEnabled: boolean;
+  bannerBroadcastMessage: string;
+  isBroadcastActive: boolean;
+  requireAdminVerification: boolean;
+  kundaliAstrologerServiceEnabled: boolean;
+  allowGuestDownloads: boolean;
+}
+
+

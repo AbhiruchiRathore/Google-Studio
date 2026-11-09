@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   ShieldCheck, Users, Store, BookOpen, Calendar, 
   UserPlus, PlusCircle, Menu, X, UserCheck, LogOut, Crown, Sparkles, HeartHandshake,
-  LayoutDashboard, Compass
+  LayoutDashboard, Compass, ClipboardList, Lock
 } from 'lucide-react';
 import { TabType, AuthSession } from '../types';
 
@@ -57,7 +57,7 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
           <nav className="hidden md:flex items-center space-x-1 lg:space-x-1.5">
             <button 
               onClick={() => handleTabClick('matrimony')} 
-              className={`relative flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs lg:text-sm font-medium transition-all ${
+              className={`relative flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs lg:text-sm font-medium transition-all ${
                 currentTab === 'matrimony' 
                   ? 'text-amber-200 font-semibold bg-white/12 shadow-xs' 
                   : 'text-rose-100 hover:text-amber-200 hover:bg-white/5'
@@ -72,7 +72,7 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
 
             <button 
               onClick={() => handleTabClick('kundali')} 
-              className={`relative flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs lg:text-sm font-medium transition-all ${
+              className={`relative flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs lg:text-sm font-medium transition-all ${
                 currentTab === 'kundali' 
                   ? 'text-amber-200 font-semibold bg-white/12 shadow-xs' 
                   : 'text-rose-100 hover:text-amber-200 hover:bg-white/5'
@@ -87,8 +87,24 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
             </button>
 
             <button 
+              onClick={() => handleTabClick('guest-list')} 
+              className={`relative flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs lg:text-sm font-medium transition-all ${
+                currentTab === 'guest-list' 
+                  ? 'text-amber-200 font-semibold bg-white/12 shadow-xs' 
+                  : 'text-rose-100 hover:text-amber-200 hover:bg-white/5'
+              }`}
+            >
+              <ClipboardList className="w-4 h-4 text-amber-300" />
+              <span>Guest List</span>
+              <span className="text-[10px] bg-rose-500/80 text-white font-bold px-1.5 py-0.2 rounded-md">अतिथि</span>
+              {currentTab === 'guest-list' && (
+                <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-gradient-to-r from-amber-300 via-amber-200 to-amber-300 rounded-full" />
+              )}
+            </button>
+
+            <button 
               onClick={() => handleTabClick('directory')} 
-              className={`relative flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs lg:text-sm font-medium transition-all ${
+              className={`relative flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs lg:text-sm font-medium transition-all ${
                 currentTab === 'directory' 
                   ? 'text-amber-200 font-semibold bg-white/12 shadow-xs' 
                   : 'text-rose-100 hover:text-amber-200 hover:bg-white/5'
@@ -103,14 +119,14 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
 
             <button 
               onClick={() => handleTabClick('booklet')} 
-              className={`relative flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs lg:text-sm font-medium transition-all ${
+              className={`relative flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs lg:text-sm font-medium transition-all ${
                 currentTab === 'booklet' 
                   ? 'text-amber-200 font-semibold bg-white/12 shadow-xs' 
                   : 'text-rose-100 hover:text-amber-200 hover:bg-white/5'
               }`}
             >
               <BookOpen className="w-4 h-4 text-amber-300" />
-              <span>Digital E-Book</span>
+              <span>E-Book</span>
               {currentTab === 'booklet' && (
                 <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-gradient-to-r from-amber-300 via-amber-200 to-amber-300 rounded-full" />
               )}
@@ -118,14 +134,14 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
 
             <button 
               onClick={() => handleTabClick('events')} 
-              className={`relative flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs lg:text-sm font-medium transition-all ${
+              className={`relative flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs lg:text-sm font-medium transition-all ${
                 currentTab === 'events' 
                   ? 'text-amber-200 font-semibold bg-white/12 shadow-xs' 
                   : 'text-rose-100 hover:text-amber-200 hover:bg-white/5'
               }`}
             >
               <Calendar className="w-4 h-4 text-amber-300" />
-              <span>Samaj Events</span>
+              <span>Events</span>
               {currentTab === 'events' && (
                 <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-gradient-to-r from-amber-300 via-amber-200 to-amber-300 rounded-full" />
               )}
@@ -184,7 +200,21 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
           </nav>
 
           {/* Account Actions */}
-          <div className="hidden md:flex items-center space-x-3">
+          <div className="hidden md:flex items-center space-x-2.5">
+            {/* Admin Portal Button */}
+            <button
+              onClick={() => handleTabClick('admin')}
+              title="Admin Portal (Username & Password Protected)"
+              className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all border cursor-pointer flex items-center gap-1.5 ${
+                currentTab === 'admin'
+                  ? 'bg-amber-300 text-[#4c0d1b] border-amber-200 font-bold shadow-sm'
+                  : 'bg-black/30 text-amber-200/80 hover:text-amber-100 hover:bg-black/45 border-amber-400/25'
+              }`}
+            >
+              <Lock className="w-3.5 h-3.5 text-amber-300" />
+              <span className="text-[11px] font-medium">Admin</span>
+            </button>
+
             {authSession ? (
               <div className="flex items-center gap-2">
                 <button
@@ -257,6 +287,17 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
             <span className="text-[10px] bg-amber-400 text-stone-950 font-extrabold px-1.5 py-0.2 rounded-md">३६ गुण</span>
           </button>
           <button 
+            onClick={() => handleTabClick('guest-list')} 
+            className={`w-full text-left px-3.5 py-2.5 rounded-xl font-medium text-sm flex items-center justify-between ${
+              currentTab === 'guest-list' ? 'bg-amber-300 text-[#4c0d1b] font-bold' : 'text-rose-100'
+            }`}
+          >
+            <span className="flex items-center gap-2.5">
+              <ClipboardList className="w-4 h-4 text-amber-300" /> Guest List Planner
+            </span>
+            <span className="text-[10px] bg-rose-500/80 text-white font-bold px-1.5 py-0.2 rounded-md">अतिथि</span>
+          </button>
+          <button 
             onClick={() => handleTabClick('directory')} 
             className={`w-full text-left px-3.5 py-2.5 rounded-xl font-medium text-sm flex items-center gap-2.5 ${
               currentTab === 'directory' ? 'bg-amber-300 text-[#4c0d1b] font-bold' : 'text-rose-100'
@@ -279,6 +320,17 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
             }`}
           >
             <Calendar className="w-4 h-4 text-amber-300" /> Samaj Events & News
+          </button>
+          <button 
+            onClick={() => handleTabClick('admin')} 
+            className={`w-full text-left px-3.5 py-2 rounded-xl font-medium text-xs flex items-center justify-between border border-amber-400/30 bg-black/25 ${
+              currentTab === 'admin' ? 'bg-amber-300 text-[#4c0d1b] font-bold' : 'text-amber-200'
+            }`}
+          >
+            <span className="flex items-center gap-2">
+              <Lock className="w-3.5 h-3.5 text-amber-300" /> Admin Dashboard (Password Protected)
+            </span>
+            <span className="text-[10px] bg-rose-900 text-rose-200 px-1.5 py-0.5 rounded">AdminAbhi</span>
           </button>
 
           {/* Member actions in mobile menu if logged in */}
