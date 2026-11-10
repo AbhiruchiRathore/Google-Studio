@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { 
   ShieldCheck, Users, Store, BookOpen, Calendar, 
   UserPlus, PlusCircle, Menu, X, UserCheck, LogOut, Crown, HeartHandshake,
-  LayoutDashboard, Compass, ClipboardList, Languages
+  LayoutDashboard, Compass, ClipboardList, Languages, Lock
 } from 'lucide-react';
 import { TabType, AuthSession } from '../types';
 import { useLanguage } from '../context/LanguageContext';
@@ -84,6 +84,7 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
             >
               <Compass className="w-4 h-4 text-amber-300 shrink-0" />
               <span>{t('Kundali Milan', 'कुंडली मिलान')}</span>
+              {!authSession && <Lock className="w-3 h-3 text-amber-300/80 shrink-0" />}
               <span className="text-[10px] bg-amber-400 text-stone-950 font-extrabold px-1.5 py-0.2 rounded-md">
                 {t('36 Gunas', '३६ गुण')}
               </span>
@@ -102,6 +103,7 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
             >
               <ClipboardList className="w-4 h-4 text-amber-300 shrink-0" />
               <span>{t('Guest List', 'अतिथि सूची')}</span>
+              {!authSession && <Lock className="w-3 h-3 text-amber-300/80 shrink-0" />}
               <span className="text-[10px] bg-rose-500/80 text-white font-bold px-1.5 py-0.2 rounded-md">
                 {t('Planner', 'प्लानर')}
               </span>
@@ -377,6 +379,7 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
           >
             <span className="flex items-center gap-2.5">
               <Compass className="w-4 h-4 text-amber-300" /> {t('Kundali Milan', 'कुंडली मिलान')}
+              {!authSession && <Lock className="w-3.5 h-3.5 text-amber-300/80" />}
             </span>
             <span className="text-[10px] bg-amber-400 text-stone-950 font-extrabold px-1.5 py-0.2 rounded-md">
               {t('36 Gunas', '३६ गुण')}
@@ -390,6 +393,7 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
           >
             <span className="flex items-center gap-2.5">
               <ClipboardList className="w-4 h-4 text-amber-300" /> {t('Guest List Planner', 'अतिथि सूची प्लानर')}
+              {!authSession && <Lock className="w-3.5 h-3.5 text-amber-300/80" />}
             </span>
             <span className="text-[10px] bg-rose-500/80 text-white font-bold px-1.5 py-0.2 rounded-md">
               {t('Planner', 'प्लानर')}

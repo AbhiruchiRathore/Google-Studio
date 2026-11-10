@@ -9,7 +9,7 @@ import { AuthSession, TabType, UserAccount } from '../types';
 import { GoogleSignInModal } from './GoogleSignInModal';
 import { auth } from '../firebase';
 import { GoogleAuthProvider, signInWithRedirect, signInWithPopup } from 'firebase/auth';
-import { sanitizePhoneInput, validatePhoneNumber } from '../utils/validation';
+import { sanitizePhoneInput, validatePhoneNumber, validateStrongPassword } from '../utils/validation';
 import { useLanguage } from '../context/LanguageContext';
 
 interface SignUpTabProps {
@@ -195,6 +195,8 @@ export default function SignUpTab({
   const [signupError, setSignupError] = useState<string | null>(null);
   const [signupSuccessInfo, setSignupSuccessInfo] = useState<{ username: string; fullName: string } | null>(null);
 
+  const passwordValidation = validateStrongPassword(signupPassword, signupUsername);
+
   // Log In Form State
   const [loginIdentifier, setLoginIdentifier] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -287,7 +289,6 @@ export default function SignUpTab({
 
     const cleanUsername = signupUsername.trim().toLowerCase();
     const cleanFullName = signupFullName.trim();
-    const cleanPassword = signupPassword.trim();
 
     if (!cleanFullName) {
       setSignupError(t('Please enter your full name.', 'कृपया अपना पूरा नाम दर्ज करें।'));
@@ -314,12 +315,13 @@ export default function SignUpTab({
       return;
     }
 
-    if (!cleanPassword || cleanPassword.length < 4) {
-      setSignupError(t('Password must be at least 4 characters.', 'पासवर्ड कम से कम 4 अक्षरों का होना चाहिए।'));
+    const passwordCheck = validateStrongPassword(signupPassword, cleanUsername);
+    if (!passwordCheck.valid) {
+      setSignupError(lang === 'hi' ? (passwordCheck.errorHi || '') : (passwordCheck.errorEn || ''));
       return;
     }
 
-    if (cleanPassword !== signupConfirmPassword.trim()) {
+    if (signupPassword !== signupConfirmPassword) {
       setSignupError(t('Passwords do not match.', 'पासवर्ड मेल नहीं खाते हैं।'));
       return;
     }
@@ -344,7 +346,7 @@ export default function SignUpTab({
       id: `user_${Date.now()}`,
       username: cleanUsername,
       fullName: cleanFullName,
-      password: cleanPassword,
+      password: signupPassword,
       phone: phoneCheck.cleaned || undefined,
       createdAt: new Date().toISOString()
     };
@@ -364,7 +366,7 @@ export default function SignUpTab({
 
     // Auto pre-fill login fields
     setLoginIdentifier(cleanUsername);
-    setLoginPassword(cleanPassword);
+    setLoginPassword(signupPassword);
     setLoginError(null);
 
     // Switch view to provide login option as requested
@@ -877,7 +879,7 @@ export default function SignUpTab({
                   type={showSignupPassword ? "text" : "password"}
                   value={signupPassword}
                   onChange={(e) => setSignupPassword(e.target.value)}
-                  placeholder={t('Min 4 characters', 'कम से कम 4 अक्षर')}
+                  placeholder={t('Strong (e.g. Name@123)', 'मजबूत (उदा. Name@123)')}
                   required
                   className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#851834] bg-stone-50/50"
                 />
@@ -895,6 +897,63 @@ export default function SignUpTab({
                   required
                   className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#851834] bg-stone-50/50"
                 />
+              </div>
+            </div>
+
+            {/* Live Strong Password Checklist & Strength Meter */}
+            <div className="bg-stone-50 border border-stone-200 rounded-xl p-3 space-y-2 text-[11px]">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-stone-700">
+                  {t('Strong Password Rules:', 'मजबूत पासवर्ड नियम:')}
+                </span>
+                <span className={`font-bold ${
+                  passwordValidation.valid
+                    ? 'text-emerald-700'
+                    : passwordValidation.score >= 3
+                      ? 'text-amber-700'
+                      : 'text-rose-600'
+                }`}>
+                  {passwordValidation.valid
+                    ? t('Strong ✓', 'मजबूत ✓')
+                    : passwordValidation.score >= 3
+                      ? t('Medium', 'मध्यम')
+                      : t('Weak', 'कमज़ोर')}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-5 gap-1 h-1.5">
+                {[1, 2, 3, 4, 5].map((level) => (
+                  <div
+                    key={level}
+                    className={`rounded-full transition-colors ${
+                      passwordValidation.score >= level
+                        ? passwordValidation.valid
+                          ? 'bg-emerald-500'
+                          : passwordValidation.score >= 3
+                            ? 'bg-amber-500'
+                            : 'bg-rose-500'
+                        : 'bg-stone-200'
+                    }`}
+                  />
+                ))}
+              </div>
+
+              <div className="grid grid-cols-2 gap-1 text-[10px]">
+                <span className={passwordValidation.checks.minLength ? 'text-emerald-700 font-semibold' : 'text-stone-500'}>
+                  {passwordValidation.checks.minLength ? '✓' : '○'} {t('8+ characters', 'कम से कम 8 अक्षर')}
+                </span>
+                <span className={passwordValidation.checks.hasUpper ? 'text-emerald-700 font-semibold' : 'text-stone-500'}>
+                  {passwordValidation.checks.hasUpper ? '✓' : '○'} {t('Uppercase (A–Z)', 'बड़ा अक्षर (A–Z)')}
+                </span>
+                <span className={passwordValidation.checks.hasLower ? 'text-emerald-700 font-semibold' : 'text-stone-500'}>
+                  {passwordValidation.checks.hasLower ? '✓' : '○'} {t('Lowercase (a–z)', 'छोटा अक्षर (a–z)')}
+                </span>
+                <span className={passwordValidation.checks.hasNumber ? 'text-emerald-700 font-semibold' : 'text-stone-500'}>
+                  {passwordValidation.checks.hasNumber ? '✓' : '○'} {t('Number (0–9)', 'अंक (0–9)')}
+                </span>
+                <span className={`col-span-2 ${passwordValidation.checks.hasSpecial ? 'text-emerald-700 font-semibold' : 'text-stone-500'}`}>
+                  {passwordValidation.checks.hasSpecial ? '✓' : '○'} {t('Special symbol (@, #, $, !, %, etc.)', 'विशेष चिह्न (@, #, $, !, % आदि)')}
+                </span>
               </div>
             </div>
 

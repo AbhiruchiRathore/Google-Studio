@@ -2,16 +2,18 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Sparkles, Heart, ShieldCheck, Share2, Printer, 
   ArrowRight, Users, CheckCircle2, AlertTriangle, Info,
-  Flame, RefreshCw, Star, Compass, Award
+  Flame, RefreshCw, Star, Compass, Award, Lock, UserPlus, Download, X
 } from 'lucide-react';
-import { MatrimonyProfile, TabType } from '../types';
+import { MatrimonyProfile, TabType, AuthSession } from '../types';
 import { 
   RASHIS, NAKSHATRAS, performKundaliMilan, inferRashiIndex, 
   KundaliMilanReport 
 } from '../utils/kundaliMilan';
 import { useLanguage } from '../context/LanguageContext';
+import { shareViaWhatsApp, printHtmlDocument, downloadPrintableHtml, escapeHtml } from '../utils/shareAndPrint';
 
 interface KundaliMilanTabProps {
+  authSession: AuthSession | null;
   profiles: MatrimonyProfile[];
   onNavigateTab: (tab: TabType) => void;
   preselectedBoyId?: number | string | null;
@@ -19,6 +21,7 @@ interface KundaliMilanTabProps {
 }
 
 export const KundaliMilanTab: React.FC<KundaliMilanTabProps> = ({
+  authSession,
   profiles,
   onNavigateTab,
   preselectedBoyId,
@@ -26,6 +29,7 @@ export const KundaliMilanTab: React.FC<KundaliMilanTabProps> = ({
 }) => {
   const { lang, t } = useLanguage();
   const [matchMode, setMatchMode] = useState<'samaj' | 'custom'>('samaj');
+  const [showPrintModal, setShowPrintModal] = useState(false);
 
   // Grooms & Brides from Samaj Profiles
   const grooms = useMemo(() => profiles.filter(p => p.gender === 'Male'), [profiles]);
@@ -179,13 +183,136 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
 
 🌐 *Check live Kundali Milan & verified Rathore Samaj profiles on Rathore Rishtey Portal*`;
 
-    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
-    window.open(url, '_blank');
+    shareViaWhatsApp(text);
+  };
+
+  const buildCertificatePrintOptions = () => {
+    const kootaRows = Object.values(report.kootas)
+      .map(
+        (k) => `
+        <tr>
+          <td><strong>${escapeHtml(lang === 'hi' ? k.hindiName : k.name)}</strong></td>
+          <td>${k.obtainedPoints} / ${k.maxPoints}</td>
+          <td>${escapeHtml(lang === 'hi' ? k.hindiDescription : k.description)}</td>
+        </tr>`
+      )
+      .join('');
+
+    const bodyHtml = `
+      <div class="meta-grid">
+        <div class="meta-box">
+          <span class="meta-label">${escapeHtml(t('Groom', 'वर'))}</span>
+          <span class="meta-value">${escapeHtml(report.boyName)} (${escapeHtml(lang === 'hi' ? report.boyRashi.hindiName : report.boyRashi.name)})</span>
+        </div>
+        <div class="meta-box">
+          <span class="meta-label">${escapeHtml(t('Bride', 'वधू'))}</span>
+          <span class="meta-value">${escapeHtml(report.girlName)} (${escapeHtml(lang === 'hi' ? report.girlRashi.hindiName : report.girlRashi.name)})</span>
+        </div>
+        <div class="meta-box">
+          <span class="meta-label">${escapeHtml(t('Total Score', 'कुल गुण'))}</span>
+          <span class="meta-value">${report.totalGunas} / 36 (${report.percentage}%)</span>
+        </div>
+        <div class="meta-box">
+          <span class="meta-label">${escapeHtml(t('Verdict', 'निष्कर्ष'))}</span>
+          <span class="meta-value">${escapeHtml(report.verdict.grade)} - ${escapeHtml(lang === 'hi' ? report.verdict.hindiTitle : report.verdict.title)}</span>
+        </div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>${escapeHtml(t('Ashtakoot', 'अष्टकूट'))}</th>
+            <th>${escapeHtml(t('Gunas', 'गुण'))}</th>
+            <th>${escapeHtml(t('Analysis', 'विश्लेषण'))}</th>
+          </tr>
+        </thead>
+        <tbody>${kootaRows}</tbody>
+      </table>
+      <div style="margin-top: 16px; padding: 12px; border: 1px solid #d6d3d1; border-radius: 8px; background: #faf8f5; font-size: 12px;">
+        <strong>${escapeHtml(t('Dosha Summary:', 'दोष विवरण:'))}</strong>
+        <ul style="margin: 6px 0 0 18px; padding: 0;">
+          <li>${escapeHtml(report.doshaSummary.nadiDosha ? t('Nadi Dosha Present', 'नाड़ी दोष उपस्थित') : t('Nadi Compatible (No Dosha)', 'नाड़ी अनुकूल (कोई दोष नहीं)'))}</li>
+          <li>${escapeHtml(report.doshaSummary.bhakootDosha ? t('Bhakoot Dosha Present', 'भकूट दोष उपस्थित') : t('Bhakoot Auspicious (No Dosha)', 'भकूट शुभ (कोई दोष नहीं)'))}</li>
+          <li>${escapeHtml(lang === 'hi' ? report.doshaSummary.manglikCheck.hindiStatus : report.doshaSummary.manglikCheck.status)}</li>
+        </ul>
+      </div>
+    `;
+
+    return {
+      title: `${report.boyName} & ${report.girlName} - Vedic Kundali Milan`,
+      subtitle: t('Vedic Ashtakoot 36-Guna Matching Certificate', 'वैदिक अष्टकूट 36-गुण मिलान प्रमाणपत्र'),
+      bodyHtml,
+      filename: `kundali-milan-${report.boyName.replace(/\s+/g, '-').toLowerCase()}-${report.girlName.replace(/\s+/g, '-').toLowerCase()}`
+    };
   };
 
   const handlePrint = () => {
-    window.print();
+    setShowPrintModal(true);
+    printHtmlDocument(buildCertificatePrintOptions());
   };
+
+  if (!authSession) {
+    return (
+      <div className="max-w-4xl mx-auto py-4">
+        <div className="bg-white rounded-3xl shadow-xl border border-stone-200/90 overflow-hidden">
+          <div className="bg-gradient-to-r from-[#24050b] via-[#380812] to-[#24050b] p-8 sm:p-10 text-white flex flex-col md:flex-row justify-between items-center gap-6 border-b border-amber-500/30">
+            <div className="space-y-3 max-w-xl text-center md:text-left">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-400/10 border border-amber-400/30 text-amber-300 text-xs font-semibold">
+                <Lock className="w-3.5 h-3.5" />
+                <span>{t('Sign Up Required for Kundali Milan', 'कुंडली मिलान हेतु पंजीकरण आवश्यक')}</span>
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-serif font-bold text-amber-50">
+                {t('Sign Up / Sign In to Access Kundali Milan', 'कुंडली मिलान देखने के लिए साइन अप / लॉग इन करें')}
+              </h2>
+              <p className="text-xs sm:text-sm text-stone-300 leading-relaxed font-light">
+                {t(
+                  'Register or sign in to calculate authentic 36-Guna Vedic Ashtakoot compatibility, check Manglik Dosha, and print or share Kundali reports.',
+                  'प्रामाणिक 36-गुण वैदिक अष्टकूट मिलान, मांगलिक दोष जाँच और कुंडली रिपोर्ट प्रिंट या शेयर करने के लिए साइन अप या लॉग इन करें।'
+                )}
+              </p>
+            </div>
+
+            <button
+              onClick={() => onNavigateTab('signup')}
+              className="bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-stone-950 font-bold px-6 py-3.5 rounded-xl shadow-lg transition-all text-xs sm:text-sm shrink-0 flex items-center gap-2 cursor-pointer hover:scale-102"
+            >
+              <UserPlus className="w-4 h-4 text-stone-950" />
+              <span>{t('Sign Up / Log In Now', 'साइन अप / लॉग इन करें')}</span>
+            </button>
+          </div>
+
+          <div className="p-6 md:p-8 bg-[#FAF8F5] grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+            <div className="bg-white p-5 rounded-2xl border border-stone-200/80 shadow-xs space-y-2">
+              <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-900 border border-amber-200/60 flex items-center justify-center">
+                <Compass className="w-5 h-5 text-amber-800" />
+              </div>
+              <h4 className="font-serif font-bold text-sm text-stone-900">{t('36-Guna Ashtakoot', '36-गुण अष्टकूट मिलान')}</h4>
+              <p className="text-stone-600 leading-relaxed">
+                {t('Varna, Vashya, Tara, Yoni, Graha Maitri, Gana, Bhakoot & Nadi analysis.', 'वर्ण, वश्य, तारा, योनि, ग्रह मैत्री, गण, भकूट व नाड़ी का पूर्ण विश्लेषण।')}
+              </p>
+            </div>
+            <div className="bg-white p-5 rounded-2xl border border-stone-200/80 shadow-xs space-y-2">
+              <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-900 border border-amber-200/60 flex items-center justify-center">
+                <ShieldCheck className="w-5 h-5 text-amber-800" />
+              </div>
+              <h4 className="font-serif font-bold text-sm text-stone-900">{t('Manglik & Dosha Check', 'मांगलिक एवं दोष जाँच')}</h4>
+              <p className="text-stone-600 leading-relaxed">
+                {t('Instant Nadi, Bhakoot & Kuja Dosha evaluation with traditional safeguards.', 'नाड़ी, भकूट और मंगल दोष की तुरंत जाँच व शास्त्रीय मार्गदर्शन।')}
+              </p>
+            </div>
+            <div className="bg-white p-5 rounded-2xl border border-stone-200/80 shadow-xs space-y-2">
+              <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-900 border border-amber-200/60 flex items-center justify-center">
+                <Printer className="w-5 h-5 text-amber-800" />
+              </div>
+              <h4 className="font-serif font-bold text-sm text-stone-900">{t('Print & WhatsApp Share', 'प्रिंट व व्हाट्सऐप शेयर')}</h4>
+              <p className="text-stone-600 leading-relaxed">
+                {t('Download formatted Kundali Milan certificates or share directly with family.', 'पारिवारिक चर्चा हेतु कुंडली रिपोर्ट डाउनलोड करें या व्हाट्सऐप पर भेजें।')}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 max-w-5xl mx-auto py-2">
@@ -702,6 +829,61 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
           </div>
         </div>
       </div>
+
+      {/* PRINT & DOWNLOAD CERTIFICATE MODAL */}
+      {showPrintModal && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
+          onClick={() => setShowPrintModal(false)}
+        >
+          <div
+            className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-amber-300 relative space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setShowPrintModal(false)}
+              className="absolute top-4 right-4 text-stone-400 hover:text-stone-700 p-1 rounded-full cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <h3 className="text-lg font-serif font-bold text-stone-900 flex items-center gap-2">
+              <Printer className="w-5 h-5 text-amber-800" />
+              <span>{t('Print / Save Kundali Certificate', 'कुंडली प्रमाणपत्र प्रिंट / सेव करें')}</span>
+            </h3>
+            <p className="text-xs text-stone-600 leading-relaxed">
+              {t(
+                'Print directly or download a clean printable sheet for offline viewing and PDF export.',
+                'सीधे प्रिंट करें या ऑफलाइन देखने व PDF सेव करने के लिए प्रिंट योग्य फ़ाइल डाउनलोड करें।'
+              )}
+            </p>
+
+            <div className="bg-amber-50/70 border border-amber-200 rounded-2xl p-4 text-xs space-y-1">
+              <p className="font-bold text-stone-900">{report.boyName} &amp; {report.girlName}</p>
+              <p className="text-amber-900 font-semibold">{report.totalGunas} / 36 {t('Gunas', 'गुण')} ({report.percentage}%)</p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => printHtmlDocument(buildCertificatePrintOptions())}
+                className="flex-1 bg-[#380812] hover:bg-[#24050b] text-amber-200 font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Printer className="w-4 h-4" />
+                <span>{t('Print Now', 'अभी प्रिंट करें')}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => downloadPrintableHtml(buildCertificatePrintOptions())}
+                className="flex-1 bg-amber-100 hover:bg-amber-200 text-amber-950 border border-amber-300 font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Download className="w-4 h-4" />
+                <span>{t('Download Sheet (.html)', 'शीट डाउनलोड (.html)')}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

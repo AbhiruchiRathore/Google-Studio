@@ -3,6 +3,7 @@ import { Store, PlusCircle, Phone, Tag, Star, X, Sparkles, UserPlus, Heart, Shar
 import { BusinessAd, TabType, AuthSession } from '../types';
 import { sanitizePhoneInput, validatePhoneNumber } from '../utils/validation';
 import { useLanguage } from '../context/LanguageContext';
+import { shareViaWhatsApp } from '../utils/shareAndPrint';
 
 interface BusinessTabProps {
   authSession: AuthSession | null;
@@ -90,8 +91,7 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({
       ? `🛍️ *राठौड़ समाज व्यापार डायरेक्टरी* 🛍️\n\n*${ad.title}*\n*श्रेणी:* ${ad.category}\n*संचालक:* ${ad.owner} ${ad.city ? `(${ad.city})` : ''}\n${ad.tagline || ad.description ? `*विवरण:* ${ad.tagline || ad.description}\n` : ''}${ad.offer ? `🎁 *विशेष ऑफर:* ${ad.offer}\n` : ''}${ad.address ? `📍 *पता:* ${ad.address}\n` : ''}📞 *संपर्क:* ${ad.phone}\n\n✨ *राठौड़ समाज व्यापार डायरेक्टरी से जुड़ें:*\nhttps://svayaa.com/`
       : `🛍️ *Rathore Samaj Business Directory* 🛍️\n\n*${ad.title}*\n*Category:* ${ad.category}\n*Owner:* ${ad.owner} ${ad.city ? `(${ad.city})` : ''}\n${ad.tagline || ad.description ? `*About:* ${ad.tagline || ad.description}\n` : ''}${ad.offer ? `🎁 *Special Offer:* ${ad.offer}\n` : ''}${ad.address ? `📍 *Address:* ${ad.address}\n` : ''}📞 *Contact:* ${ad.phone}\n\n✨ *Connect with Rathore Samaj businesses on our community portal:*\nhttps://svayaa.com/\n_Powered by Svayaa_`;
 
-    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
-    window.open(url, '_blank');
+    shareViaWhatsApp(text);
   };
 
   const categories = ['all', 'Clothing & Retail', 'Hardware & Home Imprv.', 'Jewelry & Gold'];

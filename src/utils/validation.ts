@@ -127,3 +127,136 @@ export function validatePhoneNumber(
 
   return { valid: true, cleaned };
 }
+
+export interface PasswordValidationResult {
+  valid: boolean;
+  score: number;
+  checks: {
+    minLength: boolean;
+    hasUpper: boolean;
+    hasLower: boolean;
+    hasNumber: boolean;
+    hasSpecial: boolean;
+    noSpaces: boolean;
+  };
+  errorEn?: string;
+  errorHi?: string;
+}
+
+/**
+ * Validates that a password meets strong security standards:
+ * - Minimum 8 characters
+ * - At least 1 uppercase letter (A-Z)
+ * - At least 1 lowercase letter (a-z)
+ * - At least 1 numeric digit (0-9)
+ * - At least 1 special character (!@#$%^&*...)
+ * - No whitespace or identical match to username
+ */
+export function validateStrongPassword(
+  password: string,
+  username?: string
+): PasswordValidationResult {
+  const checks = {
+    minLength: password.length >= 8,
+    hasUpper: /[A-Z]/.test(password),
+    hasLower: /[a-z]/.test(password),
+    hasNumber: /[0-9]/.test(password),
+    hasSpecial: /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?~`]/.test(password),
+    noSpaces: password.length > 0 && !/\s/.test(password)
+  };
+
+  const score = [
+    checks.minLength,
+    checks.hasUpper,
+    checks.hasLower,
+    checks.hasNumber,
+    checks.hasSpecial
+  ].filter(Boolean).length;
+
+  if (!password) {
+    return {
+      valid: false,
+      score: 0,
+      checks,
+      errorEn: 'Password is required.',
+      errorHi: 'पासवर्ड दर्ज करना आवश्यक है।'
+    };
+  }
+
+  if (!checks.noSpaces) {
+    return {
+      valid: false,
+      score,
+      checks,
+      errorEn: 'Password must not contain spaces.',
+      errorHi: 'पासवर्ड में रिक्त स्थान (Space) नहीं होना चाहिए।'
+    };
+  }
+
+  if (!checks.minLength) {
+    return {
+      valid: false,
+      score,
+      checks,
+      errorEn: 'Password must be at least 8 characters long.',
+      errorHi: 'पासवर्ड कम से कम 8 अक्षरों का होना चाहिए।'
+    };
+  }
+
+  if (!checks.hasUpper) {
+    return {
+      valid: false,
+      score,
+      checks,
+      errorEn: 'Include at least 1 uppercase letter (A–Z).',
+      errorHi: 'पासवर्ड में कम से कम 1 बड़ा अक्षर (A–Z) शामिल करें।'
+    };
+  }
+
+  if (!checks.hasLower) {
+    return {
+      valid: false,
+      score,
+      checks,
+      errorEn: 'Include at least 1 lowercase letter (a–z).',
+      errorHi: 'पासवर्ड में कम से कम 1 छोटा अक्षर (a–z) शामिल करें।'
+    };
+  }
+
+  if (!checks.hasNumber) {
+    return {
+      valid: false,
+      score,
+      checks,
+      errorEn: 'Include at least 1 number (0–9).',
+      errorHi: 'पासवर्ड में कम से कम 1 अंक (0–9) शामिल करें।'
+    };
+  }
+
+  if (!checks.hasSpecial) {
+    return {
+      valid: false,
+      score,
+      checks,
+      errorEn: 'Include at least 1 special character (e.g. @, #, $, !, %).',
+      errorHi: 'पासवर्ड में कम से कम 1 विशेष चिह्न (जैसे @, #, $, !) शामिल करें।'
+    };
+  }
+
+  if (username && username.trim().length >= 3 && password.toLowerCase().includes(username.trim().toLowerCase())) {
+    return {
+      valid: false,
+      score,
+      checks,
+      errorEn: 'Password should not contain your username.',
+      errorHi: 'पासवर्ड में आपका यूज़रनेम शामिल नहीं होना चाहिए।'
+    };
+  }
+
+  return {
+    valid: true,
+    score,
+    checks
+  };
+}
+

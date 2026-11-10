@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { TabType, MatrimonyProfile, BusinessAd, SamajEvent, AuthSession } from './types';
 import { INITIAL_PROFILES, INITIAL_ADS, INITIAL_EVENTS } from './data/mockData';
 import { Header } from './components/Header';
@@ -7,7 +7,7 @@ import { MatrimonyTab } from './components/MatrimonyTab';
 import { BusinessTab } from './components/BusinessTab';
 import { BookletTab } from './components/BookletTab';
 import { EventsTab } from './components/EventsTab';
-import SignUpTab from './components/SignUpTab';
+import SignUpTab, { isAndroidEnvironment } from './components/SignUpTab';
 import { CreateProfileTab } from './components/CreateProfileTab';
 import { AdvertiseShopTab } from './components/AdvertiseShopTab';
 import { FamilyDetailsTab } from './components/FamilyDetailsTab';
@@ -23,11 +23,106 @@ import { Sparkles } from 'lucide-react';
 import { useLanguage } from './context/LanguageContext';
 import { sanitizePhoneInput } from './utils/validation';
 
+const VALID_TABS = new Set<TabType>([
+  'matrimony',
+  'kundali',
+  'guest-list',
+  'directory',
+  'booklet',
+  'events',
+  'signup',
+  'create-profile',
+  'advertise-shop',
+  'family-details',
+  'dashboard',
+  'admin'
+]);
+
+function getInitialTabFromUrl(): TabType {
+  if (typeof window === 'undefined') return 'matrimony';
+  const hashTab = window.location.hash.replace('#', '') as TabType;
+  if (VALID_TABS.has(hashTab) && hashTab !== 'admin') {
+    return hashTab;
+  }
+  return 'matrimony';
+}
+
 export const App: React.FC = () => {
   const { t } = useLanguage();
-  const [currentTab, setCurrentTab] = useState<TabType>('matrimony');
+  const [currentTab, setCurrentTab] = useState<TabType>(() => getInitialTabFromUrl());
+  const currentTabRef = useRef<TabType>(currentTab);
+  currentTabRef.current = currentTab;
+
+  const [backNotice, setBackNotice] = useState(false);
   const [kundaliBoyId, setKundaliBoyId] = useState<number | string | null>(null);
   const [kundaliGirlId, setKundaliGirlId] = useState<number | string | null>(null);
+
+  const navigateToTab = useCallback((nextTab: TabType) => {
+    setCurrentTab((prev) => {
+      if (prev !== nextTab && typeof window !== 'undefined') {
+        try {
+          window.history.pushState({ tab: nextTab }, '', `#${nextTab}`);
+        } catch {
+          // Ignore history errors in restricted environments
+        }
+      }
+      return nextTab;
+    });
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, []);
+
+  // Initialize history stack and handle hardware/browser Back button cleanly
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const initialTab = getInitialTabFromUrl();
+
+    try {
+      if (!window.history.state?.tab) {
+        if (isAndroidEnvironment()) {
+          // Push a root guard entry on Android WebView so pressing Back once doesn't immediately close the APK
+          window.history.replaceState({ tab: initialTab, isGuard: true }, '', `#${initialTab}`);
+          window.history.pushState({ tab: initialTab }, '', `#${initialTab}`);
+        } else {
+          window.history.replaceState({ tab: initialTab }, '', `#${initialTab}`);
+        }
+      }
+    } catch {
+      // ignore
+    }
+
+    const handlePopState = (event: PopStateEvent) => {
+      const stateTab = event.state?.tab as TabType | undefined;
+      const hashTab = window.location.hash.replace('#', '') as TabType;
+      const targetTab =
+        stateTab && VALID_TABS.has(stateTab)
+          ? stateTab
+          : VALID_TABS.has(hashTab)
+            ? hashTab
+            : 'matrimony';
+
+      // If Android WebView hits the synthetic guard at root, keep user inside app and nudge once
+      if (event.state?.isGuard) {
+        if (currentTabRef.current !== 'matrimony') {
+          setCurrentTab('matrimony');
+          window.history.pushState({ tab: 'matrimony' }, '', '#matrimony');
+        } else {
+          setBackNotice(true);
+          window.history.pushState({ tab: 'matrimony' }, '', '#matrimony');
+          setTimeout(() => setBackNotice(false), 2500);
+        }
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+
+      setCurrentTab(targetTab);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   const handleSelectKundaliProfile = (id: number | string, gender: 'Male' | 'Female') => {
     if (gender === 'Male') {
@@ -35,8 +130,7 @@ export const App: React.FC = () => {
     } else {
       setKundaliGirlId(id);
     }
-    setCurrentTab('kundali');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    navigateToTab('kundali');
   };
 
   // Matrimony Profiles State
@@ -140,7 +234,9 @@ export const App: React.FC = () => {
           } catch (e) {
             console.error(e);
           }
-          setCurrentTab(prev => (prev === 'signup' ? 'dashboard' : prev));
+          if (currentTabRef.current === 'signup') {
+            navigateToTab('dashboard');
+          }
         }
       })
       .catch((err) => console.warn('Redirect result check:', err?.code || err));
@@ -166,7 +262,9 @@ export const App: React.FC = () => {
         } catch (e) {
           console.error(e);
         }
-        setCurrentTab(prev => (prev === 'signup' ? 'dashboard' : prev));
+        if (currentTabRef.current === 'signup') {
+          navigateToTab('dashboard');
+        }
       } else {
         const stored = localStorage.getItem('user_auth_session');
         if (!stored) {
@@ -360,7 +458,7 @@ export const App: React.FC = () => {
     } catch (e) {
       console.error(e);
     }
-    setCurrentTab('dashboard');
+    navigateToTab('dashboard');
   };
 
   const handleLogout = async () => {
@@ -372,7 +470,7 @@ export const App: React.FC = () => {
     } catch (e) {
       console.error("Logout error:", e);
     }
-    setCurrentTab('signup');
+    navigateToTab('signup');
   };
 
   // Optional broadcast banner from Admin config
@@ -395,10 +493,16 @@ export const App: React.FC = () => {
     <div className="min-h-screen bg-[#FDFBF7] text-stone-800 font-sans flex flex-col selection:bg-rose-100 selection:text-rose-950">
       <Header 
         currentTab={currentTab} 
-        onSelectTab={setCurrentTab} 
+        onSelectTab={navigateToTab} 
         authSession={authSession} 
         onLogout={handleLogout}
       />
+
+      {backNotice && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 bg-stone-900/95 text-amber-100 px-4 py-2 rounded-xl text-xs font-semibold shadow-xl border border-amber-400/30">
+          {t('You are on the Home screen.', 'आप मुख्य पृष्ठ (होम) पर हैं।')}
+        </div>
+      )}
 
       {broadcastMessage && (
         <div className="bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 text-stone-950 px-4 py-2 text-xs sm:text-sm font-semibold text-center border-b border-amber-600/30 shadow-xs flex items-center justify-center gap-2">
@@ -416,7 +520,7 @@ export const App: React.FC = () => {
 
       {currentTab === 'matrimony' && (
         <HeroBanner 
-          onNavigateTab={setCurrentTab}
+          onNavigateTab={navigateToTab}
           authSession={authSession}
         />
       )}
@@ -429,7 +533,7 @@ export const App: React.FC = () => {
             unlockedProfiles={unlockedProfiles}
             hasRegisteredProfile={hasRegisteredProfile}
             onUnlockProfile={handleUnlockProfile}
-            onNavigateTab={setCurrentTab}
+            onNavigateTab={navigateToTab}
             onAddQuickProfile={handleAddQuickProfile}
             onSelectKundaliProfile={handleSelectKundaliProfile}
           />
@@ -437,8 +541,9 @@ export const App: React.FC = () => {
 
         {currentTab === 'kundali' && (
           <KundaliMilanTab
+            authSession={authSession}
             profiles={profiles}
-            onNavigateTab={setCurrentTab}
+            onNavigateTab={navigateToTab}
             preselectedBoyId={kundaliBoyId}
             preselectedGirlId={kundaliGirlId}
           />
@@ -455,7 +560,7 @@ export const App: React.FC = () => {
             onUpdateAd={handleUpdateAd}
             onAddAd={handleAddAd}
             onDeleteAd={handleDeleteAd}
-            onNavigateTab={setCurrentTab}
+            onNavigateTab={navigateToTab}
             onLogout={handleLogout}
             onSelectKundaliProfile={handleSelectKundaliProfile}
           />
@@ -465,13 +570,13 @@ export const App: React.FC = () => {
           <BusinessTab 
             authSession={authSession}
             ads={ads} 
-            onNavigateTab={setCurrentTab} 
+            onNavigateTab={navigateToTab} 
             onAddQuickAd={handleAddQuickAd} 
           />
         )}
 
         {currentTab === 'booklet' && (
-          <BookletTab onNavigateTab={setCurrentTab} />
+          <BookletTab onNavigateTab={navigateToTab} />
         )}
 
         {currentTab === 'events' && (
@@ -486,7 +591,7 @@ export const App: React.FC = () => {
             authSession={authSession}
             onLogin={handleLogin}
             onLogout={handleLogout}
-            onNavigateTab={setCurrentTab}
+            onNavigateTab={navigateToTab}
             hasRegisteredProfile={hasRegisteredProfile}
             unlockedCount={unlockedProfiles.length}
           />
@@ -497,7 +602,7 @@ export const App: React.FC = () => {
             authSession={authSession}
             onLogin={handleLogin}
             onAddProfile={handleAddProfile} 
-            onNavigateTab={setCurrentTab} 
+            onNavigateTab={navigateToTab} 
           />
         )}
 
@@ -506,14 +611,14 @@ export const App: React.FC = () => {
             authSession={authSession}
             onLogin={handleLogin}
             onAddAd={handleAddAd} 
-            onNavigateTab={setCurrentTab} 
+            onNavigateTab={navigateToTab} 
           />
         )}
 
         {currentTab === 'guest-list' && (
           <GuestListTab
             authSession={authSession}
-            onNavigateTab={setCurrentTab}
+            onNavigateTab={navigateToTab}
           />
         )}
 
@@ -525,14 +630,14 @@ export const App: React.FC = () => {
             onDeleteProfile={handleDeleteProfile}
             onUpdateAd={handleUpdateAd}
             onDeleteAd={handleDeleteAd}
-            onNavigateTab={setCurrentTab}
+            onNavigateTab={navigateToTab}
           />
         )}
 
         {currentTab === 'family-details' && (
           <FamilyDetailsTab
             authSession={authSession}
-            onNavigateTab={setCurrentTab}
+            onNavigateTab={navigateToTab}
             onAddQuickProfile={handleAddQuickProfile}
             hasRegisteredProfile={hasRegisteredProfile}
           />
@@ -540,7 +645,7 @@ export const App: React.FC = () => {
       </main>
 
       <WhatsAppShare />
-      <Footer onNavigateTab={setCurrentTab} />
+      <Footer onNavigateTab={navigateToTab} />
     </div>
   );
 };

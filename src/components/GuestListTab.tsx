@@ -2,11 +2,18 @@ import React, { useState, useMemo } from 'react';
 import { 
   Users, UserPlus, Search, Edit3, Trash2, Share2, 
   Printer, CheckCircle2, Clock, X, Send, 
-  Calendar, AlertCircle
+  Calendar, AlertCircle, Lock, Download, FileSpreadsheet
 } from 'lucide-react';
 import { GuestItem, GuestListOccasion, TabType, AuthSession } from '../types';
 import { sanitizePhoneInput, validatePhoneNumber } from '../utils/validation';
 import { useLanguage } from '../context/LanguageContext';
+import {
+  shareViaWhatsApp,
+  printHtmlDocument,
+  downloadPrintableHtml,
+  downloadCsvFile,
+  escapeHtml
+} from '../utils/shareAndPrint';
 
 interface GuestListTabProps {
   authSession: AuthSession | null;
@@ -113,8 +120,10 @@ const DEFAULT_OCCASIONS: GuestListOccasion[] = [
   }
 ];
 
-export const GuestListTab: React.FC<GuestListTabProps> = () => {
+export const GuestListTab: React.FC<GuestListTabProps> = ({ authSession, onNavigateTab }) => {
   const { lang, t } = useLanguage();
+  const [showPrintModal, setShowPrintModal] = useState(false);
+  const [confirmDeleteGuest, setConfirmDeleteGuest] = useState<{ id: string; name: string } | null>(null);
 
   const [occasions, setOccasions] = useState<GuestListOccasion[]>(() => {
     try {
@@ -302,20 +311,20 @@ export const GuestListTab: React.FC<GuestListTabProps> = () => {
   };
 
   const handleDeleteGuest = (id: string, name: string) => {
-    const confirmMsg = t(
-      `Are you sure you want to remove "${name}" from this guest list?`,
-      `क्या आप वाकई "${name}" को इस अतिथि सूची से हटाना चाहते हैं?`
-    );
-    if (!window.confirm(confirmMsg)) return;
+    setConfirmDeleteGuest({ id, name });
+  };
 
+  const confirmAndRemoveGuest = () => {
+    if (!confirmDeleteGuest || !activeOccasion) return;
     const updatedOccasions = occasions.map(occ => {
       if (occ.id !== activeOccasion.id) return occ;
       return {
         ...occ,
-        guests: occ.guests.filter(g => g.id !== id)
+        guests: occ.guests.filter(g => g.id !== confirmDeleteGuest.id)
       };
     });
     saveOccasions(updatedOccasions);
+    setConfirmDeleteGuest(null);
   };
 
   const handleCreateOccasion = (e: React.FormEvent) => {
@@ -357,8 +366,7 @@ export const GuestListTab: React.FC<GuestListTabProps> = () => {
 
     text += `_Rathore Rishtey Guest Planner_\nhttps://svayaa.com/`;
 
-    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
-    window.open(url, '_blank');
+    shareViaWhatsApp(text);
   };
 
   const handleSendPersonalInviteWhatsApp = (guest: GuestItem) => {
@@ -366,15 +374,162 @@ export const GuestListTab: React.FC<GuestListTabProps> = () => {
       ? `जय माताजी की!\n\nआदरणीय *${guest.name}* जी,\n\nसप्रेम नमस्कार! आपको एवं आपके पूरे परिवार को *${activeOccasion.title}* के शुभ अवसर पर सपरिवार पधारने का स्नेहभरा निमंत्रण है।\n\n📅 दिनांक: ${activeOccasion.date || 'शीघ्र घोषित'}\n📍 स्थान: ${activeOccasion.venue || 'कार्यक्रम स्थल'}\n\nआपकी उपस्थिति से हमारा समारोह गौरवान्वित होगा।\n\nभवदीय,\nराठौड़ परिवार\nसंपर्क: +91 9826012345`
       : `Jai Mataji Ki!\n\nDear *${guest.name}*,\n\nPlease accept our warm regards and cordial invitation. You and your family are cordially invited to celebrate the auspicious occasion of *${activeOccasion.title}* with us.\n\n📅 Date: ${activeOccasion.date || 'To be announced'}\n📍 Venue: ${activeOccasion.venue || 'Event Venue'}\n\nYour presence and blessings will make this celebration truly special.\n\nWarm regards,\nRathore Family\nContact: +91 9826012345`;
 
-    const cleanPhone = guest.phone.replace(/[^0-9]/g, '');
-    const phoneWithCode = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
-    const url = `https://api.whatsapp.com/send?phone=${phoneWithCode}&text=${encodeURIComponent(text)}`;
-    window.open(url, '_blank');
+    shareViaWhatsApp(text, guest.phone);
+  };
+
+  const buildGuestListPrintOptions = () => {
+    const guestRowsHtml = filteredGuests
+      .map(
+        (g, idx) => `
+        <tr>
+          <td>${idx + 1}</td>
+          <td>
+            <strong>${escapeHtml(g.name)}</strong><br/>
+            <span style="font-size: 10px; color: #78716c;">${escapeHtml(translateCategory(g.category))}</span>
+          </td>
+          <td style="font-family: monospace;">${escapeHtml(g.phone)}</td>
+          <td>${escapeHtml(g.address)}${g.city ? `, ${escapeHtml(g.city)}` : ''}</td>
+          <td style="text-align: center; font-weight: bold;">${g.membersCount}</td>
+          <td><span class="badge">${escapeHtml(translateStatus(g.status))}</span></td>
+        </tr>`
+      )
+      .join('');
+
+    const subtitleParts = [
+      activeOccasion.date ? `${t('Date:', 'दिनांक:')} ${activeOccasion.date}` : '',
+      activeOccasion.venue ? `${t('Venue:', 'स्थान:')} ${activeOccasion.venue}` : ''
+    ]
+      .filter(Boolean)
+      .join(' • ');
+
+    const bodyHtml = `
+      <div class="meta-grid">
+        <div class="meta-box">
+          <span class="meta-label">${escapeHtml(t('Guest Entries', 'अतिथि परिवार'))}</span>
+          <span class="meta-value">${filteredGuests.length}</span>
+        </div>
+        <div class="meta-box">
+          <span class="meta-label">${escapeHtml(t('Expected Attendees', 'कुल सदस्य'))}</span>
+          <span class="meta-value">${filteredGuests.reduce((sum, g) => sum + (Number(g.membersCount) || 1), 0)}</span>
+        </div>
+        <div class="meta-box">
+          <span class="meta-label">${escapeHtml(t('Confirmed RSVP', 'पुष्ट उपस्थिति'))}</span>
+          <span class="meta-value">${filteredGuests.filter(g => g.status === 'Confirmed').length}</span>
+        </div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>${escapeHtml(t('Guest Name & Relation', 'अतिथि का नाम व संबंध'))}</th>
+            <th>${escapeHtml(t('Phone', 'मोबाइल'))}</th>
+            <th>${escapeHtml(t('Address & City', 'पता व शहर'))}</th>
+            <th style="text-align:center;">${escapeHtml(t('Pax', 'सदस्य'))}</th>
+            <th>${escapeHtml(t('RSVP Status', 'स्थिति'))}</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${guestRowsHtml || `<tr><td colspan="6" style="text-align:center;">${escapeHtml(t('No guests in current view', 'कोई अतिथि नहीं'))}</td></tr>`}
+        </tbody>
+      </table>
+    `;
+
+    return {
+      title: activeOccasion.title,
+      subtitle: subtitleParts,
+      bodyHtml,
+      filename: `guest-list-${activeOccasion.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 36)}`
+    };
   };
 
   const handlePrint = () => {
-    window.print();
+    setShowPrintModal(true);
+    printHtmlDocument(buildGuestListPrintOptions());
   };
+
+  const handleExportCsv = () => {
+    const headers = ['#', 'Guest Name', 'Relation', 'Phone', 'Address', 'City', 'Members', 'Status', 'Notes'];
+    const rows = filteredGuests.map((g, idx) => [
+      idx + 1,
+      g.name,
+      g.category || '',
+      g.phone,
+      g.address,
+      g.city || '',
+      g.membersCount,
+      g.status,
+      g.notes || ''
+    ]);
+    downloadCsvFile(
+      `guest-list-${activeOccasion.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 36)}`,
+      headers,
+      rows
+    );
+  };
+
+  if (!authSession) {
+    return (
+      <div className="max-w-4xl mx-auto py-4">
+        <div className="bg-white rounded-3xl shadow-xl border border-stone-200/90 overflow-hidden">
+          <div className="bg-gradient-to-r from-[#24050b] via-[#380812] to-[#24050b] p-8 sm:p-10 text-white flex flex-col md:flex-row justify-between items-center gap-6 border-b border-amber-500/30">
+            <div className="space-y-3 max-w-xl text-center md:text-left">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-400/10 border border-amber-400/30 text-amber-300 text-xs font-semibold">
+                <Lock className="w-3.5 h-3.5" />
+                <span>{t('Sign Up Required for Guest List', 'अतिथि सूची हेतु पंजीकरण आवश्यक')}</span>
+              </div>
+              <h2 className="text-2xl sm:text-3xl font-serif font-bold text-amber-50">
+                {t('Sign Up / Sign In to Access Saved Guest List', 'सहेजी गई अतिथि सूची देखने के लिए साइन अप / लॉग इन करें')}
+              </h2>
+              <p className="text-xs sm:text-sm text-stone-300 leading-relaxed font-light">
+                {t(
+                  'Create and save your family guest list once for weddings, sagai, and ceremonies. Print sheets, download Excel/CSV, and send WhatsApp invitations after signing up.',
+                  'विवाह, सगाई और पारिवारिक समारोहों के लिए अपनी अतिथि सूची एक बार सहेजें। लॉग इन या साइन अप के बाद प्रिंट, डाउनलोड और व्हाट्सऐप निमंत्रण भेजें।'
+                )}
+              </p>
+            </div>
+
+            <button
+              onClick={() => onNavigateTab('signup')}
+              className="bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-stone-950 font-bold px-6 py-3.5 rounded-xl shadow-lg transition-all text-xs sm:text-sm shrink-0 flex items-center gap-2 cursor-pointer hover:scale-102"
+            >
+              <UserPlus className="w-4 h-4 text-stone-950" />
+              <span>{t('Sign Up / Log In Now', 'साइन अप / लॉग इन करें')}</span>
+            </button>
+          </div>
+
+          <div className="p-6 md:p-8 bg-[#FAF8F5] grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+            <div className="bg-white p-5 rounded-2xl border border-stone-200/80 shadow-xs space-y-2">
+              <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-900 border border-amber-200/60 flex items-center justify-center">
+                <Users className="w-5 h-5 text-amber-800" />
+              </div>
+              <h4 className="font-serif font-bold text-sm text-stone-900">{t('Save Once, Reuse Forever', 'एक बार सहेजें, हमेशा उपयोग करें')}</h4>
+              <p className="text-stone-600 leading-relaxed">
+                {t('Store full guest names, addresses, cities, 10-digit phones, and member counts.', 'सभी अतिथियों के नाम, पता, शहर, मोबाइल नंबर और सदस्य संख्या सुरक्षित रखें।')}
+              </p>
+            </div>
+            <div className="bg-white p-5 rounded-2xl border border-stone-200/80 shadow-xs space-y-2">
+              <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-900 border border-amber-200/60 flex items-center justify-center">
+                <Send className="w-5 h-5 text-amber-800" />
+              </div>
+              <h4 className="font-serif font-bold text-sm text-stone-900">{t('WhatsApp List & Cards', 'व्हाट्सऐप सूची व निमंत्रण')}</h4>
+              <p className="text-stone-600 leading-relaxed">
+                {t('Send personalized wedding invitation messages directly to every guest on WhatsApp.', 'प्रत्येक अतिथि को एक क्लिक में व्यक्तिगत व्हाट्सऐप निमंत्रण कार्ड भेजें।')}
+              </p>
+            </div>
+            <div className="bg-white p-5 rounded-2xl border border-stone-200/80 shadow-xs space-y-2">
+              <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-900 border border-amber-200/60 flex items-center justify-center">
+                <Printer className="w-5 h-5 text-amber-800" />
+              </div>
+              <h4 className="font-serif font-bold text-sm text-stone-900">{t('Print & Excel Export', 'प्रिंट एवं एक्सेल डाउनलोड')}</h4>
+              <p className="text-stone-600 leading-relaxed">
+                {t('Print neat directory sheets or download HTML/CSV files for event coordination.', 'कार्यक्रम व्यवस्था के लिए साफ-सुथरी सूची प्रिंट करें या HTML/CSV डाउनलोड करें।')}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
@@ -946,6 +1101,139 @@ export const GuestListTab: React.FC<GuestListTabProps> = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: CONFIRM DELETE GUEST */}
+      {confirmDeleteGuest && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={() => setConfirmDeleteGuest(null)}
+        >
+          <div
+            className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-rose-200 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h4 className="font-serif font-bold text-stone-900 text-base">
+              {t('Remove Guest from List?', 'अतिथि को सूची से हटाएं?')}
+            </h4>
+            <p className="text-xs text-stone-600 leading-relaxed">
+              {t(
+                `Are you sure you want to remove "${confirmDeleteGuest.name}" from this guest list?`,
+                `क्या आप वाकई "${confirmDeleteGuest.name}" को इस अतिथि सूची से हटाना चाहते हैं?`
+              )}
+            </p>
+            <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteGuest(null)}
+                className="px-4 py-2 rounded-xl border border-stone-300 text-stone-700 text-xs font-semibold cursor-pointer hover:bg-stone-50"
+              >
+                {t('Cancel', 'रद्द करें')}
+              </button>
+              <button
+                type="button"
+                onClick={confirmAndRemoveGuest}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold cursor-pointer"
+              >
+                {t('Remove', 'हटाएं')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: PRINT PREVIEW & EXPORT GUEST LIST */}
+      {showPrintModal && activeOccasion && (
+        <div
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+          onClick={() => setShowPrintModal(false)}
+        >
+          <div
+            className="bg-white rounded-3xl max-w-3xl w-full p-6 shadow-2xl border border-amber-300 relative my-8 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => setShowPrintModal(false)}
+              className="absolute top-4 right-4 text-stone-400 hover:text-stone-700 p-1 rounded-full cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div>
+              <h3 className="text-xl font-serif font-bold text-stone-900 flex items-center gap-2">
+                <Printer className="w-5 h-5 text-amber-800" />
+                <span>{t('Print & Export Guest List', 'अतिथि सूची प्रिंट व निर्यात करें')}</span>
+              </h3>
+              <p className="text-xs text-stone-500 mt-0.5">
+                {activeOccasion.title} • {filteredGuests.length} {t('Guests', 'अतिथि')} (
+                {filteredGuests.reduce((sum, g) => sum + (Number(g.membersCount) || 1), 0)} {t('Persons', 'सदस्य')})
+              </p>
+            </div>
+
+            <div className="max-h-64 overflow-y-auto border border-stone-200 rounded-2xl">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead className="bg-stone-100 text-stone-700 sticky top-0">
+                  <tr>
+                    <th className="py-2 px-3 font-bold">#</th>
+                    <th className="py-2 px-3 font-bold">{t('Name', 'नाम')}</th>
+                    <th className="py-2 px-3 font-bold">{t('Phone', 'मोबाइल')}</th>
+                    <th className="py-2 px-3 font-bold">{t('Address', 'पता')}</th>
+                    <th className="py-2 px-3 font-bold text-center">{t('Pax', 'सदस्य')}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-stone-100">
+                  {filteredGuests.map((g, idx) => (
+                    <tr key={g.id}>
+                      <td className="py-2 px-3 font-mono text-stone-500">{idx + 1}</td>
+                      <td className="py-2 px-3 font-semibold text-stone-900">{g.name}</td>
+                      <td className="py-2 px-3 font-mono text-stone-700">{g.phone}</td>
+                      <td className="py-2 px-3 text-stone-600">{g.address}{g.city ? `, ${g.city}` : ''}</td>
+                      <td className="py-2 px-3 text-center font-bold">{g.membersCount}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => printHtmlDocument(buildGuestListPrintOptions())}
+                className="flex-1 min-w-[140px] bg-[#380812] hover:bg-[#24050b] text-amber-200 font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Printer className="w-4 h-4" />
+                <span>{t('Print Sheet', 'सीधे प्रिंट करें')}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => downloadPrintableHtml(buildGuestListPrintOptions())}
+                className="flex-1 min-w-[140px] bg-amber-100 hover:bg-amber-200 text-amber-950 border border-amber-300 font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Download className="w-4 h-4" />
+                <span>{t('Download Sheet (.html)', 'शीट डाउनलोड (.html)')}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleExportCsv}
+                className="bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-300 font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <FileSpreadsheet className="w-4 h-4 text-emerald-700" />
+                <span>{t('Excel / CSV', 'एक्सेल / CSV')}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleShareListWhatsApp}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Share2 className="w-4 h-4" />
+                <span>{t('Share WhatsApp', 'व्हाट्सऐप शेयर')}</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

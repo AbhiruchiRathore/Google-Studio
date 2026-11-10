@@ -7,6 +7,7 @@ import {
 import { MatrimonyProfile, GenderType, TabType, AuthSession, ProfileAdmirer } from '../types';
 import { ChatModal } from './ChatModal';
 import { useLanguage } from '../context/LanguageContext';
+import { shareViaWhatsApp } from '../utils/shareAndPrint';
 
 interface MatrimonyTabProps {
   authSession: AuthSession | null;
@@ -176,8 +177,7 @@ ${p.about ? `*About:* ${p.about}\n` : ''}*Contact:* ${p.contact}
 https://svayaa.com/
 _Powered by Svayaa_`;
 
-    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
-    window.open(url, '_blank');
+    shareViaWhatsApp(text);
   };
 
   // Selected Profile for Biodata Modal
