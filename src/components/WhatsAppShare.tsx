@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Share2, ExternalLink, Copy, Check, X, MessageCircle, Smartphone } from 'lucide-react';
+import { Share2, ExternalLink, Copy, Check, X, MessageCircle } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import {
   shareViaWhatsApp,
@@ -104,13 +104,14 @@ export const WhatsAppShare: React.FC = () => {
             </a>
 
             <a
-              href={activeShare.deepLink}
+              href={activeShare.apiUrl}
+              target="_blank"
               rel="noopener noreferrer"
               className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-semibold px-3 py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-colors"
-              title={t('Launch WhatsApp App directly on phone', 'फ़ोन में सीधे व्हाट्सऐप ऐप खोलें')}
+              title={t('Open via WhatsApp Web / API link', 'व्हाट्सऐप वेब / एपीआई लिंक से खोलें')}
             >
-              <Smartphone className="w-3.5 h-3.5" />
-              <span>{t('App Link', 'ऐप लिंक')}</span>
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span>{t('WhatsApp Web', 'व्हाट्सऐप वेब')}</span>
             </a>
 
             <button

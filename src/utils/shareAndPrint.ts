@@ -3,7 +3,6 @@ export interface WhatsAppSharePayload {
   phone?: string;
   waMeUrl: string;
   apiUrl: string;
-  deepLink: string;
   copied: boolean;
 }
 
@@ -30,11 +29,7 @@ export function buildWhatsAppUrls(text: string, phone?: string) {
     ? `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodedText}`
     : `https://api.whatsapp.com/send?text=${encodedText}`;
 
-  const deepLink = cleanPhone
-    ? `whatsapp://send?phone=${cleanPhone}&text=${encodedText}`
-    : `whatsapp://send?text=${encodedText}`;
-
-  return { waMeUrl, apiUrl, deepLink, cleanPhone };
+  return { waMeUrl, apiUrl, cleanPhone };
 }
 
 export async function copyTextToClipboard(text: string): Promise<boolean> {
@@ -65,62 +60,85 @@ export async function copyTextToClipboard(text: string): Promise<boolean> {
   }
 }
 
-function isAndroidOrWebView(): boolean {
+function isMobileOrWebView(): boolean {
   if (typeof navigator === 'undefined') return false;
   const ua = navigator.userAgent || '';
-  return /Android/i.test(ua) || /wv|Version\/[0-9.]+/i.test(ua) || Boolean((window as unknown as { Android?: unknown }).Android);
+  return (
+    /Android|iPhone|iPad|iPod|Mobile/i.test(ua) ||
+    /\bwv\b|Version\/[0-9.]+/i.test(ua) ||
+    Boolean((window as unknown as { Android?: unknown }).Android)
+  );
 }
 
-/**
- * Reliably triggers WhatsApp sharing across Desktop Browsers, Mobile Browsers,
- * AI Studio sandboxed iFrames, and Android APK WebViews.
- * Always copies message to clipboard and dispatches `samaj:whatsapp-share` so an inline
- * non-blocking toast with direct fallback links & copy is available if popups are blocked.
- */
-export async function shareViaWhatsApp(text: string, phone?: string): Promise<WhatsAppSharePayload> {
-  const { waMeUrl, apiUrl, deepLink } = buildWhatsAppUrls(text, phone);
-  const copied = await copyTextToClipboard(text);
+function isAndroidWebView(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  return (
+    /\bwv\b/i.test(ua) ||
+    (/Android/i.test(ua) && /Version\/[0-9.]+/i.test(ua)) ||
+    Boolean((window as unknown as { Android?: unknown }).Android)
+  );
+}
 
-  const payload: WhatsAppSharePayload = {
-    text,
-    phone,
-    waMeUrl,
-    apiUrl,
-    deepLink,
-    copied
-  };
-
-  // Notify global WhatsApp share bar so user always has direct clickable links + copy fallback
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent<WhatsAppSharePayload>(WHATSAPP_SHARE_EVENT, { detail: payload }));
-  }
-
-  // On Android/WebView, try native deep link or Web Share API first
-  if (isAndroidOrWebView()) {
-    try {
-      const a = document.createElement('a');
-      a.href = deepLink;
-      a.rel = 'noopener noreferrer';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      return payload;
-    } catch {
-      // Continue to web link attempt
-    }
-  }
-
-  // Try launching universal wa.me link via synthetic anchor click (more popup-blocker resilient than window.open)
+function openExternalHttpsLink(url: string): void {
   try {
     const link = document.createElement('a');
-    link.href = waMeUrl;
+    link.href = url;
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   } catch {
-    // Fallback silently handled by the global share helper toast
+    // Silently handled by the global share assistant fallback UI
+  }
+}
+
+/**
+ * Reliably triggers WhatsApp / social sharing across Desktop Browsers, Mobile Browsers,
+ * AI Studio sandboxed iFrames, and Android APK WebViews without ever using custom `whatsapp://`
+ * URI schemes (which trigger `net::ERR_UNKNOWN_URL_SCHEME` in standard Android WebViews).
+ */
+export async function shareViaWhatsApp(text: string, phone?: string): Promise<WhatsAppSharePayload> {
+  const { waMeUrl, apiUrl } = buildWhatsAppUrls(text, phone);
+  // Start clipboard copy immediately without awaiting before synchronous user-gesture calls
+  const copyPromise = copyTextToClipboard(text);
+
+  let sharedViaNativeSheet = false;
+
+  // On mobile/WebView without a specific target phone, prefer native Web Share sheet when available
+  if (!phone && isMobileOrWebView() && typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+    try {
+      await navigator.share({
+        title: 'Rathore Rishtey',
+        text
+      });
+      sharedViaNativeSheet = true;
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        sharedViaNativeSheet = true;
+      }
+    }
+  }
+
+  // Launch universal HTTPS wa.me link in browsers (skip automatic redirect in bare Android WebViews
+  // where wa.me can redirect internally to whatsapp:// and trigger net::ERR_UNKNOWN_URL_SCHEME;
+  // those users still get immediate clipboard copy + explicit HTTPS buttons in the Share Assistant)
+  if (!sharedViaNativeSheet && !isAndroidWebView()) {
+    openExternalHttpsLink(waMeUrl);
+  }
+
+  const copied = await copyPromise;
+  const payload: WhatsAppSharePayload = {
+    text,
+    phone,
+    waMeUrl,
+    apiUrl,
+    copied
+  };
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent<WhatsAppSharePayload>(WHATSAPP_SHARE_EVENT, { detail: payload }));
   }
 
   return payload;
