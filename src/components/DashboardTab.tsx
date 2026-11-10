@@ -14,13 +14,14 @@ import {
 import { ChatModal } from './ChatModal';
 import { useLanguage } from '../context/LanguageContext';
 import { sanitizePhoneInput, validatePhoneNumber } from '../utils/validation';
+import { isProfileOwnedBySession } from '../utils/profileOwnership';
 
 interface DashboardTabProps {
   authSession: AuthSession | null;
   profiles: MatrimonyProfile[];
   ads: BusinessAd[];
   onUpdateProfile: (updatedProfile: MatrimonyProfile) => void;
-  onAddProfile: (newProfile: MatrimonyProfile) => void;
+  onAddProfile: (newProfile: MatrimonyProfile) => boolean | void;
   onDeleteProfile: (id: number | string) => void;
   onUpdateAd: (updatedAd: BusinessAd) => void;
   onAddAd: (newAd: BusinessAd) => void;
@@ -251,24 +252,29 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   const [whatsappMasking, setWhatsappMasking] = useState(false);
   const [notifyOnView, setNotifyOnView] = useState(true);
   const [settingsSavedToast, setSettingsSavedToast] = useState(false);
+  const [profileLimitNotice, setProfileLimitNotice] = useState(false);
 
-  // Processed Matrimony Profiles
+  // Only show matrimonial profiles added by this logged-in account (never all community profiles)
   const userProfiles = useMemo(() => {
-    return profiles.map((p, idx) => ({
-      ...p,
-      status: p.status || (idx % 2 === 0 ? 'active' : 'draft'),
-      visibility: p.visibility || (idx % 2 === 0 ? 'public' : 'verified_only'),
-      coverPhoto: p.coverPhoto || 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1200&q=80',
-      gallery: p.gallery || [
-        p.photo || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=600&q=80',
-        'https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&w=600&q=80'
-      ],
-      socialLinks: p.socialLinks || {
-        linkedin: 'https://linkedin.com/in/rathore',
-        instagram: '@rathore_rishtey'
-      }
-    }));
-  }, [profiles]);
+    return profiles
+      .filter(p => isProfileOwnedBySession(p, authSession))
+      .map((p) => ({
+        ...p,
+        status: p.status || 'active',
+        visibility: p.visibility || 'public',
+        coverPhoto: p.coverPhoto || 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1200&q=80',
+        gallery: p.gallery || [
+          p.photo || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=600&q=80',
+          'https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&w=600&q=80'
+        ],
+        socialLinks: p.socialLinks || {
+          linkedin: 'https://linkedin.com/in/rathore',
+          instagram: '@rathore_rishtey'
+        }
+      }));
+  }, [profiles, authSession]);
+
+  const hasOwnProfile = userProfiles.length >= 1;
 
   const filteredUserProfiles = useMemo(() => {
     return userProfiles.filter(p => {
@@ -325,8 +331,17 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     setIsEditingAd(false);
   };
 
-  // Handler: Create New Profile via Editor
+  // Handler: Create New Profile via Editor (strictly limited to 1 profile per login)
   const handleStartCreateNewProfile = () => {
+    if (hasOwnProfile) {
+      setActiveSection('profiles');
+      setIsEditingProfile(false);
+      setIsEditingAd(false);
+      setProfileLimitNotice(true);
+      setTimeout(() => setProfileLimitNotice(false), 5000);
+      return;
+    }
+    setProfileLimitNotice(false);
     setProfileFormError('');
     setShowGalleryAddInput(false);
     setNewGalleryUrlInput('');
@@ -390,7 +405,21 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     if (exists) {
       onUpdateProfile(cleanedProfile);
     } else {
-      onAddProfile(cleanedProfile);
+      if (hasOwnProfile) {
+        setProfileFormError(t(
+          'Only 1 profile can be created per login. Please edit or delete your existing profile first.',
+          'प्रति लॉगिन केवल 1 प्रोफ़ाइल बनाई जा सकती है। कृपया अपनी मौजूदा प्रोफ़ाइल को संपादित करें।'
+        ));
+        return;
+      }
+      const added = onAddProfile(cleanedProfile);
+      if (added === false) {
+        setProfileFormError(t(
+          'Only 1 profile can be created per login.',
+          'प्रति लॉगिन केवल 1 प्रोफ़ाइल बनाई जा सकती है।'
+        ));
+        return;
+      }
     }
 
     setIsEditingProfile(false);
@@ -990,13 +1019,23 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
 
           {/* Quick Action CTAs in Sidebar */}
           <div className="pt-2 space-y-2">
-            <button
-              onClick={handleStartCreateNewProfile}
-              className="w-full bg-gradient-to-r from-amber-300 via-amber-400 to-amber-500 hover:from-amber-200 hover:to-amber-400 text-[#4c0d1b] font-bold py-2.5 px-4 rounded-2xl text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer hover:scale-101 font-serif"
-            >
-              <Plus className="w-4 h-4" />
-              <span>{t('+ Create Profile', '+ नया बायोडाटा जोड़ें')}</span>
-            </button>
+            {hasOwnProfile ? (
+              <button
+                onClick={() => handleStartEditProfile(userProfiles[0])}
+                className="w-full bg-gradient-to-r from-amber-300 via-amber-400 to-amber-500 hover:from-amber-200 hover:to-amber-400 text-[#4c0d1b] font-bold py-2.5 px-4 rounded-2xl text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer hover:scale-101 font-serif"
+              >
+                <Edit3 className="w-4 h-4" />
+                <span>{t('Edit My Profile (1/1)', 'प्रोफ़ाइल संपादित करें (1/1)')}</span>
+              </button>
+            ) : (
+              <button
+                onClick={handleStartCreateNewProfile}
+                className="w-full bg-gradient-to-r from-amber-300 via-amber-400 to-amber-500 hover:from-amber-200 hover:to-amber-400 text-[#4c0d1b] font-bold py-2.5 px-4 rounded-2xl text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer hover:scale-101 font-serif"
+              >
+                <Plus className="w-4 h-4" />
+                <span>{t('+ Create Profile', '+ नया बायोडाटा जोड़ें')}</span>
+              </button>
+            )}
 
             <button
               onClick={handleStartCreateNewAd}
@@ -1714,12 +1753,21 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                     )}
                   </p>
                   <div className="pt-2 flex flex-wrap gap-2.5">
-                    <button
-                      onClick={handleStartCreateNewProfile}
-                      className="bg-gradient-to-r from-amber-300 to-amber-400 text-[#4c0d1b] font-bold px-4 py-2 rounded-xl text-xs shadow cursor-pointer font-serif"
-                    >
-                      {t('+ Create Matrimony Profile', '+ नया बायोडाटा जोड़ें')}
-                    </button>
+                    {hasOwnProfile ? (
+                      <button
+                        onClick={() => handleStartEditProfile(userProfiles[0])}
+                        className="bg-gradient-to-r from-amber-300 to-amber-400 text-[#4c0d1b] font-bold px-4 py-2 rounded-xl text-xs shadow cursor-pointer font-serif"
+                      >
+                        {t('Edit My Profile (1/1 Limit)', 'मेरा बायोडाटा संपादित करें (1/1)')}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={handleStartCreateNewProfile}
+                        className="bg-gradient-to-r from-amber-300 to-amber-400 text-[#4c0d1b] font-bold px-4 py-2 rounded-xl text-xs shadow cursor-pointer font-serif"
+                      >
+                        {t('+ Create Matrimony Profile', '+ नया बायोडाटा जोड़ें')}
+                      </button>
+                    )}
                     <button
                       onClick={handleStartCreateNewAd}
                       className="bg-white/15 hover:bg-white/25 text-amber-100 border border-amber-300/30 font-semibold px-4 py-2 rounded-xl text-xs transition-colors cursor-pointer"
@@ -1865,15 +1913,43 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                     </button>
                   </div>
 
-                  <button
-                    onClick={handleStartCreateNewProfile}
-                    className="bg-gradient-to-r from-[#6e1628] via-[#851834] to-[#6e1628] text-amber-100 font-bold px-3.5 py-1.5 rounded-xl text-xs shadow-sm flex items-center gap-1.5 cursor-pointer border border-amber-300/30"
-                  >
-                    <Plus className="w-3.5 h-3.5 text-amber-300" />
-                    <span>{t('New Profile', 'नया बायोडाटा')}</span>
-                  </button>
+                  {hasOwnProfile ? (
+                    <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>{t('1 / 1 Profile Used', '1 / 1 प्रोफ़ाइल सक्रिय')}</span>
+                    </span>
+                  ) : (
+                    <button
+                      onClick={handleStartCreateNewProfile}
+                      className="bg-gradient-to-r from-[#6e1628] via-[#851834] to-[#6e1628] text-amber-100 font-bold px-3.5 py-1.5 rounded-xl text-xs shadow-sm flex items-center gap-1.5 cursor-pointer border border-amber-300/30"
+                    >
+                      <Plus className="w-3.5 h-3.5 text-amber-300" />
+                      <span>{t('New Profile', 'नया बायोडाटा')}</span>
+                    </button>
+                  )}
                 </div>
               </div>
+
+              {profileLimitNotice && (
+                <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 flex items-center justify-between gap-3 text-xs text-amber-950">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="w-4 h-4 text-amber-700 shrink-0" />
+                    <span>
+                      {t(
+                        'Only 1 matrimonial profile can be added per login. Please edit or delete your existing profile below.',
+                        'प्रति लॉगिन केवल 1 वैवाहिक प्रोफ़ाइल जोड़ी जा सकती है। कृपया नीचे अपनी मौजूदा प्रोफ़ाइल संपादित करें या हटाएं।'
+                      )}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setProfileLimitNotice(false)}
+                    className="text-amber-800 hover:text-amber-950 font-bold cursor-pointer"
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
 
               {/* EMPTY STATE SCREEN WITH CLEAR CTA */}
               {filteredUserProfiles.length === 0 ? (

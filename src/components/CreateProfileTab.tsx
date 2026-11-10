@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Lock, ShieldCheck, Users, AlertCircle } from 'lucide-react';
+import { Lock, ShieldCheck, Users, AlertCircle, CheckCircle2, LayoutDashboard } from 'lucide-react';
 import { MatrimonyProfile, TabType, AuthSession } from '../types';
 import { GoogleSignInModal } from './GoogleSignInModal';
 import {
@@ -14,15 +14,19 @@ import { useLanguage } from '../context/LanguageContext';
 interface CreateProfileTabProps {
   authSession: AuthSession | null;
   onLogin: (session: AuthSession) => void;
-  onAddProfile: (profile: MatrimonyProfile) => void;
+  onAddProfile: (profile: MatrimonyProfile) => boolean | void;
   onNavigateTab: (tab: TabType) => void;
+  hasRegisteredProfile?: boolean;
+  existingUserProfile?: MatrimonyProfile | null;
 }
 
 export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
   authSession,
   onLogin,
   onAddProfile,
-  onNavigateTab
+  onNavigateTab,
+  hasRegisteredProfile = false,
+  existingUserProfile = null
 }) => {
   const { lang, t } = useLanguage();
   const [showGoogleModal, setShowGoogleModal] = useState(false);
@@ -165,8 +169,15 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
       createdAt: new Date().toISOString()
     };
 
-    onAddProfile(newProfile);
-    onNavigateTab('matrimony');
+    const added = onAddProfile(newProfile);
+    if (added === false) {
+      setFormError(t(
+        'Only 1 profile can be created per login. You already have a published profile in your account.',
+        'प्रति लॉगिन केवल 1 प्रोफ़ाइल बनाई जा सकती है। आपके खाते में पहले से एक प्रोफ़ाइल मौजूद है।'
+      ));
+      return;
+    }
+    onNavigateTab('dashboard');
   };
 
   if (!authSession) {
@@ -224,6 +235,67 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
               'Publishing your profile also unlocks unlimited biodata views across the Rathore Samaj directory.',
               'अपनी प्रोफ़ाइल प्रकाशित करने से पूरे राठौड़ समाज डायरेक्टरी में असीमित बायोडाटा संपर्क अनलॉक होते हैं।'
             )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (hasRegisteredProfile || existingUserProfile) {
+    return (
+      <div className="max-w-xl mx-auto py-8">
+        <div className="bg-white rounded-3xl border border-amber-200 shadow-xl p-6 sm:p-8 text-center space-y-5">
+          <div className="w-16 h-16 bg-emerald-50 text-emerald-700 rounded-2xl mx-auto flex items-center justify-center border border-emerald-200 shadow-xs">
+            <CheckCircle2 className="w-8 h-8" />
+          </div>
+
+          <div className="space-y-1.5">
+            <span className="inline-block bg-amber-100 text-amber-900 text-[11px] font-bold px-3 py-1 rounded-full border border-amber-200">
+              {t('1 Profile Per Login Limit Reached', 'प्रति लॉगिन 1 प्रोफ़ाइल सीमा पूर्ण')}
+            </span>
+            <h2 className="text-2xl font-serif font-bold text-stone-900">
+              {t('Profile Already Created for This Login', 'इस लॉगिन पर प्रोफ़ाइल पहले से बनी हुई है')}
+            </h2>
+            <p className="text-xs text-stone-600 leading-relaxed max-w-md mx-auto">
+              {t(
+                'Each user login is allowed to publish 1 matrimonial profile to maintain directory authenticity. You can view, edit, or manage your profile from your Member Dashboard.',
+                'प्रत्येक लॉगिन पर केवल 1 वैवाहिक प्रोफ़ाइल बनाने की अनुमति है। आप अपनी मौजूदा प्रोफ़ाइल को डैशबोर्ड से देख या संपादित कर सकते हैं।'
+              )}
+            </p>
+          </div>
+
+          {existingUserProfile && (
+            <div className="bg-[#FAF8F5] border border-stone-200 rounded-2xl p-4 flex items-center gap-4 text-left">
+              <img
+                src={existingUserProfile.photo || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80'}
+                alt={existingUserProfile.name}
+                className="w-14 h-14 rounded-xl object-cover object-top border border-amber-200 shrink-0"
+              />
+              <div className="min-w-0 flex-1 text-xs space-y-0.5">
+                <p className="font-bold text-stone-900 text-sm truncate">{existingUserProfile.name}</p>
+                <p className="text-stone-600">{existingUserProfile.age} {t('Yrs', 'वर्ष')} · {existingUserProfile.gotra} · {existingUserProfile.city}</p>
+                <p className="text-stone-500 font-mono text-[11px]">{existingUserProfile.contact}</p>
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-col sm:flex-row gap-3 pt-1">
+            <button
+              type="button"
+              onClick={() => onNavigateTab('dashboard')}
+              className="flex-1 bg-gradient-to-r from-[#380812] to-[#540e1b] hover:from-[#24050b] hover:to-[#380812] text-amber-200 font-bold py-3 px-4 rounded-xl text-xs shadow-md flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <LayoutDashboard className="w-4 h-4 text-amber-300" />
+              <span>{t('Manage / Edit My Profile', 'मेरी प्रोफ़ाइल संपादित करें')}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onNavigateTab('matrimony')}
+              className="flex-1 bg-amber-100 hover:bg-amber-200 text-amber-950 font-bold py-3 px-4 rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <Users className="w-4 h-4" />
+              <span>{t('Browse Directory', 'बायोडाटा देखें')}</span>
+            </button>
           </div>
         </div>
       </div>

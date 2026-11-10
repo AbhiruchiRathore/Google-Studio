@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { TabType, MatrimonyProfile, BusinessAd, SamajEvent, AuthSession } from './types';
 import { INITIAL_PROFILES, INITIAL_ADS, INITIAL_EVENTS } from './data/mockData';
 import { Header } from './components/Header';
@@ -22,6 +22,7 @@ import { onAuthStateChanged, signOut, getRedirectResult } from 'firebase/auth';
 import { Sparkles } from 'lucide-react';
 import { useLanguage } from './context/LanguageContext';
 import { sanitizePhoneInput } from './utils/validation';
+import { getSessionOwnerKey, isProfileOwnedBySession } from './utils/profileOwnership';
 
 const VALID_TABS = new Set<TabType>([
   'matrimony',
@@ -275,19 +276,12 @@ export const App: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
-  // Has registered profile
-  const [hasRegisteredProfile, setHasRegisteredProfile] = useState<boolean>(() => {
-    try {
-      const stored = localStorage.getItem('samaj_profiles');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        return Array.isArray(parsed) && parsed.length > 0;
-      }
-    } catch (e) {
-      console.error("Error checking registered profile:", e);
-    }
-    return false;
-  });
+  // Profiles owned by the currently logged-in account (max 1 profile per login)
+  const userOwnedProfiles = useMemo(() => {
+    return profiles.filter(p => isProfileOwnedBySession(p, authSession));
+  }, [profiles, authSession]);
+
+  const hasRegisteredProfile = userOwnedProfiles.length > 0;
 
   const handleUnlockProfile = (id: number | string) => {
     setUnlockedProfiles(prev => {
@@ -302,20 +296,37 @@ export const App: React.FC = () => {
     });
   };
 
-  const handleAddProfile = (newProfile: MatrimonyProfile) => {
-    setProfiles(prev => [newProfile, ...prev]);
-    setHasRegisteredProfile(true);
+  const handleAddProfile = (newProfile: MatrimonyProfile): boolean => {
+    const ownerKey = getSessionOwnerKey(authSession);
+    if (!authSession || !ownerKey) {
+      return false;
+    }
+
+    // Strict constraint: User can add only 1 profile per login
+    if (userOwnedProfiles.length >= 1) {
+      return false;
+    }
+
+    const ownedProfile: MatrimonyProfile = {
+      ...newProfile,
+      ownerId: ownerKey,
+      ownerName: authSession.name || authSession.username || authSession.email || 'Member'
+    };
+
+    setProfiles(prev => [ownedProfile, ...prev]);
     try {
       const stored = localStorage.getItem('samaj_profiles');
       const userProfiles = stored ? JSON.parse(stored) : [];
-      userProfiles.unshift(newProfile);
+      userProfiles.unshift(ownedProfile);
       localStorage.setItem('samaj_profiles', JSON.stringify(userProfiles));
     } catch (e) {
       console.error("Error saving profile:", e);
     }
+    return true;
   };
 
-  const handleAddQuickProfile = (partial: Partial<MatrimonyProfile>) => {
+  const handleAddQuickProfile = (partial: Partial<MatrimonyProfile>): boolean => {
+    const cleanPhone = sanitizePhoneInput(partial.phone || partial.contact || authSession?.phone || '');
     const newProfile: MatrimonyProfile = {
       id: Date.now(),
       name: partial.name || 'Candidate',
@@ -323,20 +334,24 @@ export const App: React.FC = () => {
       gender: partial.gender || 'Male',
       gotra: partial.gotra || 'Rathore',
       city: partial.city || 'Indore',
-      state: 'Madhya Pradesh',
+      state: partial.state || 'Madhya Pradesh',
+      native: partial.native || partial.city || 'Indore',
+      location: partial.location || `${partial.city || 'Indore'}, ${partial.state || 'Madhya Pradesh'}`,
       education: partial.education || 'Graduate',
       profession: partial.profession || 'Business / Professional',
-      income: 'Competitive',
-      height: "5' 6\"",
-      familyDetails: 'Respected Rathore Samaj family. Quick registration via portal.',
-      contact: sanitizePhoneInput(partial.contact || authSession?.phone || ''),
-      photo: partial.gender === 'Female' 
+      income: partial.income || 'Competitive',
+      height: partial.height || "5' 6\"",
+      familyDetails: partial.familyDetails || 'Respected Rathore Samaj family. Quick registration via portal.',
+      about: partial.about || 'Well-settled respected Rathore Samaj family.',
+      contact: partial.contact || cleanPhone,
+      phone: cleanPhone,
+      photo: partial.photo || (partial.gender === 'Female' 
         ? "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80" 
-        : "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80",
+        : "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80"),
       verified: true,
       createdAt: new Date().toISOString()
     };
-    handleAddProfile(newProfile);
+    return handleAddProfile(newProfile);
   };
 
   const handleAddAd = (newAd: BusinessAd) => {
@@ -602,7 +617,9 @@ export const App: React.FC = () => {
             authSession={authSession}
             onLogin={handleLogin}
             onAddProfile={handleAddProfile} 
-            onNavigateTab={navigateToTab} 
+            onNavigateTab={navigateToTab}
+            hasRegisteredProfile={hasRegisteredProfile}
+            existingUserProfile={userOwnedProfiles[0] || null}
           />
         )}
 
@@ -640,6 +657,7 @@ export const App: React.FC = () => {
             onNavigateTab={navigateToTab}
             onAddQuickProfile={handleAddQuickProfile}
             hasRegisteredProfile={hasRegisteredProfile}
+            existingUserProfile={userOwnedProfiles[0] || null}
           />
         )}
       </main>

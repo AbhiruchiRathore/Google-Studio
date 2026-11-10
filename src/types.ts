@@ -57,6 +57,8 @@ export interface MatrimonyProfile {
   about?: string;
   native?: string;
   location?: string;
+  ownerId?: string;
+  ownerName?: string;
   createdAt?: string;
   updatedAt?: string;
 }
