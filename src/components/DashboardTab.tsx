@@ -2,16 +2,18 @@ import React, { useState, useMemo } from 'react';
 import { 
   LayoutDashboard, Users, Image as ImageIcon, Settings, Plus, Search, 
   Bell, ChevronDown, CheckCircle2, ShieldCheck, ExternalLink, Edit3, 
-  Eye, Trash2, Globe, Lock, Shield, Sparkles, Upload, ArrowRight, 
-  X, Check, AlertCircle, Phone, HeartHandshake, FileText, Camera,
-  Share2, Linkedin, Instagram, Link2, MoreVertical, Sliders, Store,
-  Tag, Star, MapPin, Building, Heart, MessageCircle, Compass
+  Eye, Trash2, Globe, Sparkles, Upload, ArrowRight, 
+  X, AlertCircle, Phone, FileText, Camera,
+  Linkedin, Instagram, Link2, Sliders, Store,
+  Tag, Star, MapPin, Heart, MessageCircle, Compass
 } from 'lucide-react';
 import { 
   MatrimonyProfile, BusinessAd, TabType, AuthSession, 
   UserMediaAsset, VisibilitySetting, ProfileStatus, ProfileAdmirer, ChatMessage 
 } from '../types';
 import { ChatModal } from './ChatModal';
+import { useLanguage } from '../context/LanguageContext';
+import { sanitizePhoneInput, validatePhoneNumber } from '../utils/validation';
 
 interface DashboardTabProps {
   authSession: AuthSession | null;
@@ -44,6 +46,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   onLogout,
   onSelectKundaliProfile
 }) => {
+  const { lang, t } = useLanguage();
   // Current active sidebar section
   const [activeSection, setActiveSection] = useState<DashboardNavSection>('profiles');
 
@@ -77,7 +80,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   };
 
   // Who Liked My Profile State
-  const [admirers, setAdmirers] = useState<ProfileAdmirer[]>(() => {
+  const [admirers] = useState<ProfileAdmirer[]>(() => {
     try {
       const stored = localStorage.getItem('samaj_profile_admirers');
       if (stored) return JSON.parse(stored);
@@ -129,7 +132,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
 
   // Stored chat messages & Active Chat Profile
   const [activeChatProfile, setActiveChatProfile] = useState<MatrimonyProfile | null>(null);
-  const [chatThreads, setChatThreads] = useState<Record<string, ChatMessage[]>>(() => {
+  const [chatThreads] = useState<Record<string, ChatMessage[]>>(() => {
     try {
       const stored = localStorage.getItem('samaj_chat_messages');
       return stored ? JSON.parse(stored) : {};
@@ -183,10 +186,14 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   // Inline Profile Editor State
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [editingProfile, setEditingProfile] = useState<MatrimonyProfile | null>(null);
+  const [profileFormError, setProfileFormError] = useState('');
+  const [showGalleryAddInput, setShowGalleryAddInput] = useState(false);
+  const [newGalleryUrlInput, setNewGalleryUrlInput] = useState('');
 
   // Inline Business Ad Editor State
   const [isEditingAd, setIsEditingAd] = useState(false);
   const [editingAd, setEditingAd] = useState<BusinessAd | null>(null);
+  const [adFormError, setAdFormError] = useState('');
 
   // Live Preview Modals
   const [previewProfile, setPreviewProfile] = useState<MatrimonyProfile | null>(null);
@@ -195,6 +202,8 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   // Quick Card Settings Modals
   const [settingsModalProfile, setSettingsModalProfile] = useState<MatrimonyProfile | null>(null);
   const [settingsModalAd, setSettingsModalAd] = useState<BusinessAd | null>(null);
+  const [confirmDeleteProfileId, setConfirmDeleteProfileId] = useState<number | string | null>(null);
+  const [confirmDeleteAdId, setConfirmDeleteAdId] = useState<number | string | null>(null);
 
   // User's Media Assets State
   const [mediaAssets, setMediaAssets] = useState<UserMediaAsset[]>([
@@ -303,19 +312,25 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   const activeProfilesCount = useMemo(() => userProfiles.filter(p => p.status === 'active').length, [userProfiles]);
   const draftProfilesCount = useMemo(() => userProfiles.filter(p => p.status === 'draft').length, [userProfiles]);
   const activeAdsCount = useMemo(() => userAds.filter(a => a.status === 'active').length, [userAds]);
-  const draftAdsCount = useMemo(() => userAds.filter(a => a.status === 'draft').length, [userAds]);
   const featuredAdsCount = useMemo(() => userAds.filter(a => a.isFeatured).length, [userAds]);
   const unreadNotificationCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications]);
 
   // Handler: Start Editing Profile
   const handleStartEditProfile = (profile: MatrimonyProfile) => {
-    setEditingProfile({ ...profile });
+    setProfileFormError('');
+    setShowGalleryAddInput(false);
+    setNewGalleryUrlInput('');
+    setEditingProfile({ ...profile, contact: sanitizePhoneInput(profile.contact || '') || profile.contact });
     setIsEditingProfile(true);
     setIsEditingAd(false);
   };
 
   // Handler: Create New Profile via Editor
   const handleStartCreateNewProfile = () => {
+    setProfileFormError('');
+    setShowGalleryAddInput(false);
+    setNewGalleryUrlInput('');
+    const initialPhone = sanitizePhoneInput(authSession?.phone || '');
     const blank: MatrimonyProfile = {
       id: Date.now(),
       name: authSession?.name || '',
@@ -330,8 +345,8 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
       state: 'Madhya Pradesh',
       native: 'Indore',
       location: 'Indore, Madhya Pradesh',
-      contact: authSession?.phone ? `+91 ${authSession.phone}` : '+91 98260 00000',
-      phone: authSession?.phone ? `+91 ${authSession.phone}` : '',
+      contact: initialPhone,
+      phone: initialPhone,
       about: 'Well-settled respected Rathore Samaj family alliance sought.',
       familyDetails: 'Father: Respected Elder, Mother: Homemaker. Native: Indore.',
       photo: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=600&q=80',
@@ -352,17 +367,30 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   const handleSaveProfileEdits = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingProfile) return;
+    setProfileFormError('');
 
     if (!editingProfile.name.trim() || !editingProfile.gotra.trim()) {
-      alert("Please provide at least candidate Name and Gotra.");
+      setProfileFormError(t('Please provide at least candidate Name and Gotra.', 'कृपया कम से कम प्रत्याशी का नाम और गोत्र दर्ज करें।'));
       return;
     }
 
-    const exists = profiles.some(p => p.id === editingProfile.id);
+    const phoneRes = validatePhoneNumber(editingProfile.contact || '', true);
+    if (!phoneRes.valid) {
+      setProfileFormError(lang === 'hi' ? (phoneRes.errorHi || '') : (phoneRes.errorEn || ''));
+      return;
+    }
+
+    const cleanedProfile: MatrimonyProfile = {
+      ...editingProfile,
+      contact: phoneRes.cleaned,
+      phone: phoneRes.cleaned
+    };
+
+    const exists = profiles.some(p => p.id === cleanedProfile.id);
     if (exists) {
-      onUpdateProfile(editingProfile);
+      onUpdateProfile(cleanedProfile);
     } else {
-      onAddProfile(editingProfile);
+      onAddProfile(cleanedProfile);
     }
 
     setIsEditingProfile(false);
@@ -385,13 +413,15 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
 
   // Handler: Start Editing Business Ad
   const handleStartEditAd = (ad: BusinessAd) => {
-    setEditingAd({ ...ad });
+    setAdFormError('');
+    setEditingAd({ ...ad, phone: sanitizePhoneInput(ad.phone || '') });
     setIsEditingAd(true);
     setIsEditingProfile(false);
   };
 
   // Handler: Create New Business Ad
   const handleStartCreateNewAd = () => {
+    setAdFormError('');
     const blankAd: BusinessAd = {
       id: Date.now(),
       title: '',
@@ -399,7 +429,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
       category: 'Clothing & Retail',
       city: 'Indore',
       address: '',
-      phone: authSession?.phone ? `+91 ${authSession.phone}` : '+91 98260 00000',
+      phone: sanitizePhoneInput(authSession?.phone || ''),
       tagline: 'Trusted Rathore Samaj Member Business',
       offer: '10% Exclusive Discount for Samaj Members',
       rating: '5.0 ★',
@@ -420,17 +450,29 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   const handleSaveAdEdits = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingAd) return;
+    setAdFormError('');
 
-    if (!editingAd.title.trim() || !editingAd.phone.trim() || !editingAd.address.trim()) {
-      alert("Please provide Business Name, Phone, and Address.");
+    if (!editingAd.title.trim() || !editingAd.address.trim()) {
+      setAdFormError(t('Please provide Business Name and Address.', 'कृपया व्यवसाय का नाम और पता दर्ज करें।'));
       return;
     }
 
-    const exists = ads.some(a => a.id === editingAd.id);
+    const phoneRes = validatePhoneNumber(editingAd.phone || '', true);
+    if (!phoneRes.valid) {
+      setAdFormError(lang === 'hi' ? (phoneRes.errorHi || '') : (phoneRes.errorEn || ''));
+      return;
+    }
+
+    const cleanedAd: BusinessAd = {
+      ...editingAd,
+      phone: phoneRes.cleaned
+    };
+
+    const exists = ads.some(a => a.id === cleanedAd.id);
     if (exists) {
-      onUpdateAd(editingAd);
+      onUpdateAd(cleanedAd);
     } else {
-      onAddAd(editingAd);
+      onAddAd(cleanedAd);
     }
 
     setIsEditingAd(false);
@@ -506,14 +548,14 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             <div>
               <div className="flex items-center gap-1.5">
                 <span className="font-serif font-bold text-stone-900 text-sm sm:text-base leading-none">
-                  Member Dashboard
+                  {t('Member Dashboard', 'सदस्य डैशबोर्ड')}
                 </span>
                 <span className="bg-rose-50 text-[#851834] text-[10px] font-bold px-2 py-0.5 rounded-full border border-rose-200 font-serif">
-                  Workspace
+                  {t('Workspace', 'कार्यक्षेत्र')}
                 </span>
               </div>
               <p className="text-[11px] text-stone-400 font-light mt-0.5">
-                Rathore Rishtey • Member Workspace & Management
+                {t('Rathore Rishtey • Member Workspace & Management', 'राठौर रिश्ते • सदस्य प्रबंधन केंद्र')}
               </p>
             </div>
           </div>
@@ -523,7 +565,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             onClick={() => onNavigateTab('matrimony')}
             className="md:hidden text-xs text-[#851834] font-semibold flex items-center gap-1 bg-rose-50 px-2.5 py-1.5 rounded-xl border border-rose-200"
           >
-            Directory <ArrowRight className="w-3.5 h-3.5" />
+            {t('Directory', 'डायरेक्टरी')} <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>
 
@@ -534,7 +576,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search profiles, business ads, gotra, city..."
+            placeholder={t('Search profiles, business ads, gotra, city...', 'प्रोफ़ाइल, व्यापार विज्ञापन, गोत्र, शहर खोजें...')}
             className="w-full pl-10 pr-4 py-2 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-rose-500/20 text-xs sm:text-sm bg-stone-50/50 transition-all"
           />
           {searchQuery && (
@@ -558,7 +600,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 setShowProfileMenu(false);
               }}
               className="relative p-2.5 rounded-xl border border-stone-200 hover:bg-stone-50 text-stone-600 transition-colors cursor-pointer"
-              aria-label="Notifications"
+              aria-label={t('Notifications', 'सूचनाएं')}
             >
               <Bell className="w-4 h-4" />
               {unreadNotificationCount > 0 && (
@@ -577,14 +619,14 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 <div className="flex items-center justify-between border-b border-stone-100 pb-2">
                   <div className="flex items-center gap-1.5">
                     <Bell className="w-4 h-4 text-[#851834]" />
-                    <span className="font-serif font-bold text-sm text-stone-900">Notifications</span>
+                    <span className="font-serif font-bold text-sm text-stone-900">{t('Notifications', 'सूचनाएं')}</span>
                   </div>
                   {unreadNotificationCount > 0 && (
                     <button
                       onClick={handleMarkAllNotificationsRead}
                       className="text-[11px] text-[#851834] font-semibold hover:underline cursor-pointer"
                     >
-                      Mark all as read
+                      {t('Mark all as read', 'सभी को पढ़ा हुआ मानें')}
                     </button>
                   )}
                 </div>
@@ -615,7 +657,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                     onClick={() => setShowNotifications(false)}
                     className="text-xs text-stone-500 hover:text-stone-800 font-semibold cursor-pointer"
                   >
-                    Close
+                    {t('Close', 'बंद करें')}
                   </button>
                 </div>
               </div>
@@ -640,10 +682,10 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               </div>
               <div className="text-left hidden sm:block">
                 <span className="text-xs font-bold text-stone-800 block truncate max-w-[120px]">
-                  {authSession?.name || 'Samaj Member'}
+                  {authSession?.name || t('Samaj Member', 'समाज सदस्य')}
                 </span>
                 <span className="text-[10px] text-emerald-700 font-medium flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Verified
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> {t('Verified', 'सत्यापित')}
                 </span>
               </div>
               <ChevronDown className="w-3.5 h-3.5 text-stone-400" />
@@ -656,12 +698,12 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="p-3 bg-rose-50/50 rounded-2xl border border-rose-100/80">
-                  <p className="font-bold text-stone-900 font-serif">{authSession?.name || 'Samaj Member'}</p>
+                  <p className="font-bold text-stone-900 font-serif">{authSession?.name || t('Samaj Member', 'समाज सदस्य')}</p>
                   <p className="text-[11px] text-stone-500 font-light truncate">
                     {authSession?.email || `+91 ${authSession?.phone}`}
                   </p>
                   <div className="mt-2 inline-flex items-center gap-1 text-[10px] bg-emerald-100 text-emerald-900 font-bold px-2 py-0.5 rounded-full">
-                    <ShieldCheck className="w-3 h-3 text-emerald-700" /> Rathore Samaj ID Verified
+                    <ShieldCheck className="w-3 h-3 text-emerald-700" /> {t('Rathore Samaj ID Verified', 'राठौर समाज आईडी सत्यापित')}
                   </div>
                 </div>
 
@@ -673,7 +715,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                     }}
                     className="w-full text-left px-3 py-2 rounded-xl hover:bg-stone-50 font-medium text-stone-700 flex items-center gap-2"
                   >
-                    <FileText className="w-4 h-4 text-[#851834]" /> My Published Profiles
+                    <FileText className="w-4 h-4 text-[#851834]" /> {t('My Published Profiles', 'मेरी प्रकाशित प्रोफ़ाइलें')}
                   </button>
 
                   <button
@@ -683,7 +725,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                     }}
                     className="w-full text-left px-3 py-2 rounded-xl hover:bg-stone-50 font-medium text-stone-700 flex items-center gap-2"
                   >
-                    <Store className="w-4 h-4 text-[#851834]" /> My Published Ads
+                    <Store className="w-4 h-4 text-[#851834]" /> {t('My Published Ads', 'मेरे प्रकाशित विज्ञापन')}
                   </button>
 
                   <button
@@ -693,7 +735,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                     }}
                     className="w-full text-left px-3 py-2 rounded-xl hover:bg-stone-50 font-medium text-stone-700 flex items-center gap-2"
                   >
-                    <ImageIcon className="w-4 h-4 text-[#851834]" /> Media Assets
+                    <ImageIcon className="w-4 h-4 text-[#851834]" /> {t('Media Assets', 'मीडिया और फ़ोटो')}
                   </button>
 
                   <button
@@ -703,7 +745,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                     }}
                     className="w-full text-left px-3 py-2 rounded-xl hover:bg-stone-50 font-medium text-stone-700 flex items-center gap-2"
                   >
-                    <Settings className="w-4 h-4 text-[#851834]" /> Account Settings
+                    <Settings className="w-4 h-4 text-[#851834]" /> {t('Account Settings', 'खाता सेटिंग्स')}
                   </button>
 
                   <button
@@ -713,7 +755,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                     }}
                     className="w-full text-left px-3 py-2 rounded-xl hover:bg-rose-50 font-semibold text-[#851834] flex items-center gap-2 border-t border-stone-100 mt-1 pt-2"
                   >
-                    <ExternalLink className="w-4 h-4" /> Go to Public Directory
+                    <ExternalLink className="w-4 h-4" /> {t('Go to Public Directory', 'पब्लिक डायरेक्टरी पर जाएं')}
                   </button>
                 </div>
 
@@ -725,7 +767,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                     }}
                     className="w-full text-left px-3 py-2 rounded-xl hover:bg-red-50 font-semibold text-red-700 flex items-center gap-2 cursor-pointer"
                   >
-                    Sign Out of Workspace
+                    {t('Sign Out of Workspace', 'लॉग आउट करें')}
                   </button>
                 </div>
               </div>
@@ -746,7 +788,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           
           <div className="space-y-1">
             <span className="text-[10px] uppercase font-bold tracking-wider text-stone-400 px-3">
-              Workspace Menu
+              {t('Workspace Menu', 'मेनू')}
             </span>
 
             <nav className="space-y-1 pt-1">
@@ -765,7 +807,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               >
                 <div className="flex items-center gap-2.5">
                   <LayoutDashboard className="w-4 h-4" />
-                  <span>Home / Overview</span>
+                  <span>{t('Home / Overview', 'होम / सारांश')}</span>
                 </div>
               </button>
 
@@ -784,7 +826,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               >
                 <div className="flex items-center gap-2.5">
                   <Users className="w-4 h-4" />
-                  <span>Published Profiles</span>
+                  <span>{t('Published Profiles', 'प्रकाशित प्रोफ़ाइलें')}</span>
                 </div>
                 <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
                   activeSection === 'profiles' || isEditingProfile
@@ -795,7 +837,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 </span>
               </button>
 
-              {/* 3. Published Business Ads (NEW FEATURE!) */}
+              {/* 3. Published Business Ads */}
               <button
                 onClick={() => { 
                   setActiveSection('ads'); 
@@ -810,7 +852,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               >
                 <div className="flex items-center gap-2.5">
                   <Store className="w-4 h-4" />
-                  <span>Published Ads</span>
+                  <span>{t('Published Ads', 'प्रकाशित विज्ञापन')}</span>
                 </div>
                 <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
                   activeSection === 'ads' || isEditingAd
@@ -836,7 +878,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               >
                 <div className="flex items-center gap-2.5">
                   <Heart className="w-4 h-4 text-rose-500 fill-rose-500/20" />
-                  <span>Profiles I Liked</span>
+                  <span>{t('Profiles I Liked', 'मेरी पसंद')}</span>
                 </div>
                 <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
                   activeSection === 'liked_by_me'
@@ -862,7 +904,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               >
                 <div className="flex items-center gap-2.5">
                   <Sparkles className="w-4 h-4 text-amber-500" />
-                  <span>Who Liked Me</span>
+                  <span>{t('Who Liked Me', 'प्रशंसक')}</span>
                 </div>
                 <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
                   activeSection === 'who_liked_me'
@@ -888,14 +930,14 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               >
                 <div className="flex items-center gap-2.5">
                   <MessageCircle className="w-4 h-4 text-emerald-600" />
-                  <span>Chat Messages</span>
+                  <span>{t('Chat Messages', 'चैट संदेश')}</span>
                 </div>
                 <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
                   activeSection === 'chats'
                     ? 'bg-amber-300 text-[#4c0d1b]'
                     : 'bg-emerald-100 text-emerald-900'
                 }`}>
-                  {Object.keys(chatThreads).length || 'Live'}
+                  {Object.keys(chatThreads).length || t('Live', 'लाइव')}
                 </span>
               </button>
 
@@ -914,7 +956,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               >
                 <div className="flex items-center gap-2.5">
                   <ImageIcon className="w-4 h-4" />
-                  <span>Media Assets</span>
+                  <span>{t('Media Assets', 'मीडिया फ़ाइलें')}</span>
                 </div>
                 <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
                   activeSection === 'media' && !isEditingProfile && !isEditingAd
@@ -925,7 +967,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 </span>
               </button>
 
-              {/* 5. Settings */}
+              {/* 8. Settings */}
               <button
                 onClick={() => { 
                   setActiveSection('settings'); 
@@ -940,7 +982,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               >
                 <div className="flex items-center gap-2.5">
                   <Settings className="w-4 h-4" />
-                  <span>Settings</span>
+                  <span>{t('Settings', 'सेटिंग्स')}</span>
                 </div>
               </button>
             </nav>
@@ -953,7 +995,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               className="w-full bg-gradient-to-r from-amber-300 via-amber-400 to-amber-500 hover:from-amber-200 hover:to-amber-400 text-[#4c0d1b] font-bold py-2.5 px-4 rounded-2xl text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer hover:scale-101 font-serif"
             >
               <Plus className="w-4 h-4" />
-              <span>+ Create Profile</span>
+              <span>{t('+ Create Profile', '+ नया बायोडाटा जोड़ें')}</span>
             </button>
 
             <button
@@ -961,7 +1003,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               className="w-full bg-rose-50 hover:bg-rose-100 text-[#851834] border border-rose-200 font-bold py-2.5 px-4 rounded-2xl text-xs transition-all flex items-center justify-center gap-2 cursor-pointer font-serif"
             >
               <Store className="w-4 h-4" />
-              <span>+ Post Business Ad</span>
+              <span>{t('+ Post Business Ad', '+ व्यापार विज्ञापन जोड़ें')}</span>
             </button>
           </div>
 
@@ -969,16 +1011,16 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           <div className="bg-rose-50/50 rounded-2xl p-4 border border-rose-100 text-xs space-y-2">
             <div className="flex items-center gap-1.5 text-[#851834] font-bold font-serif">
               <ShieldCheck className="w-4 h-4 text-[#851834]" />
-              <span>100% Verified Directory</span>
+              <span>{t('100% Verified Directory', '100% सत्यापित डायरेक्टरी')}</span>
             </div>
             <p className="text-stone-500 text-[11px] font-light leading-relaxed">
-              Your listings are screened against Rathore Samaj registry to protect community trust.
+              {t('Your listings are screened against Rathore Samaj registry to protect community trust.', 'समाज के विश्वास की रक्षा के लिए आपकी जानकारी राठौर समाज रजिस्ट्री में सत्यापित होती है।')}
             </p>
             <button
               onClick={() => onNavigateTab('matrimony')}
               className="text-[11px] font-bold text-[#851834] hover:underline flex items-center gap-1 pt-1"
             >
-              Public Directory <ArrowRight className="w-3 h-3" />
+              {t('Public Directory', 'पब्लिक डायरेक्टरी')} <ArrowRight className="w-3 h-3" />
             </button>
           </div>
         </aside>
@@ -996,31 +1038,43 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               <div className="flex items-center justify-between border-b border-rose-100 pb-4">
                 <div>
                   <span className="text-[10px] uppercase font-bold tracking-widest text-[#851834] font-serif bg-rose-50 px-3 py-1 rounded-full border border-rose-200 inline-block mb-1">
-                    Inline Profile Editor
+                    {t('Inline Profile Editor', 'प्रोफ़ाइल संपादक')}
                   </span>
                   <h3 className="text-2xl font-serif font-bold text-stone-900">
-                    {editingProfile.name ? `Edit Profile: ${editingProfile.name}` : 'Create New Matrimonial Biodata'}
+                    {editingProfile.name
+                      ? t(`Edit Profile: ${editingProfile.name}`, `प्रोफ़ाइल संपादित करें: ${editingProfile.name}`)
+                      : t('Create New Matrimonial Biodata', 'नया वैवाहिक बायोडाटा बनाएं')}
                   </h3>
                   <p className="text-xs text-stone-500 font-light mt-0.5">
-                    Update candidate biodata, photos, media gallery, contact details, social handles, and public visibility.
+                    {t(
+                      'Update candidate biodata, photos, media gallery, contact details, social handles, and public visibility.',
+                      'प्रत्याशी का बायोडाटा, फोटो, संपर्क विवरण, सोशल हैंडल और पब्लिक दृश्यता अपडेट करें।'
+                    )}
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setIsEditingProfile(false)}
                   className="p-2 rounded-xl hover:bg-stone-100 text-stone-400 hover:text-stone-700 transition-colors"
-                  aria-label="Cancel"
+                  aria-label={t('Cancel', 'रद्द करें')}
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
+
+              {profileFormError && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-medium flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+                  <span>{profileFormError}</span>
+                </div>
+              )}
 
               <form onSubmit={handleSaveProfileEdits} className="space-y-6">
                 
                 {/* 1. Basic Info & Candidate Bio */}
                 <div className="space-y-4">
                   <h4 className="text-xs font-bold uppercase tracking-wider text-[#851834] font-serif flex items-center gap-1.5">
-                    <Edit3 className="w-3.5 h-3.5" /> 1. Candidate Identity & Background
+                    <Edit3 className="w-3.5 h-3.5" /> {t('1. Candidate Identity & Background', '1. प्रत्याशी पहचान एवं पृष्ठभूमि')}
                   </h4>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
@@ -1197,25 +1251,45 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 <div className="space-y-3 pt-2 border-t border-rose-100">
                   <div className="flex items-center justify-between">
                     <h4 className="text-xs font-bold uppercase tracking-wider text-[#851834] font-serif flex items-center gap-1.5">
-                      <ImageIcon className="w-3.5 h-3.5" /> 3. Additional Media Gallery & Kundali
+                      <ImageIcon className="w-3.5 h-3.5" /> {t('3. Additional Media Gallery & Kundali', '3. अतिरिक्त फोटो गैलरी एवं कुंडली')}
                     </h4>
                     <button
                       type="button"
-                      onClick={() => {
-                        const currentGallery = editingProfile.gallery || [];
-                        const sampleUrl = prompt("Enter additional photo or Kundali document image URL:");
-                        if (sampleUrl) {
-                          setEditingProfile({
-                            ...editingProfile,
-                            gallery: [...currentGallery, sampleUrl]
-                          });
-                        }
-                      }}
+                      onClick={() => setShowGalleryAddInput(!showGalleryAddInput)}
                       className="text-xs font-bold text-[#851834] hover:underline flex items-center gap-1 cursor-pointer"
                     >
-                      <Plus className="w-3.5 h-3.5" /> Add Gallery Photo
+                      <Plus className="w-3.5 h-3.5" /> {t('Add Gallery Photo', 'गैलरी फोटो जोड़ें')}
                     </button>
                   </div>
+
+                  {showGalleryAddInput && (
+                    <div className="flex gap-2 items-center bg-rose-50/40 p-2.5 rounded-xl border border-rose-100 text-xs">
+                      <input
+                        type="url"
+                        value={newGalleryUrlInput}
+                        onChange={(e) => setNewGalleryUrlInput(e.target.value)}
+                        placeholder={t('Paste photo or Kundali URL (https://...)', 'फोटो या कुंडली का URL डालें (https://...)')}
+                        className="flex-1 p-2 rounded-lg border border-stone-200 bg-white"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (newGalleryUrlInput.trim()) {
+                            const currentGallery = editingProfile.gallery || [];
+                            setEditingProfile({
+                              ...editingProfile,
+                              gallery: [...currentGallery, newGalleryUrlInput.trim()]
+                            });
+                            setNewGalleryUrlInput('');
+                            setShowGalleryAddInput(false);
+                          }
+                        }}
+                        className="bg-[#851834] text-amber-100 px-3 py-2 rounded-lg font-bold cursor-pointer"
+                      >
+                        {t('Add', 'जोड़ें')}
+                      </button>
+                    </div>
+                  )}
 
                   {editingProfile.gallery && editingProfile.gallery.length > 0 ? (
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -1237,7 +1311,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                     </div>
                   ) : (
                     <p className="text-[11px] text-stone-400 font-light italic">
-                      No additional photos added yet. Click "+ Add Gallery Photo" above.
+                      {t('No additional photos added yet. Click "+ Add Gallery Photo" above.', 'अभी कोई अतिरिक्त फोटो नहीं जोड़ी गई है। ऊपर "+ गैलरी फोटो जोड़ें" पर क्लिक करें।')}
                     </p>
                   )}
                 </div>
@@ -1245,29 +1319,39 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 {/* 4. Family & Contact Info */}
                 <div className="space-y-4 pt-2 border-t border-rose-100">
                   <h4 className="text-xs font-bold uppercase tracking-wider text-[#851834] font-serif flex items-center gap-1.5">
-                    <Phone className="w-3.5 h-3.5" /> 4. Contact & Family Details
+                    <Phone className="w-3.5 h-3.5" /> {t('4. Contact & Family Details', '4. संपर्क एवं पारिवारिक विवरण')}
                   </h4>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                     <div>
-                      <label className="block font-bold text-stone-700 mb-1">Primary Verified Phone / WhatsApp *</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="font-bold text-stone-700">{t('Primary Verified Phone / WhatsApp (10 digits) *', 'प्राथमिक मोबाइल / व्हाट्सएप नंबर (10 अंक) *')}</label>
+                        <span className={`text-[10px] font-mono ${sanitizePhoneInput(editingProfile.contact || '').length === 10 ? 'text-emerald-600 font-bold' : 'text-stone-400'}`}>
+                          {sanitizePhoneInput(editingProfile.contact || '').length}/10
+                        </span>
+                      </div>
                       <input
                         type="tel"
+                        inputMode="numeric"
+                        maxLength={10}
                         required
                         value={editingProfile.contact}
-                        onChange={(e) => setEditingProfile({ ...editingProfile, contact: e.target.value })}
-                        placeholder="+91 98260 00000"
+                        onChange={(e) => {
+                          setProfileFormError('');
+                          setEditingProfile({ ...editingProfile, contact: sanitizePhoneInput(e.target.value) });
+                        }}
+                        placeholder={t('10-digit mobile number (e.g. 9826012345)', '10 अंकों का नंबर (जैसे 9826012345)')}
                         className="w-full p-2.5 rounded-xl border border-stone-200 bg-stone-50/40"
                       />
                     </div>
 
                     <div>
-                      <label className="block font-bold text-stone-700 mb-1">Family Lineage Summary</label>
+                      <label className="block font-bold text-stone-700 mb-1">{t('Family Lineage Summary', 'पारिवारिक वंश विवरण')}</label>
                       <input
                         type="text"
                         value={editingProfile.familyDetails || ''}
                         onChange={(e) => setEditingProfile({ ...editingProfile, familyDetails: e.target.value })}
-                        placeholder="Father, Mother, Gotra lineage..."
+                        placeholder={t('Father, Mother, Gotra lineage...', 'पिता, माता, गोत्र आदि...')}
                         className="w-full p-2.5 rounded-xl border border-stone-200 bg-stone-50/40"
                       />
                     </div>
@@ -1373,13 +1457,13 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                     onClick={() => setIsEditingProfile(false)}
                     className="px-5 py-2.5 rounded-xl border border-stone-200 text-stone-700 font-semibold text-xs hover:bg-stone-50 cursor-pointer"
                   >
-                    Cancel & Discard
+                    {t('Cancel & Discard', 'रद्द करें')}
                   </button>
                   <button
                     type="submit"
                     className="px-6 py-2.5 bg-gradient-to-r from-[#6e1628] via-[#851834] to-[#6e1628] hover:opacity-95 text-amber-100 font-bold rounded-xl text-xs shadow-md border border-amber-300/30 cursor-pointer"
                   >
-                    Save & Update Profile
+                    {t('Save & Update Profile', 'प्रोफ़ाइल सहेजें व अपडेट करें')}
                   </button>
                 </div>
               </form>
@@ -1394,47 +1478,59 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               <div className="flex items-center justify-between border-b border-rose-100 pb-4">
                 <div>
                   <span className="text-[10px] uppercase font-bold tracking-widest text-[#851834] font-serif bg-rose-50 px-3 py-1 rounded-full border border-rose-200 inline-block mb-1">
-                    Business Ad Editor
+                    {t('Business Ad Editor', 'व्यापार विज्ञापन संपादक')}
                   </span>
                   <h3 className="text-2xl font-serif font-bold text-stone-900">
-                    {editingAd.title ? `Edit Business Ad: ${editingAd.title}` : 'Post New Business Advertisement'}
+                    {editingAd.title
+                      ? t(`Edit Business Ad: ${editingAd.title}`, `विज्ञापन संपादित करें: ${editingAd.title}`)
+                      : t('Post New Business Advertisement', 'नया व्यापार विज्ञापन जोड़ें')}
                   </h3>
                   <p className="text-xs text-stone-500 font-light mt-0.5">
-                    Promote your showroom, wholesale agency, or professional service to thousands of community families.
+                    {t(
+                      'Promote your showroom, wholesale agency, or professional service to thousands of community families.',
+                      'अपने शोरूम, व्यवसाय या पेशेवर सेवा को हजारों समाज परिवारों तक पहुंचाएं।'
+                    )}
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setIsEditingAd(false)}
                   className="p-2 rounded-xl hover:bg-stone-100 text-stone-400 hover:text-stone-700 transition-colors"
-                  aria-label="Cancel"
+                  aria-label={t('Cancel', 'रद्द करें')}
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
+              {adFormError && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs font-medium flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+                  <span>{adFormError}</span>
+                </div>
+              )}
+
               <form onSubmit={handleSaveAdEdits} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
                   <div>
-                    <label className="block font-bold text-stone-700 mb-1">Business / Firm Title *</label>
+                    <label className="block font-bold text-stone-700 mb-1">{t('Business / Firm Title *', 'व्यवसाय / फर्म का नाम *')}</label>
                     <input
                       type="text"
                       required
                       value={editingAd.title}
                       onChange={(e) => setEditingAd({ ...editingAd, title: e.target.value })}
-                      placeholder="e.g. Rathore Jewellers & Sons"
+                      placeholder={t('e.g. Rathore Jewellers & Sons', 'जैसे: राठौर ज्वेलर्स एंड संस')}
                       className="w-full p-2.5 rounded-xl border border-stone-200 focus:ring-2 focus:ring-rose-500/20 bg-stone-50/40"
                     />
                   </div>
 
                   <div>
-                    <label className="block font-bold text-stone-700 mb-1">Owner Name *</label>
+                    <label className="block font-bold text-stone-700 mb-1">{t('Owner Name *', 'संचालक का नाम *')}</label>
                     <input
                       type="text"
                       required
                       value={editingAd.owner}
                       onChange={(e) => setEditingAd({ ...editingAd, owner: e.target.value })}
-                      placeholder="e.g. Rameshwar Rathore"
+                      placeholder={t('e.g. Rameshwar Rathore', 'जैसे: रामेश्वर राठौर')}
                       className="w-full p-2.5 rounded-xl border border-stone-200 focus:ring-2 focus:ring-rose-500/20 bg-stone-50/40"
                     />
                   </div>
@@ -1442,43 +1538,53 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
                   <div>
-                    <label className="block font-bold text-stone-700 mb-1">Category *</label>
+                    <label className="block font-bold text-stone-700 mb-1">{t('Category *', 'श्रेणी *')}</label>
                     <select
                       value={editingAd.category}
                       onChange={(e) => setEditingAd({ ...editingAd, category: e.target.value })}
                       className="w-full p-2.5 rounded-xl border border-stone-200 bg-white"
                     >
-                      <option value="Clothing & Retail">Clothing & Retail</option>
-                      <option value="Hardware & Home Imprv.">Hardware & Home Imprv.</option>
-                      <option value="Jewelry & Gold">Jewelry & Gold</option>
-                      <option value="Wedding Services & Catering">Wedding Planning & Catering</option>
-                      <option value="Healthcare & Pharmacy">Healthcare & Pharmacy</option>
-                      <option value="Food & Restaurants">Food & Sweets</option>
-                      <option value="Automobile">Automobile & Transport</option>
-                      <option value="Other">Other Business</option>
+                      <option value="Clothing & Retail">{t('Clothing & Retail', 'कपड़े और रिटेल')}</option>
+                      <option value="Hardware & Home Imprv.">{t('Hardware & Home Imprv.', 'हार्डवेयर व गृह निर्माण')}</option>
+                      <option value="Jewelry & Gold">{t('Jewelry & Gold', 'ज्वेलरी व आभूषण')}</option>
+                      <option value="Wedding Services & Catering">{t('Wedding Planning & Catering', 'विवाह सेवाएं एवं कैटरिंग')}</option>
+                      <option value="Healthcare & Pharmacy">{t('Healthcare & Pharmacy', 'स्वास्थ्य और फार्मेसी')}</option>
+                      <option value="Food & Restaurants">{t('Food & Sweets', 'भोजन व मिष्ठान')}</option>
+                      <option value="Automobile">{t('Automobile & Transport', 'ऑटोमोबाइल व परिवहन')}</option>
+                      <option value="Other">{t('Other Business', 'अन्य व्यवसाय')}</option>
                     </select>
                   </div>
 
                   <div>
-                    <label className="block font-bold text-stone-700 mb-1">Phone / WhatsApp *</label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="font-bold text-stone-700">{t('Phone / WhatsApp (10 digits) *', 'मोबाइल / व्हाट्सएप (10 अंक) *')}</label>
+                      <span className={`text-[10px] font-mono ${sanitizePhoneInput(editingAd.phone || '').length === 10 ? 'text-emerald-600 font-bold' : 'text-stone-400'}`}>
+                        {sanitizePhoneInput(editingAd.phone || '').length}/10
+                      </span>
+                    </div>
                     <input
                       type="tel"
+                      inputMode="numeric"
+                      maxLength={10}
                       required
                       value={editingAd.phone}
-                      onChange={(e) => setEditingAd({ ...editingAd, phone: e.target.value })}
-                      placeholder="+91 98261 11223"
+                      onChange={(e) => {
+                        setAdFormError('');
+                        setEditingAd({ ...editingAd, phone: sanitizePhoneInput(e.target.value) });
+                      }}
+                      placeholder={t('10-digit mobile number', '10 अंकों का मोबाइल नंबर')}
                       className="w-full p-2.5 rounded-xl border border-stone-200 bg-stone-50/40"
                     />
                   </div>
 
                   <div>
-                    <label className="block font-bold text-stone-700 mb-1">City *</label>
+                    <label className="block font-bold text-stone-700 mb-1">{t('City *', 'शहर *')}</label>
                     <input
                       type="text"
                       required
                       value={editingAd.city || 'Indore'}
                       onChange={(e) => setEditingAd({ ...editingAd, city: e.target.value })}
-                      placeholder="e.g. Indore"
+                      placeholder={t('e.g. Indore', 'जैसे: इंदौर')}
                       className="w-full p-2.5 rounded-xl border border-stone-200 bg-stone-50/40"
                     />
                   </div>
@@ -1567,22 +1673,22 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 </div>
 
                 <div className="pt-4 border-t border-rose-100 flex items-center justify-end gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setIsEditingAd(false)}
-                    className="px-5 py-2.5 rounded-xl border border-stone-200 text-stone-700 font-semibold text-xs hover:bg-stone-50 cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-6 py-2.5 bg-gradient-to-r from-[#6e1628] via-[#851834] to-[#6e1628] hover:opacity-95 text-amber-100 font-bold rounded-xl text-xs shadow-md border border-amber-300/30 cursor-pointer"
-                  >
-                    Save & Publish Ad
-                  </button>
-                </div>
-              </form>
-            </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingAd(false)}
+                      className="px-5 py-2.5 rounded-xl border border-stone-200 text-stone-700 font-semibold text-xs hover:bg-stone-50 cursor-pointer"
+                    >
+                      {t('Cancel', 'रद्द करें')}
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-6 py-2.5 bg-gradient-to-r from-[#6e1628] via-[#851834] to-[#6e1628] hover:opacity-95 text-amber-100 font-bold rounded-xl text-xs shadow-md border border-amber-300/30 cursor-pointer"
+                    >
+                      {t('Save & Publish Ad', 'विज्ञापन सहेजें व प्रकाशित करें')}
+                    </button>
+                  </div>
+                </form>
+              </div>
           )}
 
           {/* ==================================================== */}
@@ -1596,26 +1702,29 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 <div className="relative z-10 space-y-2 max-w-xl">
                   <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 border border-amber-300/40 text-amber-200 text-xs font-semibold backdrop-blur-xs font-serif">
                     <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                    <span>Member Management Console</span>
+                    <span>{t('Member Management Console', 'सदस्य प्रबंधन कंसोल')}</span>
                   </span>
                   <h3 className="text-2xl sm:text-3xl font-serif font-bold text-amber-50">
-                    Welcome, {authSession?.name || 'Samaj Member'}
+                    {t(`Welcome, ${authSession?.name || 'Samaj Member'}`, `स्वागत है, ${authSession?.name || 'समाज सदस्य'}`)}
                   </h3>
                   <p className="text-xs sm:text-sm text-rose-100/90 font-light leading-relaxed">
-                    Manage your published candidate profiles, business ads, horoscopes, and contact privacy settings for the Rathore Samaj network.
+                    {t(
+                      'Manage your published candidate profiles, business ads, horoscopes, and contact privacy settings for the Rathore Samaj network.',
+                      'राठौर समाज नेटवर्क के लिए अपने प्रकाशित बायोडाटा, व्यापार विज्ञापन और गोपनीयता सेटिंग्स प्रबंधित करें।'
+                    )}
                   </p>
                   <div className="pt-2 flex flex-wrap gap-2.5">
                     <button
                       onClick={handleStartCreateNewProfile}
                       className="bg-gradient-to-r from-amber-300 to-amber-400 text-[#4c0d1b] font-bold px-4 py-2 rounded-xl text-xs shadow cursor-pointer font-serif"
                     >
-                      + Create Matrimony Profile
+                      {t('+ Create Matrimony Profile', '+ नया बायोडाटा जोड़ें')}
                     </button>
                     <button
                       onClick={handleStartCreateNewAd}
                       className="bg-white/15 hover:bg-white/25 text-amber-100 border border-amber-300/30 font-semibold px-4 py-2 rounded-xl text-xs transition-colors cursor-pointer"
                     >
-                      + Post Business Ad
+                      {t('+ Post Business Ad', '+ व्यापार विज्ञापन जोड़ें')}
                     </button>
                   </div>
                 </div>
@@ -1627,33 +1736,33 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                   onClick={() => setActiveSection('profiles')}
                   className="bg-white p-4 rounded-3xl border border-rose-100 shadow-xs text-center space-y-1 cursor-pointer hover:border-rose-300 transition-colors"
                 >
-                  <span className="text-[10px] uppercase font-bold text-stone-400 tracking-wider">Active Profiles</span>
+                  <span className="text-[10px] uppercase font-bold text-stone-400 tracking-wider">{t('Active Profiles', 'सक्रिय बायोडाटा')}</span>
                   <p className="text-2xl sm:text-3xl font-serif font-bold text-[#851834]">{activeProfilesCount}</p>
-                  <p className="text-[11px] text-emerald-600 font-medium">Live on Directory</p>
+                  <p className="text-[11px] text-emerald-600 font-medium">{t('Live on Directory', 'डायरेक्टरी में लाइव')}</p>
                 </div>
 
                 <div 
                   onClick={() => setActiveSection('ads')}
                   className="bg-white p-4 rounded-3xl border border-rose-100 shadow-xs text-center space-y-1 cursor-pointer hover:border-rose-300 transition-colors"
                 >
-                  <span className="text-[10px] uppercase font-bold text-stone-400 tracking-wider">Published Ads</span>
+                  <span className="text-[10px] uppercase font-bold text-stone-400 tracking-wider">{t('Published Ads', 'प्रकाशित विज्ञापन')}</span>
                   <p className="text-2xl sm:text-3xl font-serif font-bold text-stone-900">{activeAdsCount}</p>
-                  <p className="text-[11px] text-emerald-600 font-medium">Business Directory</p>
+                  <p className="text-[11px] text-emerald-600 font-medium">{t('Business Directory', 'व्यापार डायरेक्टरी')}</p>
                 </div>
 
                 <div 
                   onClick={() => setActiveSection('media')}
                   className="bg-white p-4 rounded-3xl border border-rose-100 shadow-xs text-center space-y-1 cursor-pointer hover:border-rose-300 transition-colors"
                 >
-                  <span className="text-[10px] uppercase font-bold text-stone-400 tracking-wider">Media Assets</span>
+                  <span className="text-[10px] uppercase font-bold text-stone-400 tracking-wider">{t('Media Assets', 'मीडिया फ़ाइलें')}</span>
                   <p className="text-2xl sm:text-3xl font-serif font-bold text-stone-800">{mediaAssets.length}</p>
-                  <p className="text-[11px] text-stone-400 font-light">Photos & Kundalis</p>
+                  <p className="text-[11px] text-stone-400 font-light">{t('Photos & Kundalis', 'फोटो और कुंडली')}</p>
                 </div>
 
                 <div className="bg-white p-4 rounded-3xl border border-rose-100 shadow-xs text-center space-y-1">
-                  <span className="text-[10px] uppercase font-bold text-stone-400 tracking-wider">Samaj Trust Score</span>
+                  <span className="text-[10px] uppercase font-bold text-stone-400 tracking-wider">{t('Samaj Trust Score', 'समाज विश्वास स्कोर')}</span>
                   <p className="text-2xl sm:text-3xl font-serif font-bold text-emerald-700">100%</p>
-                  <p className="text-[11px] text-emerald-600 font-medium">Verified Gotra</p>
+                  <p className="text-[11px] text-emerald-600 font-medium">{t('Verified Gotra', 'सत्यापित गोत्र')}</p>
                 </div>
               </div>
 
@@ -1715,10 +1824,10 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               <div className="bg-white rounded-3xl border border-rose-100 p-4 sm:p-5 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div>
                   <h3 className="text-lg sm:text-xl font-serif font-bold text-stone-900">
-                    Published Candidate Profiles
+                    {t('Published Candidate Profiles', 'प्रकाशित प्रत्याशी बायोडाटा')}
                   </h3>
                   <p className="text-xs text-stone-500 font-light">
-                    Manage active and draft listings, edit media assets, and view live directory previews.
+                    {t('Manage active and draft listings, edit media assets, and view live directory previews.', 'सक्रिय और ड्राफ्ट लिस्टिंग प्रबंधित करें, फोटो बदलें और लाइव प्रीव्यू देखें।')}
                   </p>
                 </div>
 
@@ -1732,7 +1841,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                           : 'text-stone-600 hover:text-stone-900'
                       }`}
                     >
-                      All ({userProfiles.length})
+                      {t(`All (${userProfiles.length})`, `सभी (${userProfiles.length})`)}
                     </button>
                     <button
                       onClick={() => setProfileStatusFilter('active')}
@@ -1742,7 +1851,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                           : 'text-stone-600 hover:text-stone-900'
                       }`}
                     >
-                      Active ({activeProfilesCount})
+                      {t(`Active (${activeProfilesCount})`, `सक्रिय (${activeProfilesCount})`)}
                     </button>
                     <button
                       onClick={() => setProfileStatusFilter('draft')}
@@ -1752,7 +1861,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                           : 'text-stone-600 hover:text-stone-900'
                       }`}
                     >
-                      Draft ({draftProfilesCount})
+                      {t(`Draft (${draftProfilesCount})`, `ड्राफ्ट (${draftProfilesCount})`)}
                     </button>
                   </div>
 
@@ -1761,7 +1870,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                     className="bg-gradient-to-r from-[#6e1628] via-[#851834] to-[#6e1628] text-amber-100 font-bold px-3.5 py-1.5 rounded-xl text-xs shadow-sm flex items-center gap-1.5 cursor-pointer border border-amber-300/30"
                   >
                     <Plus className="w-3.5 h-3.5 text-amber-300" />
-                    <span>New Profile</span>
+                    <span>{t('New Profile', 'नया बायोडाटा')}</span>
                   </button>
                 </div>
               </div>
@@ -1774,12 +1883,12 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                   </div>
                   <div className="max-w-md mx-auto space-y-1">
                     <h4 className="text-xl font-serif font-bold text-stone-900">
-                      No Matrimonial Profiles Found
+                      {t('No Matrimonial Profiles Found', 'कोई वैवाहिक बायोडाटा नहीं मिला')}
                     </h4>
                     <p className="text-xs text-stone-500 font-light leading-relaxed">
                       {searchQuery 
-                        ? `No profiles matching "${searchQuery}". Clear your search query to see all candidates.`
-                        : "You haven't published or saved any matrimonial profiles in your account yet. Create your first profile to connect with 450+ verified Rathore Samaj families."}
+                        ? t(`No profiles matching "${searchQuery}". Clear your search query to see all candidates.`, `"${searchQuery}" से कोई प्रोफ़ाइल मेल नहीं खाती। सभी देखने के लिए खोज साफ़ करें।`)
+                        : t("You haven't published or saved any matrimonial profiles in your account yet.", 'आपने अभी तक कोई वैवाहिक बायोडाटा प्रकाशित नहीं किया है।')}
                     </p>
                   </div>
                   <div className="pt-2">
@@ -1788,7 +1897,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                       className="bg-gradient-to-r from-amber-300 via-amber-400 to-amber-500 hover:from-amber-200 hover:to-amber-400 text-[#4c0d1b] font-bold px-6 py-3 rounded-2xl text-xs shadow-md transition-all inline-flex items-center gap-2 cursor-pointer font-serif hover:scale-102"
                     >
                       <Plus className="w-4 h-4" />
-                      <span>{searchQuery ? "Clear Search Filter" : "Create Your First Profile"}</span>
+                      <span>{searchQuery ? t('Clear Search Filter', 'खोज फ़िल्टर हटाएं') : t('Create Your First Profile', 'अपना पहला बायोडाटा बनाएं')}</span>
                     </button>
                   </div>
                 </div>
@@ -1815,19 +1924,19 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                             {p.status === 'active' ? (
                               <span className="bg-emerald-600/90 text-white text-[10px] font-bold px-2.5 py-1 rounded-full shadow-xs flex items-center gap-1 backdrop-blur-xs font-serif">
                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-200 animate-pulse"></span>
-                                Active • Live on Directory
+                                {t('Active • Live', 'सक्रिय • लाइव')}
                               </span>
                             ) : (
                               <span className="bg-amber-600/90 text-white text-[10px] font-bold px-2.5 py-1 rounded-full shadow-xs flex items-center gap-1 backdrop-blur-xs font-serif">
                                 <span className="w-1.5 h-1.5 rounded-full bg-amber-200"></span>
-                                Draft • In Review
+                                {t('Draft • Review', 'ड्राफ्ट • समीक्षा')}
                               </span>
                             )}
                           </div>
 
                           {/* Visibility Chip */}
                           <div className="absolute top-3 right-3 bg-black/60 text-amber-200 text-[10px] font-semibold px-2 py-0.5 rounded-lg border border-amber-300/30 backdrop-blur-xs">
-                            {p.visibility === 'public' ? 'Public' : p.visibility === 'verified_only' ? 'Verified Only' : 'Private'}
+                            {p.visibility === 'public' ? t('Public', 'सार्वजनिक') : p.visibility === 'verified_only' ? t('Verified Only', 'केवल सत्यापित') : t('Private', 'निजी')}
                           </div>
                         </div>
 
@@ -1841,7 +1950,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                             />
                             <div className="text-right">
                               <span className="text-[10px] bg-rose-50 text-[#851834] font-serif font-bold px-2 py-0.5 rounded-md border border-rose-200">
-                                Gotra: {p.gotra}
+                                {t('Gotra:', 'गोत्र:')} {p.gotra}
                               </span>
                             </div>
                           </div>
@@ -1850,7 +1959,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                             {p.name}
                           </h4>
                           <p className="text-xs text-stone-500 font-medium mt-0.5">
-                            {p.age} Yrs · {p.height || "5' 8\""} · {p.profession}
+                            {p.age} {t('Yrs', 'वर्ष')} · {p.height || "5' 8\""} · {p.profession}
                           </p>
                           <p className="text-xs text-stone-400 mt-0.5 font-light">
                             📍 {p.city}, {p.state || 'MP'}
@@ -1865,7 +1974,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                           className="flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-semibold bg-white border border-stone-200 hover:border-rose-300 hover:bg-rose-50 text-stone-700 transition-colors cursor-pointer shadow-2xs"
                         >
                           <Edit3 className="w-3.5 h-3.5 text-[#851834]" />
-                          <span>Edit</span>
+                          <span>{t('Edit', 'संपादित करें')}</span>
                         </button>
 
                         <button
@@ -1873,15 +1982,18 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                           className="flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-semibold bg-white border border-stone-200 hover:border-rose-300 hover:bg-rose-50 text-stone-700 transition-colors cursor-pointer shadow-2xs"
                         >
                           <Eye className="w-3.5 h-3.5 text-[#851834]" />
-                          <span>View Live</span>
+                          <span>{t('View Live', 'प्रीव्यू')}</span>
                         </button>
 
                         <button
-                          onClick={() => setSettingsModalProfile(p)}
+                          onClick={() => {
+                            setConfirmDeleteProfileId(null);
+                            setSettingsModalProfile(p);
+                          }}
                           className="flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-semibold bg-white border border-stone-200 hover:border-rose-300 hover:bg-rose-50 text-stone-700 transition-colors cursor-pointer shadow-2xs"
                         >
                           <Sliders className="w-3.5 h-3.5 text-[#851834]" />
-                          <span>Settings</span>
+                          <span>{t('Settings', 'सेटिंग्स')}</span>
                         </button>
                       </div>
                     </div>
@@ -1892,7 +2004,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           )}
 
           {/* ==================================================== */}
-          {/* VIEW E: PUBLISHED BUSINESS ADS (NEW FEATURE!)        */}
+          {/* VIEW E: PUBLISHED BUSINESS ADS                       */}
           {/* ==================================================== */}
           {!isEditingProfile && !isEditingAd && activeSection === 'ads' && (
             <div className="space-y-5 animate-in fade-in">
@@ -1902,10 +2014,10 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 <div>
                   <h3 className="text-lg sm:text-xl font-serif font-bold text-stone-900 flex items-center gap-2">
                     <Store className="w-5 h-5 text-[#851834]" />
-                    <span>My Published Business Ads</span>
+                    <span>{t('My Published Business Ads', 'मेरे प्रकाशित व्यापार विज्ञापन')}</span>
                   </h3>
                   <p className="text-xs text-stone-500 font-light">
-                    Manage your commercial listings, promotional discounts, and storefront cards in the Rathore Samaj directory.
+                    {t('Manage your commercial listings, promotional discounts, and storefront cards in the Rathore Samaj directory.', 'राठौर समाज डायरेक्टरी में अपने व्यापारिक विज्ञापन और विशेष ऑफ़र प्रबंधित करें।')}
                   </p>
                 </div>
 
@@ -1919,7 +2031,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                           : 'text-stone-600 hover:text-stone-900'
                       }`}
                     >
-                      All ({userAds.length})
+                      {t(`All (${userAds.length})`, `सभी (${userAds.length})`)}
                     </button>
                     <button
                       onClick={() => setAdStatusFilter('active')}
@@ -1929,7 +2041,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                           : 'text-stone-600 hover:text-stone-900'
                       }`}
                     >
-                      Active ({activeAdsCount})
+                      {t(`Active (${activeAdsCount})`, `सक्रिय (${activeAdsCount})`)}
                     </button>
                     <button
                       onClick={() => setAdStatusFilter('featured')}
@@ -1939,7 +2051,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                           : 'text-stone-600 hover:text-stone-900'
                       }`}
                     >
-                      Featured ({featuredAdsCount})
+                      {t(`Featured (${featuredAdsCount})`, `प्रमुख (${featuredAdsCount})`)}
                     </button>
                   </div>
 
@@ -1948,7 +2060,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                     className="bg-gradient-to-r from-[#6e1628] via-[#851834] to-[#6e1628] text-amber-100 font-bold px-3.5 py-1.5 rounded-xl text-xs shadow-sm flex items-center gap-1.5 cursor-pointer border border-amber-300/30"
                   >
                     <Plus className="w-3.5 h-3.5 text-amber-300" />
-                    <span>Post New Ad</span>
+                    <span>{t('Post New Ad', 'नया विज्ञापन जोड़ें')}</span>
                   </button>
                 </div>
               </div>
@@ -1961,12 +2073,12 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                   </div>
                   <div className="max-w-md mx-auto space-y-1">
                     <h4 className="text-xl font-serif font-bold text-stone-900">
-                      No Business Ads Found
+                      {t('No Business Ads Found', 'कोई व्यापार विज्ञापन नहीं मिला')}
                     </h4>
                     <p className="text-xs text-stone-500 font-light leading-relaxed">
                       {searchQuery
-                        ? `No advertisements match "${searchQuery}". Clear your search keyword to view all ads.`
-                        : "Showcase your retail shop, manufacturing agency, or service to thousands of Rathore Samaj families across MP, Rajasthan, and Maharashtra."}
+                        ? t(`No advertisements match "${searchQuery}".`, `"${searchQuery}" से कोई विज्ञापन मेल नहीं खाता।`)
+                        : t('Showcase your retail shop, manufacturing agency, or service to thousands of Rathore Samaj families.', 'राठौर समाज के हजारों परिवारों तक अपनी दुकान या सेवा की जानकारी पहुंचाएं।')}
                     </p>
                   </div>
                   <div className="pt-2">
@@ -1975,7 +2087,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                       className="bg-gradient-to-r from-amber-300 via-amber-400 to-amber-500 hover:from-amber-200 hover:to-amber-400 text-[#4c0d1b] font-bold px-6 py-3 rounded-2xl text-xs shadow-md transition-all inline-flex items-center gap-2 cursor-pointer font-serif hover:scale-102"
                     >
                       <Plus className="w-4 h-4" />
-                      <span>{searchQuery ? "Clear Search Filter" : "Post Your First Business Ad"}</span>
+                      <span>{searchQuery ? t('Clear Search Filter', 'खोज फ़िल्टर हटाएं') : t('Post Your First Business Ad', 'अपना पहला व्यापार विज्ञापन जोड़ें')}</span>
                     </button>
                   </div>
                 </div>
@@ -2005,7 +2117,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                           {/* Featured Badge */}
                           {ad.isFeatured && (
                             <div className="absolute top-3 right-3 bg-gradient-to-r from-amber-300 to-amber-400 text-[#4c0d1b] text-[10px] font-bold px-2.5 py-1 rounded-lg shadow flex items-center gap-1 font-serif">
-                              <Star className="w-3 h-3 fill-[#4c0d1b]" /> Featured
+                              <Star className="w-3 h-3 fill-[#4c0d1b]" /> {t('Featured', 'प्रमुख')}
                             </div>
                           )}
 
@@ -2014,12 +2126,12 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                             {ad.status === 'active' ? (
                               <span className="bg-emerald-600/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 backdrop-blur-xs">
                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-200 animate-pulse"></span>
-                                Live in Directory
+                                {t('Live in Directory', 'डायरेक्टरी में लाइव')}
                               </span>
                             ) : (
                               <span className="bg-amber-600/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 backdrop-blur-xs">
                                 <span className="w-1.5 h-1.5 rounded-full bg-amber-200"></span>
-                                Draft / Paused
+                                {t('Draft / Paused', 'ड्राफ्ट / रुका हुआ')}
                               </span>
                             )}
                           </div>
@@ -2032,7 +2144,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                               {ad.title}
                             </h4>
                             <p className="text-xs text-stone-500 font-medium mt-0.5">
-                              Owner: {ad.owner} · {ad.city || 'Indore'}
+                              {t('Owner:', 'संचालक:')} {ad.owner} · {ad.city || 'Indore'}
                             </p>
                           </div>
 
@@ -2057,10 +2169,10 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                           {/* Engagement Metrics Pill */}
                           <div className="flex items-center gap-3 text-[11px] text-stone-500 pt-1">
                             <span className="bg-stone-50 px-2 py-0.5 rounded-md border border-stone-200">
-                              👁️ {ad.viewsCount || 124} Directory Views
+                              👁️ {ad.viewsCount || 124} {t('Views', 'व्यूज')}
                             </span>
                             <span className="bg-stone-50 px-2 py-0.5 rounded-md border border-stone-200">
-                              📞 {ad.inquiriesCount || 18} Calls
+                              📞 {ad.inquiriesCount || 18} {t('Calls', 'कॉल')}
                             </span>
                           </div>
                         </div>
@@ -2073,7 +2185,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                           className="flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-semibold bg-white border border-stone-200 hover:border-rose-300 hover:bg-rose-50 text-stone-700 transition-colors cursor-pointer shadow-2xs"
                         >
                           <Edit3 className="w-3.5 h-3.5 text-[#851834]" />
-                          <span>Edit Ad</span>
+                          <span>{t('Edit Ad', 'संपादित')}</span>
                         </button>
 
                         <button
@@ -2081,15 +2193,18 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                           className="flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-semibold bg-white border border-stone-200 hover:border-rose-300 hover:bg-rose-50 text-stone-700 transition-colors cursor-pointer shadow-2xs"
                         >
                           <Eye className="w-3.5 h-3.5 text-[#851834]" />
-                          <span>View Live</span>
+                          <span>{t('View Live', 'प्रीव्यू')}</span>
                         </button>
 
                         <button
-                          onClick={() => setSettingsModalAd(ad)}
+                          onClick={() => {
+                            setConfirmDeleteAdId(null);
+                            setSettingsModalAd(ad);
+                          }}
                           className="flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-semibold bg-white border border-stone-200 hover:border-rose-300 hover:bg-rose-50 text-stone-700 transition-colors cursor-pointer shadow-2xs"
                         >
                           <Sliders className="w-3.5 h-3.5 text-[#851834]" />
-                          <span>Settings</span>
+                          <span>{t('Settings', 'सेटिंग्स')}</span>
                         </button>
                       </div>
                     </div>
@@ -2108,14 +2223,14 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-rose-100 pb-4">
                   <div>
                     <h3 className="text-xl font-serif font-bold text-stone-900">
-                      Media Assets & Photos
+                      {t('Media Assets & Photos', 'मीडिया फ़ाइलें और फोटो')}
                     </h3>
                     <p className="text-xs text-stone-500 font-light">
-                      Manage avatar portraits, background covers, shop banners, and horoscope documents.
+                      {t('Manage avatar portraits, background covers, shop banners, and horoscope documents.', 'प्रोफ़ाइल फोटो, बैकग्राउंड कवर, दुकान बैनर और कुंडली दस्तावेज़ प्रबंधित करें।')}
                     </p>
                   </div>
                   <span className="text-xs bg-rose-50 text-[#851834] font-serif font-bold px-3 py-1 rounded-xl border border-rose-200">
-                    {mediaAssets.length} Total Files
+                    {mediaAssets.length} {t('Total Files', 'कुल फ़ाइलें')}
                   </span>
                 </div>
 
@@ -2123,14 +2238,14 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 <form onSubmit={handleAddMediaAsset} className="bg-rose-50/30 p-4 rounded-2xl border border-rose-100 space-y-3">
                   <div className="flex items-center gap-2 text-xs font-bold text-[#851834] font-serif">
                     <Upload className="w-4 h-4" />
-                    <span>Upload or Add Media Link</span>
+                    <span>{t('Upload or Add Media Link', 'नई फोटो या मीडिया लिंक जोड़ें')}</span>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
                     <div>
                       <input
                         type="text"
-                        placeholder="Asset Title (e.g. Traditional Kurta Photo)"
+                        placeholder={t('Asset Title (e.g. Portrait Photo)', 'फ़ाइल का शीर्षक (जैसे: मुख्य फोटो)')}
                         value={newMediaTitle}
                         onChange={(e) => setNewMediaTitle(e.target.value)}
                         className="w-full p-2 rounded-xl border border-stone-200 bg-white"
@@ -2139,20 +2254,20 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                     <div>
                       <select
                         value={newMediaType}
-                        onChange={(e) => setNewMediaType(e.target.value as any)}
+                        onChange={(e) => setNewMediaType(e.target.value as 'avatar' | 'cover' | 'gallery' | 'document')}
                         className="w-full p-2 rounded-xl border border-stone-200 bg-white"
                       >
-                        <option value="avatar">Avatar Portrait</option>
-                        <option value="cover">Background Cover</option>
-                        <option value="gallery">Matrimony Gallery Photo</option>
-                        <option value="document">Kundali / Document</option>
+                        <option value="avatar">{t('Avatar Portrait', 'प्रोफ़ाइल फोटो')}</option>
+                        <option value="cover">{t('Background Cover', 'बैकग्राउंड कवर')}</option>
+                        <option value="gallery">{t('Matrimony Gallery Photo', 'गैलरी फोटो')}</option>
+                        <option value="document">{t('Kundali / Document', 'कुंडली / दस्तावेज़')}</option>
                       </select>
                     </div>
                     <div>
                       <input
                         type="url"
                         required
-                        placeholder="Image URL (https://...)"
+                        placeholder={t('Image URL (https://...)', 'फोटो URL (https://...)')}
                         value={newMediaUrl}
                         onChange={(e) => setNewMediaUrl(e.target.value)}
                         className="w-full p-2 rounded-xl border border-stone-200 bg-white"
@@ -2165,7 +2280,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                       type="submit"
                       className="bg-gradient-to-r from-[#6e1628] to-[#851834] text-amber-100 text-xs font-bold px-4 py-2 rounded-xl shadow-xs cursor-pointer border border-amber-300/30"
                     >
-                      + Save to Media Assets
+                      {t('+ Save to Media Assets', '+ मीडिया में सहेजें')}
                     </button>
                   </div>
                 </form>
@@ -2213,17 +2328,20 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               <div className="bg-white rounded-3xl border border-rose-100 p-6 sm:p-8 shadow-sm space-y-6">
                 <div className="border-b border-rose-100 pb-3">
                   <h3 className="text-xl font-serif font-bold text-stone-900">
-                    Account & Visibility Settings
+                    {t('Account & Visibility Settings', 'खाता एवं गोपनीयता सेटिंग्स')}
                   </h3>
                   <p className="text-xs text-stone-500 font-light">
-                    Control who can view your candidate contact numbers, commercial ads, and profile details in the Rathore Samaj network.
+                    {t(
+                      'Control who can view your candidate contact numbers, commercial ads, and profile details in the Rathore Samaj network.',
+                      'राठौर समाज नेटवर्क पर आपके संपर्क नंबर और प्रोफ़ाइल कौन देख सकता है, यह नियंत्रित करें।'
+                    )}
                   </p>
                 </div>
 
                 {settingsSavedToast && (
                   <div className="bg-emerald-50 border border-emerald-300 rounded-2xl p-3 text-xs text-emerald-800 flex items-center gap-2 font-medium">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                    <span>Your privacy and notification preferences have been saved successfully!</span>
+                    <span>{t('Your privacy and notification preferences have been saved successfully!', 'आपकी गोपनीयता और सूचना सेटिंग्स सफलतापूर्वक सहेजी गईं!')}</span>
                   </div>
                 )}
 
@@ -2231,10 +2349,10 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                   {/* Public Visibility Setting */}
                   <div className="p-4 rounded-2xl border border-rose-100/90 bg-rose-50/20 space-y-2">
                     <label className="block font-bold text-stone-800 font-serif text-sm">
-                      Default Profile Visibility
+                      {t('Default Profile Visibility', 'डिफ़ॉल्ट प्रोफ़ाइल दृश्यता')}
                     </label>
                     <p className="text-stone-500 font-light leading-relaxed">
-                      Choose how your candidate biodata is shown across search filters and the community directory.
+                      {t('Choose how your candidate biodata is shown across search filters and the community directory.', 'चुनें कि समाज डायरेक्टरी में आपका बायोडाटा किसे दिखाई दे।')}
                     </p>
 
                     <div className="space-y-2 pt-1">
@@ -2246,7 +2364,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                           onChange={() => setVisibilityPreference('public')}
                           className="text-[#851834] focus:ring-rose-500"
                         />
-                        <span className="font-medium text-stone-700">Public to All Verified Samaj Members (Recommended)</span>
+                        <span className="font-medium text-stone-700">{t('Public to All Verified Samaj Members (Recommended)', 'सभी सत्यापित समाज सदस्यों के लिए (अनुशंसित)')}</span>
                       </label>
 
                       <label className="flex items-center gap-2.5 cursor-pointer">
@@ -2257,7 +2375,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                           onChange={() => setVisibilityPreference('verified_only')}
                           className="text-[#851834] focus:ring-rose-500"
                         />
-                        <span className="font-medium text-stone-700">Only Members with a Registered Family Biodata</span>
+                        <span className="font-medium text-stone-700">{t('Only Members with a Registered Family Biodata', 'केवल पंजीकृत पारिवारिक बायोडाटा वाले सदस्य')}</span>
                       </label>
 
                       <label className="flex items-center gap-2.5 cursor-pointer">
@@ -2268,7 +2386,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                           onChange={() => setVisibilityPreference('private')}
                           className="text-[#851834] focus:ring-rose-500"
                         />
-                        <span className="font-medium text-stone-700">Private (Requires Approval for Every Contact View)</span>
+                        <span className="font-medium text-stone-700">{t('Private (Requires Approval for Every Contact View)', 'निजी (हर संपर्क के लिए अनुमति आवश्यक)')}</span>
                       </label>
                     </div>
                   </div>
@@ -2277,8 +2395,8 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                   <div className="p-4 rounded-2xl border border-stone-200 space-y-3">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-bold text-stone-800 font-serif">WhatsApp Contact Direct Link</p>
-                        <p className="text-[11px] text-stone-500 font-light">Allow verified families to initiate direct chat on WhatsApp</p>
+                        <p className="font-bold text-stone-800 font-serif">{t('WhatsApp Contact Direct Link', 'व्हाट्सएप सीधा संपर्क लिंक')}</p>
+                        <p className="text-[11px] text-stone-500 font-light">{t('Allow verified families to initiate direct chat on WhatsApp', 'सत्यापित परिवारों को व्हाट्सएप पर सीधी बात करने की अनुमति दें')}</p>
                       </div>
                       <input
                         type="checkbox"
@@ -2293,8 +2411,8 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                   <div className="p-4 rounded-2xl border border-stone-200 space-y-3">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-bold text-stone-800 font-serif">SMS & In-App View Alerts</p>
-                        <p className="text-[11px] text-stone-500 font-light">Receive alerts when another Samaj family unlocks and views your contact or ad</p>
+                        <p className="font-bold text-stone-800 font-serif">{t('SMS & In-App View Alerts', 'एसएमएस और ऐप व्यू अलर्ट')}</p>
+                        <p className="text-[11px] text-stone-500 font-light">{t('Receive alerts when another Samaj family unlocks and views your contact or ad', 'जब कोई अन्य परिवार आपका संपर्क नंबर देखे तो अलर्ट प्राप्त करें')}</p>
                       </div>
                       <input
                         type="checkbox"
@@ -2310,7 +2428,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                       onClick={handleSaveSettings}
                       className="bg-gradient-to-r from-[#6e1628] via-[#851834] to-[#6e1628] text-amber-100 font-bold px-6 py-2.5 rounded-xl shadow-md cursor-pointer border border-amber-300/30"
                     >
-                      Save Preferences
+                      {t('Save Preferences', 'सेटिंग्स सहेजें')}
                     </button>
                   </div>
                 </div>
@@ -2328,14 +2446,14 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                   <div>
                     <h3 className="text-xl font-serif font-bold text-stone-900 flex items-center gap-2">
                       <Heart className="w-5 h-5 text-rose-500 fill-rose-500" />
-                      <span>Profiles I Liked (Saved Biodatas)</span>
+                      <span>{t('Profiles I Liked (Saved Biodatas)', 'पसंद किए गए बायोडाटा')}</span>
                     </h3>
                     <p className="text-xs text-stone-500 mt-0.5">
-                      Candidates you saved for family discussions, direct chat, and astrological matching.
+                      {t('Candidates you saved for family discussions, direct chat, and astrological matching.', 'परिवार से चर्चा, चैट और कुंडली मिलान के लिए सहेजे गए बायोडाटा।')}
                     </p>
                   </div>
                   <span className="text-xs bg-rose-50 text-rose-800 font-bold px-3 py-1 rounded-full border border-rose-200">
-                    {likedProfileList.length} Saved Profiles
+                    {likedProfileList.length} {t('Saved Profiles', 'सहेजे गए')}
                   </span>
                 </div>
 
@@ -2344,15 +2462,15 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                     <div className="w-14 h-14 bg-rose-50 rounded-2xl mx-auto flex items-center justify-center border border-rose-200">
                       <Heart className="w-7 h-7 text-rose-500 fill-rose-500" />
                     </div>
-                    <h4 className="font-serif font-bold text-base text-stone-800">No Liked Profiles Yet</h4>
+                    <h4 className="font-serif font-bold text-base text-stone-800">{t('No Liked Profiles Yet', 'अभी कोई प्रोफ़ाइल पसंद नहीं की गई')}</h4>
                     <p className="text-xs text-stone-500 leading-relaxed">
-                      Tap the heart icon on any matrimonial profile in the directory to bookmark their biodata here.
+                      {t('Tap the heart icon on any matrimonial profile in the directory to bookmark their biodata here.', 'बायोडाटा को यहाँ सहेजने के लिए डायरेक्टरी में किसी भी प्रोफ़ाइल पर दिल ❤️ के आइकन पर टैप करें।')}
                     </p>
                     <button
                       onClick={() => onNavigateTab('matrimony')}
                       className="bg-gradient-to-r from-[#6e1628] to-[#851834] text-amber-100 font-bold px-5 py-2.5 rounded-xl text-xs cursor-pointer shadow-sm hover:scale-102 transition-transform"
                     >
-                      Browse Matrimony Biodatas
+                      {t('Browse Matrimony Biodatas', 'वैवाहिक बायोडाटा देखें')}
                     </button>
                   </div>
                 ) : (
@@ -2372,7 +2490,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                           <div className="flex gap-3.5 items-start">
                             <img 
                               src={photoUrl} 
-                              alt={p.name}
+                              alt={p.name} 
                               className="w-16 h-16 rounded-xl object-cover object-top border border-amber-300 shadow-2xs shrink-0" 
                             />
                             <div className="min-w-0 flex-1">
@@ -2380,10 +2498,10 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                                 {p.name}
                               </h4>
                               <p className="text-xs text-stone-600 font-medium">
-                                Gotra: {p.gotra} · {p.city}
+                                {t('Gotra:', 'गोत्र:')} {p.gotra} · {p.city}
                               </p>
                               <p className="text-[11px] text-stone-500">
-                                {p.age} Yrs · {p.education}
+                                {p.age} {t('Yrs', 'वर्ष')} · {p.education}
                               </p>
                               {p.profession && (
                                 <p className="text-[11px] text-emerald-800 font-semibold truncate">
@@ -2398,29 +2516,29 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                               onClick={() => setPreviewProfile(p)}
                               className="flex-1 bg-stone-100 hover:bg-stone-200 text-stone-800 text-[11px] font-semibold py-2 px-2.5 rounded-lg flex items-center justify-center gap-1 cursor-pointer transition-colors"
                             >
-                              <Eye className="w-3 h-3" /> View Bio
+                              <Eye className="w-3 h-3" /> {t('View Bio', 'बायो देखें')}
                             </button>
 
                             <button
                               onClick={() => setActiveChatProfile(p)}
                               className="bg-gradient-to-r from-[#6e1628] to-[#851834] text-amber-200 text-[11px] font-semibold py-2 px-3 rounded-lg flex items-center justify-center gap-1 cursor-pointer shadow-xs"
                             >
-                              <MessageCircle className="w-3 h-3 text-amber-300" /> Chat
+                              <MessageCircle className="w-3 h-3 text-amber-300" /> {t('Chat', 'चैट')}
                             </button>
 
                             {onSelectKundaliProfile && (
                               <button
                                 onClick={() => onSelectKundaliProfile(p.id, p.gender)}
-                                title="Check Kundali Milan"
+                                title={t('Check Kundali Milan', 'कुंडली मिलान जांचें')}
                                 className="bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-[11px] font-semibold py-2 px-2.5 rounded-lg flex items-center gap-1 cursor-pointer"
                               >
-                                <Compass className="w-3 h-3 text-amber-700" /> Milan
+                                <Compass className="w-3 h-3 text-amber-700" /> {t('Milan', 'मिलान')}
                               </button>
                             )}
 
                             <button
                               onClick={() => toggleUnlikeProfile(p.id)}
-                              title="Remove from Liked"
+                              title={t('Remove from Liked', 'पसंद सूची से हटाएं')}
                               className="p-2 text-rose-600 hover:bg-rose-50 rounded-lg border border-rose-200 cursor-pointer"
                             >
                               <Trash2 className="w-3 h-3" />
@@ -2445,14 +2563,14 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                   <div>
                     <h3 className="text-xl font-serif font-bold text-stone-900 flex items-center gap-2">
                       <Sparkles className="w-5 h-5 text-amber-500" />
-                      <span>Who Liked My Profile (Samaj Admirers)</span>
+                      <span>{t('Who Liked My Profile (Samaj Admirers)', 'मेरी प्रोफ़ाइल किसने पसंद की')}</span>
                     </h3>
                     <p className="text-xs text-stone-500 mt-0.5">
-                      Rathore community members who liked your profile and want to discuss matrimonial alliance.
+                      {t('Rathore community members who liked your profile and want to discuss matrimonial alliance.', 'राठौर समाज के सदस्य जिन्होंने आपका प्रोफ़ाइल पसंद किया है और रिश्ते के लिए बात करना चाहते हैं।')}
                     </p>
                   </div>
                   <span className="text-xs bg-amber-50 text-amber-900 font-bold px-3 py-1 rounded-full border border-amber-300">
-                    {admirers.length} Interested Families
+                    {admirers.length} {t('Interested Families', 'इच्छुक परिवार')}
                   </span>
                 </div>
 
@@ -2489,7 +2607,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                                 {adm.admirerName}
                               </h4>
                               <p className="text-xs text-stone-600">
-                                Gotra: {adm.admirerGotra} · {adm.admirerCity}
+                                {t('Gotra:', 'गोत्र:')} {adm.admirerGotra} · {adm.admirerCity}
                               </p>
                               <span className="text-[10px] text-rose-600 font-semibold flex items-center gap-1 mt-0.5">
                                 <Heart className="w-2.5 h-2.5 fill-rose-500 text-rose-500" /> {adm.likedAt}
@@ -2498,8 +2616,8 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                           </div>
 
                           <div className="bg-stone-50 p-2.5 rounded-xl border border-stone-200 text-[11px] text-stone-700 space-y-0.5">
-                            <p><strong>Edu:</strong> {adm.admirerEducation}</p>
-                            {adm.admirerProfession && <p><strong>Prof:</strong> {adm.admirerProfession}</p>}
+                            <p><strong>{t('Edu:', 'शिक्षा:')}</strong> {adm.admirerEducation}</p>
+                            {adm.admirerProfession && <p><strong>{t('Prof:', 'व्यवसाय:')}</strong> {adm.admirerProfession}</p>}
                             {adm.message && <p className="italic text-amber-900 pt-1 text-[10px]">&quot;{adm.message}&quot;</p>}
                           </div>
                         </div>
@@ -2509,22 +2627,22 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                             onClick={() => setActiveChatProfile(candidateProfile)}
                             className="flex-1 bg-gradient-to-r from-[#6e1628] to-[#851834] text-amber-200 text-xs font-semibold py-2 px-2.5 rounded-lg flex items-center justify-center gap-1 cursor-pointer shadow-xs"
                           >
-                            <MessageCircle className="w-3 h-3 text-amber-300" /> Chat
+                            <MessageCircle className="w-3 h-3 text-amber-300" /> {t('Chat', 'चैट')}
                           </button>
 
                           {onSelectKundaliProfile && (
                             <button
                               onClick={() => onSelectKundaliProfile(candidateProfile.id, candidateProfile.gender)}
-                              title="Milan"
+                              title={t('Milan', 'मिलान')}
                               className="bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-semibold py-2 px-2.5 rounded-lg flex items-center gap-1 cursor-pointer"
                             >
-                              <Compass className="w-3 h-3 text-amber-700" /> Milan
+                              <Compass className="w-3 h-3 text-amber-700" /> {t('Milan', 'मिलान')}
                             </button>
                           )}
 
                           <a
                             href={`tel:${adm.admirerPhone}`}
-                            title={`Call ${adm.admirerPhone}`}
+                            title={`${t('Call', 'कॉल करें')} ${adm.admirerPhone}`}
                             className="p-2 border border-stone-200 bg-stone-50 hover:bg-stone-100 text-stone-700 rounded-lg cursor-pointer"
                           >
                             <Phone className="w-3.5 h-3.5 text-emerald-700" />
@@ -2548,17 +2666,17 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                   <div>
                     <h3 className="text-xl font-serif font-bold text-stone-900 flex items-center gap-2">
                       <MessageCircle className="w-5 h-5 text-emerald-600" />
-                      <span>Direct Chat Messages & Inquiries</span>
+                      <span>{t('Direct Chat Messages & Inquiries', 'सीधी चैट एवं पूछताछ')}</span>
                     </h3>
                     <p className="text-xs text-stone-500 mt-0.5">
-                      Manage matrimonial alliance conversations with interested Rathore families.
+                      {t('Manage matrimonial alliance conversations with interested Rathore families.', 'इच्छुक राठौर परिवारों के साथ वैवाहिक बातचीत प्रबंधित करें।')}
                     </p>
                   </div>
                   <button
                     onClick={() => onNavigateTab('matrimony')}
                     className="text-xs bg-[#851834] text-amber-200 font-bold px-3.5 py-1.5 rounded-xl cursor-pointer"
                   >
-                    + Start New Chat
+                    {t('+ Start New Chat', '+ नई चैट शुरू करें')}
                   </button>
                 </div>
 
@@ -2584,22 +2702,24 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                               <h4 className="font-serif font-bold text-stone-900 text-sm group-hover:text-[#851834] transition-colors truncate">
                                 {p.name}
                               </h4>
-                              <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.2 rounded-full">Active</span>
+                              <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.2 rounded-full">{t('Active', 'सक्रिय')}</span>
                             </div>
                             <p className="text-xs text-stone-500 truncate">
-                              Gotra: {p.gotra} · {p.city}
+                              {t('Gotra:', 'गोत्र:')} {p.gotra} · {p.city}
                             </p>
                             <p className="text-xs text-stone-700 truncate mt-0.5 font-medium">
-                              {lastMsg ? `${lastMsg.senderName}: ${lastMsg.text}` : `Start conversation with ${p.name}'s family...`}
+                              {lastMsg
+                                ? `${lastMsg.senderName}: ${lastMsg.text}`
+                                : t(`Start conversation with ${p.name}'s family...`, `${p.name} के परिवार से बातचीत शुरू करें...`)}
                             </p>
                           </div>
                         </div>
 
                         <div className="flex items-center gap-2 shrink-0">
-                          <span className="text-[11px] text-stone-400 hidden sm:inline">{lastMsg ? lastMsg.timestamp : 'Recent'}</span>
+                          <span className="text-[11px] text-stone-400 hidden sm:inline">{lastMsg ? lastMsg.timestamp : t('Recent', 'हाल ही में')}</span>
                           <button className="bg-gradient-to-r from-[#6e1628] to-[#851834] text-amber-200 text-xs font-semibold py-2 px-3 rounded-xl flex items-center gap-1 shadow-xs">
                             <MessageCircle className="w-3.5 h-3.5" />
-                            <span>Open</span>
+                            <span>{t('Open', 'खोलें')}</span>
                           </button>
                         </div>
                       </div>
@@ -2634,7 +2754,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             <div className="space-y-4">
               <div className="text-center pb-2 border-b border-rose-100">
                 <span className="text-[10px] font-serif text-[#851834] font-bold tracking-widest uppercase">
-                  Candidate Matrimonial Profile (Live Preview)
+                  {t('Candidate Matrimonial Profile (Live Preview)', 'प्रत्याशी वैवाहिक बायोडाटा (लाइव प्रीव्यू)')}
                 </span>
               </div>
 
@@ -2655,17 +2775,17 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                     {previewProfile.name}
                   </h3>
                   <p className="text-xs text-[#851834] font-semibold font-serif">
-                    Gotra: {previewProfile.gotra} · {previewProfile.city}
+                    {t('Gotra:', 'गोत्र:')} {previewProfile.gotra} · {previewProfile.city}
                   </p>
                 </div>
               </div>
 
               <div className="bg-stone-50 p-4 rounded-2xl border border-stone-200 text-xs space-y-2">
                 <div className="grid grid-cols-2 gap-2">
-                  <p><span className="text-stone-500 font-medium">Age:</span> <strong className="text-stone-800">{previewProfile.age} Yrs</strong></p>
-                  <p><span className="text-stone-500 font-medium">Height:</span> <strong className="text-stone-800">{previewProfile.height || "5' 8\""}</strong></p>
-                  <p><span className="text-stone-500 font-medium">Education:</span> <strong className="text-stone-800">{previewProfile.education}</strong></p>
-                  <p><span className="text-stone-500 font-medium">Profession:</span> <strong className="text-stone-800">{previewProfile.profession}</strong></p>
+                  <p><span className="text-stone-500 font-medium">{t('Age:', 'आयु:')}</span> <strong className="text-stone-800">{previewProfile.age} {t('Yrs', 'वर्ष')}</strong></p>
+                  <p><span className="text-stone-500 font-medium">{t('Height:', 'कद:')}</span> <strong className="text-stone-800">{previewProfile.height || "5' 8\""}</strong></p>
+                  <p><span className="text-stone-500 font-medium">{t('Education:', 'शिक्षा:')}</span> <strong className="text-stone-800">{previewProfile.education}</strong></p>
+                  <p><span className="text-stone-500 font-medium">{t('Profession:', 'व्यवसाय:')}</span> <strong className="text-stone-800">{previewProfile.profession}</strong></p>
                 </div>
                 {previewProfile.about && (
                   <p className="pt-2 border-t border-stone-200/60 text-stone-600 font-light leading-relaxed">
@@ -2676,11 +2796,11 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
 
               <div className="bg-emerald-50 border border-emerald-300 p-3.5 rounded-2xl flex items-center justify-between text-xs">
                 <div>
-                  <span className="text-[10px] text-emerald-800 font-bold uppercase">Verified Contact:</span>
+                  <span className="text-[10px] text-emerald-800 font-bold uppercase">{t('Verified Contact:', 'सत्यापित संपर्क:')}</span>
                   <p className="font-extrabold text-emerald-950 mt-0.5">{previewProfile.contact}</p>
                 </div>
                 <span className="bg-emerald-700 text-white text-[10px] font-bold px-2.5 py-1 rounded-lg">
-                  Directory Active
+                  {t('Directory Active', 'डायरेक्टरी में सक्रिय')}
                 </span>
               </div>
             </div>
@@ -2709,7 +2829,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
 
             <div className="text-center pb-2 border-b border-rose-100">
               <span className="text-[10px] font-serif text-[#851834] font-bold tracking-widest uppercase">
-                Business Directory • Live Storefront Preview
+                {t('Business Directory • Live Storefront Preview', 'व्यापार डायरेक्टरी • लाइव प्रीव्यू')}
               </span>
             </div>
 
@@ -2724,7 +2844,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               </div>
               {previewAd.isFeatured && (
                 <div className="absolute top-3 right-3 bg-gradient-to-r from-amber-300 to-amber-400 text-[#4c0d1b] text-xs font-bold px-2.5 py-1 rounded-lg shadow flex items-center gap-1 font-serif">
-                  <Star className="w-3.5 h-3.5 fill-[#4c0d1b]" /> Featured
+                  <Star className="w-3.5 h-3.5 fill-[#4c0d1b]" /> {t('Featured', 'प्रमुख')}
                 </div>
               )}
             </div>
@@ -2734,7 +2854,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 {previewAd.title}
               </h3>
               <p className="text-stone-500 font-medium">
-                Owner: {previewAd.owner} · {previewAd.city || 'Indore'}
+                {t('Owner:', 'संचालक:')} {previewAd.owner} · {previewAd.city || 'Indore'}
               </p>
               <p className="text-stone-600 font-light leading-relaxed">
                 {previewAd.description || previewAd.tagline}
@@ -2755,7 +2875,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 href={`tel:${previewAd.phone}`}
                 className="w-full bg-gradient-to-r from-[#6e1628] via-[#851834] to-[#6e1628] text-amber-100 font-bold py-3 rounded-xl text-xs flex items-center justify-center gap-2 shadow-md cursor-pointer border border-amber-300/30"
               >
-                <Phone className="w-4 h-4 text-amber-300" /> Call Store Owner ({previewAd.phone})
+                <Phone className="w-4 h-4 text-amber-300" /> {t('Call Store Owner', 'संचालक को कॉल करें')} ({previewAd.phone})
               </a>
             </div>
           </div>
@@ -2776,7 +2896,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           >
             <div className="flex items-center justify-between border-b border-rose-100 pb-2">
               <h4 className="font-serif font-bold text-stone-900 text-sm">
-                Profile Settings: {settingsModalProfile.name}
+                {t('Profile Settings:', 'प्रोफ़ाइल सेटिंग्स:')} {settingsModalProfile.name}
               </h4>
               <button onClick={() => setSettingsModalProfile(null)}>
                 <X className="w-4 h-4 text-stone-400" />
@@ -2785,7 +2905,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
 
             <div className="space-y-3 text-xs">
               <div>
-                <label className="block font-bold text-stone-700 mb-1">Status on Directory</label>
+                <label className="block font-bold text-stone-700 mb-1">{t('Status on Directory', 'डायरेक्टरी स्थिति')}</label>
                 <div className="flex gap-2">
                   <button
                     type="button"
@@ -2796,7 +2916,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                         : 'bg-stone-100 text-stone-700'
                     }`}
                   >
-                    Active (Live)
+                    {t('Active (Live)', 'सक्रिय (लाइव)')}
                   </button>
                   <button
                     type="button"
@@ -2807,44 +2927,62 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                         : 'bg-stone-100 text-stone-700'
                     }`}
                   >
-                    Draft (Paused)
+                    {t('Draft (Paused)', 'ड्राफ्ट (रुका हुआ)')}
                   </button>
                 </div>
               </div>
 
               <div>
-                <label className="block font-bold text-stone-700 mb-1">Visibility Audience</label>
+                <label className="block font-bold text-stone-700 mb-1">{t('Visibility Audience', 'दृश्यता सेटिंग')}</label>
                 <select
                   value={settingsModalProfile.visibility}
                   onChange={(e) => handleUpdateProfileVisibility(settingsModalProfile, e.target.value as VisibilitySetting)}
                   className="w-full p-2.5 rounded-xl border border-stone-200 bg-white"
                 >
-                  <option value="public">Public to All Samaj Members</option>
-                  <option value="verified_only">Verified Members Only</option>
-                  <option value="private">Private (Direct Request Only)</option>
+                  <option value="public">{t('Public to All Samaj Members', 'सभी समाज सदस्यों के लिए सार्वजनिक')}</option>
+                  <option value="verified_only">{t('Verified Members Only', 'केवल सत्यापित सदस्य')}</option>
+                  <option value="private">{t('Private (Direct Request Only)', 'निजी (केवल अनुरोध पर)')}</option>
                 </select>
               </div>
 
               <div className="pt-2 border-t border-rose-100 flex items-center justify-between">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (confirm(`Are you sure you want to remove ${settingsModalProfile.name}'s profile?`)) {
-                      onDeleteProfile(settingsModalProfile.id);
-                      setSettingsModalProfile(null);
-                    }
-                  }}
-                  className="text-red-600 hover:text-red-800 text-xs font-bold flex items-center gap-1 cursor-pointer"
-                >
-                  <Trash2 className="w-3.5 h-3.5" /> Remove Profile
-                </button>
+                {confirmDeleteProfileId === settingsModalProfile.id ? (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onDeleteProfile(settingsModalProfile.id);
+                        setConfirmDeleteProfileId(null);
+                        setSettingsModalProfile(null);
+                      }}
+                      className="bg-red-600 text-white px-3 py-1.5 rounded-lg font-bold text-xs cursor-pointer"
+                    >
+                      {t('Confirm Delete', 'हटाएं')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDeleteProfileId(null)}
+                      className="text-stone-500 text-xs font-semibold cursor-pointer"
+                    >
+                      {t('Cancel', 'रद्द')}
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDeleteProfileId(settingsModalProfile.id)}
+                    className="text-red-600 hover:text-red-800 text-xs font-bold flex items-center gap-1 cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> {t('Remove Profile', 'प्रोफ़ाइल हटाएं')}
+                  </button>
+                )}
 
                 <button
                   type="button"
                   onClick={() => setSettingsModalProfile(null)}
                   className="bg-stone-100 hover:bg-stone-200 text-stone-800 font-bold px-4 py-1.5 rounded-xl text-xs cursor-pointer"
                 >
-                  Close
+                  {t('Close', 'बंद करें')}
                 </button>
               </div>
             </div>
@@ -2866,7 +3004,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           >
             <div className="flex items-center justify-between border-b border-rose-100 pb-2">
               <h4 className="font-serif font-bold text-stone-900 text-sm">
-                Ad Settings: {settingsModalAd.title}
+                {t('Ad Settings:', 'विज्ञापन सेटिंग्स:')} {settingsModalAd.title}
               </h4>
               <button onClick={() => setSettingsModalAd(null)}>
                 <X className="w-4 h-4 text-stone-400" />
@@ -2875,7 +3013,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
 
             <div className="space-y-3 text-xs">
               <div>
-                <label className="block font-bold text-stone-700 mb-1">Directory Status</label>
+                <label className="block font-bold text-stone-700 mb-1">{t('Directory Status', 'डायरेक्टरी स्थिति')}</label>
                 <div className="flex gap-2">
                   <button
                     type="button"
@@ -2886,7 +3024,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                         : 'bg-stone-100 text-stone-700'
                     }`}
                   >
-                    Active (Live)
+                    {t('Active (Live)', 'सक्रिय (लाइव)')}
                   </button>
                   <button
                     type="button"
@@ -2897,13 +3035,13 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                         : 'bg-stone-100 text-stone-700'
                     }`}
                   >
-                    Draft (Paused)
+                    {t('Draft (Paused)', 'ड्राफ्ट (रुका हुआ)')}
                   </button>
                 </div>
               </div>
 
               <div>
-                <label className="block font-bold text-stone-700 mb-1">Placement Tier</label>
+                <label className="block font-bold text-stone-700 mb-1">{t('Placement Tier', 'प्रदर्शन श्रेणी')}</label>
                 <button
                   type="button"
                   onClick={() => handleToggleAdFeatured(settingsModalAd)}
@@ -2914,30 +3052,48 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                   }`}
                 >
                   <Star className="w-3.5 h-3.5" />
-                  <span>{settingsModalAd.isFeatured ? 'Featured Top Banner (Active)' : 'Upgrade to Featured Placement'}</span>
+                  <span>{settingsModalAd.isFeatured ? t('Featured Top Banner (Active)', 'प्रमुख बैनर (सक्रिय)') : t('Upgrade to Featured Placement', 'प्रमुख बैनर में अपग्रेड करें')}</span>
                 </button>
               </div>
 
               <div className="pt-2 border-t border-rose-100 flex items-center justify-between">
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (confirm(`Are you sure you want to delete ${settingsModalAd.title}?`)) {
-                      onDeleteAd(settingsModalAd.id);
-                      setSettingsModalAd(null);
-                    }
-                  }}
-                  className="text-red-600 hover:text-red-800 text-xs font-bold flex items-center gap-1 cursor-pointer"
-                >
-                  <Trash2 className="w-3.5 h-3.5" /> Delete Ad
-                </button>
+                {confirmDeleteAdId === settingsModalAd.id ? (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onDeleteAd(settingsModalAd.id);
+                        setConfirmDeleteAdId(null);
+                        setSettingsModalAd(null);
+                      }}
+                      className="bg-red-600 text-white px-3 py-1.5 rounded-lg font-bold text-xs cursor-pointer"
+                    >
+                      {t('Confirm Delete', 'हटाएं')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmDeleteAdId(null)}
+                      className="text-stone-500 text-xs font-semibold cursor-pointer"
+                    >
+                      {t('Cancel', 'रद्द')}
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDeleteAdId(settingsModalAd.id)}
+                    className="text-red-600 hover:text-red-800 text-xs font-bold flex items-center gap-1 cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> {t('Delete Ad', 'विज्ञापन हटाएं')}
+                  </button>
+                )}
 
                 <button
                   type="button"
                   onClick={() => setSettingsModalAd(null)}
                   className="bg-stone-100 hover:bg-stone-200 text-stone-800 font-bold px-4 py-1.5 rounded-xl text-xs cursor-pointer"
                 >
-                  Close
+                  {t('Close', 'बंद करें')}
                 </button>
               </div>
             </div>

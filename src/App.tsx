@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { TabType, MatrimonyProfile, BusinessAd, SamajEvent, AuthSession, AdminRuntimeConfig } from './types';
+import { TabType, MatrimonyProfile, BusinessAd, SamajEvent, AuthSession } from './types';
 import { INITIAL_PROFILES, INITIAL_ADS, INITIAL_EVENTS } from './data/mockData';
 import { Header } from './components/Header';
 import { HeroBanner } from './components/HeroBanner';
@@ -14,14 +14,17 @@ import { FamilyDetailsTab } from './components/FamilyDetailsTab';
 import { DashboardTab } from './components/DashboardTab';
 import { KundaliMilanTab } from './components/KundaliMilanTab';
 import { GuestListTab } from './components/GuestListTab';
-import { AdminDashboardTab } from './components/AdminDashboardTab';
+import { AdminDashboardTab, DEFAULT_ADMIN_CONFIG } from './components/AdminDashboardTab';
 import { WhatsAppShare } from './components/WhatsAppShare';
 import { Footer } from './components/Footer';
 import { auth } from './firebase';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { onAuthStateChanged, signOut, getRedirectResult } from 'firebase/auth';
 import { Sparkles } from 'lucide-react';
+import { useLanguage } from './context/LanguageContext';
+import { sanitizePhoneInput } from './utils/validation';
 
 export const App: React.FC = () => {
+  const { t } = useLanguage();
   const [currentTab, setCurrentTab] = useState<TabType>('matrimony');
   const [kundaliBoyId, setKundaliBoyId] = useState<number | string | null>(null);
   const [kundaliGirlId, setKundaliGirlId] = useState<number | string | null>(null);
@@ -115,6 +118,33 @@ export const App: React.FC = () => {
 
   // Global Auth Listener to handle Redirect returns across Web & APK WebView
   useEffect(() => {
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result?.user) {
+          const session: AuthSession = {
+            method: 'Google',
+            name: result.user.displayName || 'Google User',
+            email: result.user.email || '',
+            photoUrl: result.user.photoURL || '',
+            loggedInAt: new Date().toISOString(),
+            verified: result.user.emailVerified
+          };
+          setAuthSession(session);
+          try {
+            localStorage.setItem('user_auth_session', JSON.stringify(session));
+            localStorage.setItem('device_google_account', JSON.stringify({
+              name: session.name,
+              email: session.email,
+              photoUrl: session.photoUrl
+            }));
+          } catch (e) {
+            console.error(e);
+          }
+          setCurrentTab(prev => (prev === 'signup' ? 'dashboard' : prev));
+        }
+      })
+      .catch((err) => console.warn('Redirect result check:', err?.code || err));
+
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
         const session: AuthSession = {
@@ -128,6 +158,11 @@ export const App: React.FC = () => {
         setAuthSession(session);
         try {
           localStorage.setItem('user_auth_session', JSON.stringify(session));
+          localStorage.setItem('device_google_account', JSON.stringify({
+            name: session.name,
+            email: session.email,
+            photoUrl: session.photoUrl
+          }));
         } catch (e) {
           console.error(e);
         }
@@ -196,7 +231,7 @@ export const App: React.FC = () => {
       income: 'Competitive',
       height: "5' 6\"",
       familyDetails: 'Respected Rathore Samaj family. Quick registration via portal.',
-      contact: partial.contact || '+91 9800000000',
+      contact: sanitizePhoneInput(partial.contact || authSession?.phone || ''),
       photo: partial.gender === 'Female' 
         ? "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80" 
         : "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80",
@@ -226,7 +261,7 @@ export const App: React.FC = () => {
       category: partial.category || 'Retail & Shopping',
       city: partial.city || 'Indore',
       address: partial.address || 'Main Market',
-      phone: partial.phone || '+91 98260 00000',
+      phone: sanitizePhoneInput(partial.phone || authSession?.phone || ''),
       tagline: partial.tagline || 'Special Samaj Member Discount Available.',
       offer: partial.offer || '10% Discount for Samaj Members',
       rating: '5.0 ★',
@@ -315,6 +350,13 @@ export const App: React.FC = () => {
     setAuthSession(session);
     try {
       localStorage.setItem('user_auth_session', JSON.stringify(session));
+      if (session.method === 'Google' && session.email) {
+        localStorage.setItem('device_google_account', JSON.stringify({
+          name: session.name || session.email.split('@')[0],
+          email: session.email,
+          photoUrl: session.photoUrl || ''
+        }));
+      }
     } catch (e) {
       console.error(e);
     }
@@ -361,7 +403,14 @@ export const App: React.FC = () => {
       {broadcastMessage && (
         <div className="bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 text-stone-950 px-4 py-2 text-xs sm:text-sm font-semibold text-center border-b border-amber-600/30 shadow-xs flex items-center justify-center gap-2">
           <Sparkles className="w-4 h-4 text-[#4c0d1b] shrink-0" />
-          <span>{broadcastMessage}</span>
+          <span>
+            {broadcastMessage === DEFAULT_ADMIN_CONFIG.bannerBroadcastMessage
+              ? t(
+                  DEFAULT_ADMIN_CONFIG.bannerBroadcastMessage,
+                  'जय माताजी की! राठौर रिश्ते पोर्टल में आपका स्वागत है। सभी समाज वैवाहिक बायोडाटा सत्यापित हैं।'
+                )
+              : broadcastMessage}
+          </span>
         </div>
       )}
 
@@ -408,6 +457,7 @@ export const App: React.FC = () => {
             onDeleteAd={handleDeleteAd}
             onNavigateTab={setCurrentTab}
             onLogout={handleLogout}
+            onSelectKundaliProfile={handleSelectKundaliProfile}
           />
         )}
 

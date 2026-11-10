@@ -1,6 +1,7 @@
 import React from 'react';
-import { ShieldCheck, Users, Store, BookOpen, Sparkles, ArrowRight, HeartHandshake } from 'lucide-react';
+import { Users, BookOpen, Sparkles, ArrowRight, HeartHandshake } from 'lucide-react';
 import { TabType, AuthSession } from '../types';
+import { useLanguage } from '../context/LanguageContext';
 
 interface HeroBannerProps {
   onNavigateTab?: (tab: TabType) => void;
@@ -8,6 +9,12 @@ interface HeroBannerProps {
 }
 
 export const HeroBanner: React.FC<HeroBannerProps> = ({ onNavigateTab, authSession }) => {
+  const { t } = useLanguage();
+
+  const targetActionTab = (loggedInTab: TabType): TabType => {
+    return authSession ? loggedInTab : 'signup';
+  };
+
   return (
     <div className="relative overflow-hidden bg-gradient-to-b from-[#24050b] via-[#330710] to-[#1c0307] text-white border-b border-amber-500/30">
       {/* Background Decorative Ambient Circles */}
@@ -32,42 +39,46 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ onNavigateTab, authSessi
           {/* Badge */}
           <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-amber-400/10 border border-amber-400/30 text-amber-300 text-xs font-semibold tracking-wide shadow-xs">
             <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span>वार्षिक समाज डिजिटल पत्रिका एवं विवाह संगम — 2026</span>
+            <span>{t('Annual Samaj Digital Patrika & Matrimony Sangam — 2026', 'वार्षिक समाज डिजिटल पत्रिका एवं विवाह संगम — २०२६')}</span>
           </div>
 
           {/* Grand Headline */}
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-serif font-bold text-amber-50 tracking-tight leading-tight">
-            राठौड़ रिश्ते • <span className="text-gold-gradient">Rathore Rishtey</span>
+            {t('Rathore Rishtey • ', 'राठौर रिश्ते • ')}
+            <span className="text-gold-gradient">{t('Shubh Vivah', 'शुभ विवाह')}</span>
           </h2>
 
           <p className="text-xs sm:text-sm md:text-base text-stone-300 max-w-2xl mx-auto font-light leading-relaxed">
-            Welcome to the trusted digital sanctuary for Rathore Samaj families across MP, Rajasthan, Maharashtra, and nationwide. Explore 100% verified groom & bride biodatas and discover community-owned businesses.
+            {t(
+              'Welcome to the trusted digital sanctuary for Rathore Samaj families across MP, Rajasthan, Maharashtra, and nationwide. Explore 100% verified groom & bride biodatas and discover community-owned businesses.',
+              'मध्यप्रदेश, राजस्थान, महाराष्ट्र और देशभर के राठौड़ समाज परिवारों के विश्वसनीय डिजिटल मंच पर आपका स्वागत है। १००% सत्यापित वर-वधु बायोडाटा देखें और समाज के व्यापारियों से जुड़ें।'
+            )}
           </p>
 
           {/* Quick Action Buttons */}
           <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
             <button
-              onClick={() => onNavigateTab && onNavigateTab('signup')}
+              onClick={() => onNavigateTab && onNavigateTab(targetActionTab('matrimony'))}
               className="bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-stone-950 font-bold px-6 py-2.5 rounded-xl text-xs sm:text-sm shadow-lg transition-all flex items-center gap-2 cursor-pointer hover:scale-102"
             >
               <Users className="w-4 h-4 text-stone-950" />
-              <span>Browse Biodatas (बायोडाटा देखें)</span>
+              <span>{t('Browse Biodatas', 'बायोडाटा देखें')}</span>
             </button>
 
             <button
-              onClick={() => onNavigateTab && onNavigateTab('signup')}
+              onClick={() => onNavigateTab && onNavigateTab(targetActionTab('create-profile'))}
               className="bg-white/10 hover:bg-white/20 text-amber-200 border border-amber-400/40 font-semibold px-5 py-2.5 rounded-xl text-xs sm:text-sm transition-all flex items-center gap-2 cursor-pointer backdrop-blur-xs"
             >
               <HeartHandshake className="w-4 h-4 text-amber-300" />
-              <span>Create Profile (अपना बायोडाटा बनाएं)</span>
+              <span>{t('Create Profile', 'अपना बायोडाटा बनाएं')}</span>
             </button>
 
             <button
-              onClick={() => onNavigateTab && onNavigateTab('signup')}
+              onClick={() => onNavigateTab && onNavigateTab('booklet')}
               className="text-stone-300 hover:text-amber-300 font-medium px-4 py-2 text-xs sm:text-sm flex items-center gap-1.5 transition-colors cursor-pointer"
             >
               <BookOpen className="w-4 h-4 text-amber-400" />
-              <span>Digital E-Patrika</span>
+              <span>{t('Digital E-Patrika', 'डिजिटल ई-पत्रिका')}</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -77,30 +88,45 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ onNavigateTab, authSessi
         <div className="mt-8 pt-6 border-t border-amber-500/20 grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 max-w-5xl mx-auto">
           <div className="bg-white/5 backdrop-blur-xs rounded-xl p-3 sm:p-4 border border-amber-400/20 text-center">
             <p className="text-xl sm:text-2xl font-serif font-bold text-amber-300">450+</p>
-            <p className="text-[11px] sm:text-xs text-stone-300 font-medium mt-0.5">Verified Biodatas</p>
-            <p className="text-[10px] text-amber-200/60 mt-0.5">वर-वधु परिचय</p>
+            <p className="text-[11px] sm:text-xs text-stone-300 font-medium mt-0.5">
+              {t('Verified Biodatas', 'सत्यापित बायोडाटा')}
+            </p>
+            <p className="text-[10px] text-amber-200/60 mt-0.5">
+              {t('Groom & Bride Directory', 'वर-वधु परिचय')}
+            </p>
           </div>
 
           <div className="bg-white/5 backdrop-blur-xs rounded-xl p-3 sm:p-4 border border-amber-400/20 text-center">
             <p className="text-xl sm:text-2xl font-serif font-bold text-amber-300">28</p>
-            <p className="text-[11px] sm:text-xs text-stone-300 font-medium mt-0.5">Gotras Indexed</p>
-            <p className="text-[10px] text-amber-200/60 mt-0.5">गोत्र वर्गीकरण</p>
+            <p className="text-[11px] sm:text-xs text-stone-300 font-medium mt-0.5">
+              {t('Gotras Indexed', 'सूचीबद्ध गोत्र')}
+            </p>
+            <p className="text-[10px] text-amber-200/60 mt-0.5">
+              {t('Gotra Classification', 'गोत्र वर्गीकरण')}
+            </p>
           </div>
 
           <div className="bg-white/5 backdrop-blur-xs rounded-xl p-3 sm:p-4 border border-amber-400/20 text-center">
             <p className="text-xl sm:text-2xl font-serif font-bold text-amber-300">120+</p>
-            <p className="text-[11px] sm:text-xs text-stone-300 font-medium mt-0.5">Samaj Businesses</p>
-            <p className="text-[10px] text-amber-200/60 mt-0.5">व्यापार निर्देशिका</p>
+            <p className="text-[11px] sm:text-xs text-stone-300 font-medium mt-0.5">
+              {t('Samaj Businesses', 'समाज व्यापार')}
+            </p>
+            <p className="text-[10px] text-amber-200/60 mt-0.5">
+              {t('Business Directory', 'व्यापार निर्देशिका')}
+            </p>
           </div>
 
           <div className="bg-white/5 backdrop-blur-xs rounded-xl p-3 sm:p-4 border border-amber-400/20 text-center">
             <p className="text-xl sm:text-2xl font-serif font-bold text-amber-300">100%</p>
-            <p className="text-[11px] sm:text-xs text-stone-300 font-medium mt-0.5">Family Verified</p>
-            <p className="text-[10px] text-amber-200/60 mt-0.5">सत्यापित संपर्क</p>
+            <p className="text-[11px] sm:text-xs text-stone-300 font-medium mt-0.5">
+              {t('Family Verified', 'परिवार सत्यापित')}
+            </p>
+            <p className="text-[10px] text-amber-200/60 mt-0.5">
+              {t('Trusted Contacts', 'सत्यापित संपर्क')}
+            </p>
           </div>
         </div>
       </div>
     </div>
   );
 };
-

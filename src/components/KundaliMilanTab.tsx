@@ -9,6 +9,7 @@ import {
   RASHIS, NAKSHATRAS, performKundaliMilan, inferRashiIndex, 
   KundaliMilanReport 
 } from '../utils/kundaliMilan';
+import { useLanguage } from '../context/LanguageContext';
 
 interface KundaliMilanTabProps {
   profiles: MatrimonyProfile[];
@@ -23,6 +24,7 @@ export const KundaliMilanTab: React.FC<KundaliMilanTabProps> = ({
   preselectedBoyId,
   preselectedGirlId
 }) => {
+  const { lang, t } = useLanguage();
   const [matchMode, setMatchMode] = useState<'samaj' | 'custom'>('samaj');
 
   // Grooms & Brides from Samaj Profiles
@@ -41,7 +43,7 @@ export const KundaliMilanTab: React.FC<KundaliMilanTabProps> = ({
   });
 
   // Custom Form State
-  const [customBoyName, setCustomBoyName] = useState('Groom Candidate');
+  const [customBoyName, setCustomBoyName] = useState('');
   const [customBoyDob, setCustomBoyDob] = useState('1996-05-15');
   const [customBoyTime, setCustomBoyTime] = useState('10:30');
   const [customBoyPlace, setCustomBoyPlace] = useState('Indore');
@@ -49,15 +51,13 @@ export const KundaliMilanTab: React.FC<KundaliMilanTabProps> = ({
   const [customBoyNakshatra, setCustomBoyNakshatra] = useState<number>(0); // Ashwini
   const [customBoyManglik, setCustomBoyManglik] = useState(false);
 
-  const [customGirlName, setCustomGirlName] = useState('Bride Candidate');
+  const [customGirlName, setCustomGirlName] = useState('');
   const [customGirlDob, setCustomGirlDob] = useState('1998-08-20');
   const [customGirlTime, setCustomGirlTime] = useState('14:15');
   const [customGirlPlace, setCustomGirlPlace] = useState('Nanded');
   const [customGirlRashi, setCustomGirlRashi] = useState<number>(4); // Leo
   const [customGirlNakshatra, setCustomGirlNakshatra] = useState<number>(9); // Magha
   const [customGirlManglik, setCustomGirlManglik] = useState(false);
-
-  const [copiedShare, setCopiedShare] = useState(false);
 
   // Sync preselected candidates if provided
   useEffect(() => {
@@ -77,11 +77,9 @@ export const KundaliMilanTab: React.FC<KundaliMilanTabProps> = ({
   // Compute Report
   const report: KundaliMilanReport = useMemo(() => {
     if (matchMode === 'samaj' && activeGroom && activeBride) {
-      // Infer Rashi from profile text or deterministic hash from name
       const boyRashiIdx = inferRashiIndex(activeGroom.about || activeGroom.name);
       const girlRashiIdx = inferRashiIndex(activeBride.about || activeBride.name);
 
-      // Select suitable nakshatra aligned with Rashi
       const boyNakshatras = NAKSHATRAS.filter(n => n.rashiIndex === boyRashiIdx);
       const girlNakshatras = NAKSHATRAS.filter(n => n.rashiIndex === girlRashiIdx);
 
@@ -103,8 +101,8 @@ export const KundaliMilanTab: React.FC<KundaliMilanTabProps> = ({
       );
     } else {
       return performKundaliMilan(
-        customBoyName || 'Groom Candidate',
-        customGirlName || 'Bride Candidate',
+        customBoyName.trim() || t('Groom Candidate', 'वर (प्रत्याशी)'),
+        customGirlName.trim() || t('Bride Candidate', 'वधू (प्रत्याशी)'),
         customBoyRashi,
         customGirlRashi,
         customBoyNakshatra,
@@ -124,11 +122,38 @@ export const KundaliMilanTab: React.FC<KundaliMilanTabProps> = ({
     customBoyNakshatra, 
     customGirlNakshatra, 
     customBoyManglik, 
-    customGirlManglik
+    customGirlManglik,
+    lang
   ]);
 
   const handleShareWhatsApp = () => {
-    const text = `🚩 *Vedic Kundali Milan Report* 🚩
+    const text = lang === 'hi'
+      ? `🚩 *वैदिक कुंडली मिलान रिपोर्ट* 🚩
+*राठौर रिश्ते मैट्रिमोनियल नेटवर्क*
+
+🤵 *वर:* ${report.boyName} (${report.boyRashi.hindiName})
+👰 *वधू:* ${report.girlName} (${report.girlRashi.hindiName})
+
+✨ *कुल गुण मिलान:* *${report.totalGunas} / 36 गुण* (${report.percentage}%)
+🏆 *परिणाम:* ${report.verdict.hindiTitle}
+📜 *श्रेणी:* ${report.verdict.grade}
+
+📊 *अष्टकूट गुण विवरण:*
+• वर्ण: ${report.kootas.varna.obtainedPoints}/1
+• वश्य: ${report.kootas.vashya.obtainedPoints}/2
+• तारा: ${report.kootas.tara.obtainedPoints}/3
+• योनि: ${report.kootas.yoni.obtainedPoints}/4
+• ग्रह मैत्री: ${report.kootas.grahaMaitri.obtainedPoints}/5
+• गण: ${report.kootas.gana.obtainedPoints}/6
+• भकूट: ${report.kootas.bhakoot.obtainedPoints}/7
+• नाड़ी: ${report.kootas.nadi.obtainedPoints}/8
+
+${report.doshaSummary.nadiDosha ? '⚠️ नाड़ी दोष उपस्थित' : '✅ नाड़ी अनुकूलता: उत्तम'}
+${report.doshaSummary.bhakootDosha ? '⚠️ भकूट दोष उपस्थित' : '✅ भकूट अनुकूलता: शुभ'}
+${report.doshaSummary.manglikCheck.isCompatible ? '✅ मांगलिक मिलान: अनुकूल' : 'ℹ️ मांगलिक जाँच: ज्योतिषी परामर्श लें'}
+
+🌐 *राठौर रिश्ते पोर्टल पर लाइव कुंडली मिलान एवं सत्यापित बायोडाटा देखें*`
+      : `🚩 *Vedic Kundali Milan Report* 🚩
 *Rathore Rishtey Matrimonial Network*
 
 🤵 *Groom:* ${report.boyName} (${report.boyRashi.name})
@@ -170,13 +195,16 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
           <div className="space-y-2 text-center md:text-left">
             <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-amber-400/10 border border-amber-400/30 text-amber-300 text-xs font-semibold">
               <Sparkles className="w-3.5 h-3.5" />
-              <span>Authentic Vedic Ashtakoot 36-Guna Matching</span>
+              <span>{t('Authentic Vedic Ashtakoot 36-Guna Matching', 'प्रामाणिक वैदिक अष्टकूट 36-गुण मिलान')}</span>
             </div>
             <h2 className="text-2xl sm:text-3xl font-serif font-bold text-amber-50">
-              Vedic Kundali Milan
+              {t('Vedic Kundali Milan', 'वैदिक कुंडली मिलान (गुण मिलान)')}
             </h2>
             <p className="text-xs sm:text-sm text-stone-300 max-w-xl font-light leading-relaxed">
-              Calculate authentic 36-Guna matching across all 8 Vedic Kootas (Varna, Vashya, Tara, Yoni, Graha Maitri, Gana, Bhakoot, Nadi) with Manglik Dosha analysis.
+              {t(
+                'Calculate authentic 36-Guna matching across all 8 Vedic Kootas (Varna, Vashya, Tara, Yoni, Graha Maitri, Gana, Bhakoot, Nadi) with Manglik Dosha analysis.',
+                'सभी 8 वैदिक कूटों (वर्ण, वश्य, तारा, योनि, ग्रह मैत्री, गण, भकूट, नाड़ी) के साथ प्रामाणिक 36-गुण मिलान और मांगलिक दोष विश्लेषण की तुरंत गणना करें।'
+              )}
             </p>
           </div>
 
@@ -184,10 +212,10 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
           <div className="flex flex-col items-center md:items-end gap-1.5 shrink-0">
             <div className="bg-amber-400/15 border border-amber-400/40 text-amber-200 px-4 py-2 rounded-2xl text-xs flex items-center gap-2 shadow-sm font-serif">
               <Sparkles className="w-4 h-4 text-amber-300" />
-              <span>100% Authentic Vedic Methodology</span>
+              <span>{t('100% Authentic Vedic Methodology', '100% प्रामाणिक वैदिक पद्धति')}</span>
             </div>
             <span className="text-[10px] text-amber-300/70 font-mono">
-              Sage Parashara Ashtakoot
+              {t('Sage Parashara Ashtakoot', 'महर्षि पराशर अष्टकूट')}
             </span>
           </div>
         </div>
@@ -205,7 +233,7 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
             }`}
           >
             <Users className="w-4 h-4" />
-            <span>Select from Samaj Profiles</span>
+            <span>{t('Select from Samaj Profiles', 'समाज प्रोफ़ाइल से चुनें')}</span>
           </button>
           <button
             onClick={() => setMatchMode('custom')}
@@ -216,7 +244,7 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
             }`}
           >
             <Compass className="w-4 h-4" />
-            <span>Enter Custom Birth Details</span>
+            <span>{t('Enter Custom Birth Details', 'जन्म विवरण स्वयं दर्ज करें')}</span>
           </button>
         </div>
       </div>
@@ -229,9 +257,11 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
             <div className="flex items-center justify-between pb-2 border-b border-stone-100">
               <h3 className="font-serif font-bold text-stone-900 text-sm flex items-center gap-2">
                 <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-800 text-xs font-bold flex items-center justify-center">1</span>
-                <span>Select Groom</span>
+                <span>{t('Select Groom', 'वर चुनें')}</span>
               </h3>
-              <span className="text-[11px] font-semibold text-stone-500">{grooms.length} Verified Grooms</span>
+              <span className="text-[11px] font-semibold text-stone-500">
+                {grooms.length} {t('Verified Grooms', 'सत्यापित वर')}
+              </span>
             </div>
 
             <select
@@ -241,7 +271,7 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
             >
               {grooms.map(g => (
                 <option key={g.id} value={g.id}>
-                  {g.name} ({g.age} Yrs · {g.city} · Gotra: {g.gotra})
+                  {g.name} ({g.age} {t('Yrs', 'वर्ष')} · {g.city} · {t('Gotra', 'गोत्र')}: {g.gotra})
                 </option>
               ))}
             </select>
@@ -255,9 +285,11 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
                 />
                 <div className="min-w-0 flex-1 text-xs space-y-0.5">
                   <p className="font-bold text-stone-900 text-sm truncate">{activeGroom.name}</p>
-                  <p className="text-stone-600">{activeGroom.age} Yrs · {activeGroom.height || "5' 6\""} · {activeGroom.city}</p>
-                  <p className="text-amber-900 font-semibold text-[11px]">Gotra: {activeGroom.gotra}</p>
-                  <p className="text-stone-500 text-[11px]">Rashi: <strong className="text-stone-800">{report.boyRashi.name}</strong></p>
+                  <p className="text-stone-600">{activeGroom.age} {t('Yrs', 'वर्ष')} · {activeGroom.height || "5' 6\""} · {activeGroom.city}</p>
+                  <p className="text-amber-900 font-semibold text-[11px]">{t('Gotra', 'गोत्र')}: {activeGroom.gotra}</p>
+                  <p className="text-stone-500 text-[11px]">
+                    {t('Rashi', 'राशि')}: <strong className="text-stone-800">{lang === 'hi' ? report.boyRashi.hindiName : report.boyRashi.name}</strong>
+                  </p>
                 </div>
               </div>
             )}
@@ -268,9 +300,11 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
             <div className="flex items-center justify-between pb-2 border-b border-stone-100">
               <h3 className="font-serif font-bold text-stone-900 text-sm flex items-center gap-2">
                 <span className="w-6 h-6 rounded-full bg-rose-100 text-rose-800 text-xs font-bold flex items-center justify-center">2</span>
-                <span>Select Bride</span>
+                <span>{t('Select Bride', 'वधू चुनें')}</span>
               </h3>
-              <span className="text-[11px] font-semibold text-stone-500">{brides.length} Verified Brides</span>
+              <span className="text-[11px] font-semibold text-stone-500">
+                {brides.length} {t('Verified Brides', 'सत्यापित वधुएं')}
+              </span>
             </div>
 
             <select
@@ -280,7 +314,7 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
             >
               {brides.map(b => (
                 <option key={b.id} value={b.id}>
-                  {b.name} ({b.age} Yrs · {b.city} · Gotra: {b.gotra})
+                  {b.name} ({b.age} {t('Yrs', 'वर्ष')} · {b.city} · {t('Gotra', 'गोत्र')}: {b.gotra})
                 </option>
               ))}
             </select>
@@ -294,9 +328,11 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
                 />
                 <div className="min-w-0 flex-1 text-xs space-y-0.5">
                   <p className="font-bold text-stone-900 text-sm truncate">{activeBride.name}</p>
-                  <p className="text-stone-600">{activeBride.age} Yrs · {activeBride.height || "5' 5\""} · {activeBride.city}</p>
-                  <p className="text-amber-900 font-semibold text-[11px]">Gotra: {activeBride.gotra}</p>
-                  <p className="text-stone-500 text-[11px]">Rashi: <strong className="text-stone-800">{report.girlRashi.name}</strong></p>
+                  <p className="text-stone-600">{activeBride.age} {t('Yrs', 'वर्ष')} · {activeBride.height || "5' 5\""} · {activeBride.city}</p>
+                  <p className="text-amber-900 font-semibold text-[11px]">{t('Gotra', 'गोत्र')}: {activeBride.gotra}</p>
+                  <p className="text-stone-500 text-[11px]">
+                    {t('Rashi', 'राशि')}: <strong className="text-stone-800">{lang === 'hi' ? report.girlRashi.hindiName : report.girlRashi.name}</strong>
+                  </p>
                 </div>
               </div>
             )}
@@ -309,23 +345,23 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
           <div className="space-y-3">
             <h3 className="font-serif font-bold text-stone-900 text-sm pb-2 border-b border-stone-100 flex items-center gap-2">
               <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-800 flex items-center justify-center font-bold text-xs">1</span>
-              <span>Groom Details</span>
+              <span>{t('Groom Details', 'वर का विवरण')}</span>
             </h3>
 
             <div>
-              <label className="font-bold text-stone-700 block mb-1">Groom Name</label>
+              <label className="font-bold text-stone-700 block mb-1">{t('Groom Name', 'वर का नाम')}</label>
               <input
                 type="text"
                 value={customBoyName}
                 onChange={(e) => setCustomBoyName(e.target.value)}
-                placeholder="Enter boy name"
+                placeholder={t('Enter groom name', 'वर का नाम दर्ज करें')}
                 className="w-full p-2.5 rounded-xl border border-stone-300 bg-stone-50"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="font-bold text-stone-700 block mb-1">Date of Birth</label>
+                <label className="font-bold text-stone-700 block mb-1">{t('Date of Birth', 'जन्म तिथि')}</label>
                 <input
                   type="date"
                   value={customBoyDob}
@@ -334,7 +370,7 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
                 />
               </div>
               <div>
-                <label className="font-bold text-stone-700 block mb-1">Birth Time</label>
+                <label className="font-bold text-stone-700 block mb-1">{t('Birth Time', 'जन्म समय')}</label>
                 <input
                   type="time"
                   value={customBoyTime}
@@ -346,26 +382,28 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="font-bold text-stone-700 block mb-1">Rashi (Zodiac)</label>
+                <label className="font-bold text-stone-700 block mb-1">{t('Rashi (Zodiac)', 'राशि')}</label>
                 <select
                   value={customBoyRashi}
                   onChange={(e) => setCustomBoyRashi(Number(e.target.value))}
                   className="w-full p-2.5 rounded-xl border border-stone-300 bg-stone-50 font-medium"
                 >
                   {RASHIS.map(r => (
-                    <option key={r.index} value={r.index}>{r.name} (Lord: {r.lord})</option>
+                    <option key={r.index} value={r.index}>
+                      {lang === 'hi' ? r.hindiName : `${r.name} (Lord: ${r.lord})`}
+                    </option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className="font-bold text-stone-700 block mb-1">Nakshatra</label>
+                <label className="font-bold text-stone-700 block mb-1">{t('Nakshatra', 'नक्षत्र')}</label>
                 <select
                   value={customBoyNakshatra}
                   onChange={(e) => setCustomBoyNakshatra(Number(e.target.value))}
                   className="w-full p-2.5 rounded-xl border border-stone-300 bg-stone-50 font-medium"
                 >
                   {NAKSHATRAS.map(n => (
-                    <option key={n.index} value={n.index}>{n.name}</option>
+                    <option key={n.index} value={n.index}>{lang === 'hi' ? n.hindiName : n.name}</option>
                   ))}
                 </select>
               </div>
@@ -378,7 +416,7 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
                 onChange={(e) => setCustomBoyManglik(e.target.checked)}
                 className="rounded border-stone-300 text-amber-700 focus:ring-amber-500"
               />
-              <span className="font-bold text-stone-800">Boy is Manglik (Kuja Dosha)</span>
+              <span className="font-bold text-stone-800">{t('Boy is Manglik (Kuja Dosha)', 'वर मांगलिक है (मंगल दोष)')}</span>
             </label>
           </div>
 
@@ -386,23 +424,23 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
           <div className="space-y-3">
             <h3 className="font-serif font-bold text-stone-900 text-sm pb-2 border-b border-stone-100 flex items-center gap-2">
               <span className="w-5 h-5 rounded-full bg-rose-100 text-rose-800 flex items-center justify-center font-bold text-xs">2</span>
-              <span>Bride Details</span>
+              <span>{t('Bride Details', 'वधू का विवरण')}</span>
             </h3>
 
             <div>
-              <label className="font-bold text-stone-700 block mb-1">Bride Name</label>
+              <label className="font-bold text-stone-700 block mb-1">{t('Bride Name', 'वधू का नाम')}</label>
               <input
                 type="text"
                 value={customGirlName}
                 onChange={(e) => setCustomGirlName(e.target.value)}
-                placeholder="Enter girl name"
+                placeholder={t('Enter bride name', 'वधू का नाम दर्ज करें')}
                 className="w-full p-2.5 rounded-xl border border-stone-300 bg-stone-50"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="font-bold text-stone-700 block mb-1">Date of Birth</label>
+                <label className="font-bold text-stone-700 block mb-1">{t('Date of Birth', 'जन्म तिथि')}</label>
                 <input
                   type="date"
                   value={customGirlDob}
@@ -411,7 +449,7 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
                 />
               </div>
               <div>
-                <label className="font-bold text-stone-700 block mb-1">Birth Time</label>
+                <label className="font-bold text-stone-700 block mb-1">{t('Birth Time', 'जन्म समय')}</label>
                 <input
                   type="time"
                   value={customGirlTime}
@@ -423,26 +461,28 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
 
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="font-bold text-stone-700 block mb-1">Rashi (Zodiac)</label>
+                <label className="font-bold text-stone-700 block mb-1">{t('Rashi (Zodiac)', 'राशि')}</label>
                 <select
                   value={customGirlRashi}
                   onChange={(e) => setCustomGirlRashi(Number(e.target.value))}
                   className="w-full p-2.5 rounded-xl border border-stone-300 bg-stone-50 font-medium"
                 >
                   {RASHIS.map(r => (
-                    <option key={r.index} value={r.index}>{r.name} (Lord: {r.lord})</option>
+                    <option key={r.index} value={r.index}>
+                      {lang === 'hi' ? r.hindiName : `${r.name} (Lord: ${r.lord})`}
+                    </option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className="font-bold text-stone-700 block mb-1">Nakshatra</label>
+                <label className="font-bold text-stone-700 block mb-1">{t('Nakshatra', 'नक्षत्र')}</label>
                 <select
                   value={customGirlNakshatra}
                   onChange={(e) => setCustomGirlNakshatra(Number(e.target.value))}
                   className="w-full p-2.5 rounded-xl border border-stone-300 bg-stone-50 font-medium"
                 >
                   {NAKSHATRAS.map(n => (
-                    <option key={n.index} value={n.index}>{n.name}</option>
+                    <option key={n.index} value={n.index}>{lang === 'hi' ? n.hindiName : n.name}</option>
                   ))}
                 </select>
               </div>
@@ -455,7 +495,7 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
                 onChange={(e) => setCustomGirlManglik(e.target.checked)}
                 className="rounded border-stone-300 text-amber-700 focus:ring-amber-500"
               />
-              <span className="font-bold text-stone-800">Girl is Manglik (Kuja Dosha)</span>
+              <span className="font-bold text-stone-800">{t('Girl is Manglik (Kuja Dosha)', 'वधू मांगलिक है (मंगल दोष)')}</span>
             </label>
           </div>
         </div>
@@ -466,13 +506,13 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
         {/* Certificate Top Banner */}
         <div className="bg-gradient-to-r from-[#4c0d1b] via-[#631024] to-[#4c0d1b] p-6 sm:p-8 text-white text-center border-b border-amber-400/40 relative">
           <p className="text-amber-300 font-serif tracking-widest text-xs font-semibold mb-1">
-            Shubh Vivah • Vedic Ashtakoot 36-Guna Matching Report
+            {t('Shubh Vivah • Vedic Ashtakoot 36-Guna Matching Report', 'शुभ विवाह • वैदिक अष्टकूट 36-गुण मिलान रिपोर्ट')}
           </p>
           <h3 className="text-2xl sm:text-3xl font-serif font-bold text-amber-100">
             {report.boyName} & {report.girlName}
           </h3>
           <p className="text-xs text-amber-200/90 mt-1 font-medium">
-            Groom Rashi: {report.boyRashi.name} ({report.boyNakshatra.name}) · Bride Rashi: {report.girlRashi.name} ({report.girlNakshatra.name})
+            {t('Groom Rashi', 'वर राशि')}: {lang === 'hi' ? report.boyRashi.hindiName : report.boyRashi.name} ({lang === 'hi' ? report.boyNakshatra.hindiName : report.boyNakshatra.name}) · {t('Bride Rashi', 'वधू राशि')}: {lang === 'hi' ? report.girlRashi.hindiName : report.girlRashi.name} ({lang === 'hi' ? report.girlNakshatra.hindiName : report.girlNakshatra.name})
           </p>
 
           {/* Large Score Indicator */}
@@ -482,23 +522,23 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
                 {report.totalGunas}
               </span>
               <span className="text-xs uppercase tracking-wider text-stone-300 font-semibold mt-1">
-                out of 36 Gunas
+                {t('out of 36 Gunas', '36 गुणों में से')}
               </span>
               <span className="text-[11px] text-amber-200 font-bold mt-0.5">
-                {report.percentage}% Match
+                {report.percentage}% {t('Match', 'मिलान')}
               </span>
             </div>
 
             <div className="text-center sm:text-left max-w-md space-y-1.5">
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 text-xs font-bold">
                 <Award className="w-3.5 h-3.5" />
-                <span>{report.verdict.grade}: {report.verdict.title}</span>
+                <span>{report.verdict.grade}: {lang === 'hi' ? report.verdict.hindiTitle : report.verdict.title}</span>
               </div>
               <p className="font-serif text-amber-50 font-bold text-base leading-snug">
-                {report.verdict.title}
+                {lang === 'hi' ? report.verdict.hindiTitle : report.verdict.title}
               </p>
               <p className="text-xs text-stone-300 leading-relaxed font-light">
-                {report.verdict.recommendation}
+                {lang === 'hi' ? report.verdict.hindiRecommendation : report.verdict.recommendation}
               </p>
             </div>
           </div>
@@ -507,8 +547,10 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
         {/* Action Toolbar */}
         <div className="bg-[#FAF8F5] px-6 py-3.5 border-b border-stone-200 flex flex-wrap items-center justify-between gap-3 text-xs">
           <div className="flex items-center gap-2 text-stone-700">
-            <span className="font-bold text-stone-900">Scorecard Actions:</span>
-            <span className="text-stone-500 hidden sm:inline">Share with families or print authentic report</span>
+            <span className="font-bold text-stone-900">{t('Scorecard Actions:', 'रिपोर्ट विकल्प:')}</span>
+            <span className="text-stone-500 hidden sm:inline">
+              {t('Share with families or print authentic report', 'परिवारजनों के साथ साझा करें या प्रमाणपत्र प्रिंट करें')}
+            </span>
           </div>
 
           <div className="flex items-center gap-2">
@@ -517,14 +559,14 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
               className="bg-emerald-700 hover:bg-emerald-800 text-white font-semibold px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
             >
               <Share2 className="w-3.5 h-3.5" />
-              <span>Share on WhatsApp</span>
+              <span>{t('Share on WhatsApp', 'व्हाट्सएप पर साझा करें')}</span>
             </button>
             <button
               onClick={handlePrint}
               className="bg-stone-200 hover:bg-stone-300 text-stone-800 font-semibold px-3 py-2 rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
             >
               <Printer className="w-3.5 h-3.5" />
-              <span>Print Certificate</span>
+              <span>{t('Print Certificate', 'प्रिंट करें')}</span>
             </button>
           </div>
         </div>
@@ -534,10 +576,13 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
           <div>
             <h4 className="text-base font-serif font-bold text-stone-900 mb-1 flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-amber-700" />
-              <span>Detailed Ashtakoot (8 Kootas) Analysis</span>
+              <span>{t('Detailed Ashtakoot (8 Kootas) Analysis', 'विस्तृत अष्टकूट (8 कूट) विश्लेषण')}</span>
             </h4>
             <p className="text-xs text-stone-500">
-              Each Koota analyzes an essential pillar of marital compatibility according to ancient Vedic scriptures.
+              {t(
+                'Each Koota analyzes an essential pillar of marital compatibility according to ancient Vedic scriptures.',
+                'प्रत्येक कूट प्राचीन वैदिक शास्त्रों के अनुसार वैवाहिक अनुकूलता के एक प्रमुख आधार का विश्लेषण करता है।'
+              )}
             </p>
           </div>
 
@@ -558,11 +603,11 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
                   }`}
                 >
                   <div>
-                    <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex items-center justify-between mb-1.5 gap-2">
                       <span className="font-bold text-stone-900 text-sm font-serif">
-                        {koota.name}
+                        {lang === 'hi' ? koota.hindiName : koota.name}
                       </span>
-                      <span className={`font-mono font-bold px-2 py-0.5 rounded-lg text-xs ${
+                      <span className={`font-mono font-bold px-2 py-0.5 rounded-lg text-xs shrink-0 ${
                         isFull 
                           ? 'bg-emerald-200/70 text-emerald-900' 
                           : isZero 
@@ -574,22 +619,22 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
                     </div>
 
                     <p className="text-stone-600 text-[11px] leading-relaxed">
-                      {koota.description}
+                      {lang === 'hi' ? koota.hindiDescription : koota.description}
                     </p>
                   </div>
 
                   <div className="mt-3 pt-2 border-t border-stone-200/60 flex items-center justify-between text-[10px] text-stone-500">
-                    <span>Vedic Weight: {koota.maxPoints} Gunas</span>
+                    <span>{t('Vedic Weight:', 'अधिकतम अंक:')} {koota.maxPoints} {t('Gunas', 'गुण')}</span>
                     {isFull ? (
                       <span className="text-emerald-700 font-bold flex items-center gap-0.5">
-                        <CheckCircle2 className="w-3 h-3" /> Full Match
+                        <CheckCircle2 className="w-3 h-3" /> {t('Full Match', 'पूर्ण मिलान')}
                       </span>
                     ) : isZero ? (
                       <span className="text-rose-700 font-bold flex items-center gap-0.5">
-                        <AlertTriangle className="w-3 h-3" /> Dosha / 0 Pts
+                        <AlertTriangle className="w-3 h-3" /> {t('Dosha / 0 Pts', 'दोष / 0 अंक')}
                       </span>
                     ) : (
-                      <span className="text-amber-800 font-bold">Partial Match</span>
+                      <span className="text-amber-800 font-bold">{t('Partial Match', 'आंशिक मिलान')}</span>
                     )}
                   </div>
                 </div>
@@ -601,40 +646,46 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
           <div className="bg-[#FAF8F5] p-5 sm:p-6 rounded-2xl border border-stone-200 space-y-4 text-xs">
             <h5 className="font-serif font-bold text-sm text-stone-900 flex items-center gap-2">
               <ShieldCheck className="w-4 h-4 text-amber-800" />
-              <span>Dosha Examination & Astrological Safeguards</span>
+              <span>{t('Dosha Examination & Astrological Safeguards', 'दोष परीक्षण एवं ज्योतिषीय उपाय')}</span>
             </h5>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {/* Nadi Dosha */}
               <div className="bg-white p-4 rounded-xl border border-stone-200 space-y-1">
-                <span className="text-[10px] font-bold uppercase text-stone-400">1. Nadi Balance:</span>
+                <span className="text-[10px] font-bold uppercase text-stone-400">{t('1. Nadi Balance:', '1. नाड़ी संतुलन:')}</span>
                 <p className="font-bold text-stone-800 text-xs">
-                  {report.doshaSummary.nadiDosha ? '⚠️ Nadi Dosha Present' : '✅ Nadi Compatible (No Dosha)'}
+                  {report.doshaSummary.nadiDosha 
+                    ? t('⚠️ Nadi Dosha Present', '⚠️ नाड़ी दोष उपस्थित') 
+                    : t('✅ Nadi Compatible (No Dosha)', '✅ नाड़ी अनुकूल (कोई दोष नहीं)')}
                 </p>
                 <p className="text-[11px] text-stone-600 leading-relaxed">
-                  {report.kootas.nadi.description}
+                  {lang === 'hi' ? report.kootas.nadi.hindiDescription : report.kootas.nadi.description}
                 </p>
               </div>
 
               {/* Bhakoot Dosha */}
               <div className="bg-white p-4 rounded-xl border border-stone-200 space-y-1">
-                <span className="text-[10px] font-bold uppercase text-stone-400">2. Bhakoot Alignment:</span>
+                <span className="text-[10px] font-bold uppercase text-stone-400">{t('2. Bhakoot Alignment:', '2. भकूट मिलान:')}</span>
                 <p className="font-bold text-stone-800 text-xs">
-                  {report.doshaSummary.bhakootDosha ? '⚠️ Bhakoot Dosha Present' : '✅ Bhakoot Auspicious (No Dosha)'}
+                  {report.doshaSummary.bhakootDosha 
+                    ? t('⚠️ Bhakoot Dosha Present', '⚠️ भकूट दोष उपस्थित') 
+                    : t('✅ Bhakoot Auspicious (No Dosha)', '✅ भकूट शुभ (कोई दोष नहीं)')}
                 </p>
                 <p className="text-[11px] text-stone-600 leading-relaxed">
-                  {report.kootas.bhakoot.description}
+                  {lang === 'hi' ? report.kootas.bhakoot.hindiDescription : report.kootas.bhakoot.description}
                 </p>
               </div>
 
               {/* Manglik Check */}
               <div className="bg-white p-4 rounded-xl border border-stone-200 space-y-1">
-                <span className="text-[10px] font-bold uppercase text-stone-400">3. Manglik (Kuja) Analysis:</span>
+                <span className="text-[10px] font-bold uppercase text-stone-400">{t('3. Manglik (Kuja) Analysis:', '3. मांगलिक (मंगल) विश्लेषण:')}</span>
                 <p className="font-bold text-stone-800 text-xs">
-                  {report.doshaSummary.manglikCheck.isCompatible ? '✅ Auspicious Manglik Harmony' : 'ℹ️ Manglik Consultation Required'}
+                  {report.doshaSummary.manglikCheck.isCompatible 
+                    ? t('✅ Auspicious Manglik Harmony', '✅ शुभ मांगलिक सामंजस्य') 
+                    : t('ℹ️ Manglik Consultation Required', 'ℹ️ ज्योतिषीय परामर्श आवश्यक')}
                 </p>
                 <p className="text-[11px] text-stone-600 leading-relaxed">
-                  {report.doshaSummary.manglikCheck.status}
+                  {lang === 'hi' ? report.doshaSummary.manglikCheck.hindiStatus : report.doshaSummary.manglikCheck.status}
                 </p>
               </div>
             </div>
@@ -642,10 +693,10 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
             {/* Classical astrological attribution */}
             <div className="pt-3 border-t border-stone-200 flex flex-col sm:flex-row justify-between items-center text-[11px] text-stone-500 gap-2">
               <span>
-                Based on classical Sage Parashara Vedic Jyotish Ashtakoot guidelines.
+                {t('Based on classical Sage Parashara Vedic Jyotish Ashtakoot guidelines.', 'प्राचीन महर्षि पराशर वैदिक ज्योतिष अष्टकूट नियमों पर आधारित।')}
               </span>
               <span className="text-stone-400 font-medium">
-                Rathore Rishtey Astrological Consultation
+                {t('Rathore Rishtey Astrological Consultation', 'राठौर रिश्ते ज्योतिष परामर्श')}
               </span>
             </div>
           </div>
@@ -654,3 +705,4 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
     </div>
   );
 };
+

@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
-import { BookOpen, FileText, Search, ChevronLeft, ChevronRight, CheckCircle2, Download, Printer } from 'lucide-react';
+import { BookOpen, FileText, Search, ChevronLeft, ChevronRight, CheckCircle2 } from 'lucide-react';
 import { TabType } from '../types';
 import { BOOKLET_PAGES } from '../data/mockData';
+import { useLanguage } from '../context/LanguageContext';
 
 interface BookletTabProps {
   onNavigateTab: (tab: TabType) => void;
 }
 
 export const BookletTab: React.FC<BookletTabProps> = ({ onNavigateTab }) => {
+  const { t } = useLanguage();
   const [currentPage, setCurrentPage] = useState(0);
   const [downloading, setDownloading] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
@@ -29,13 +31,16 @@ export const BookletTab: React.FC<BookletTabProps> = ({ onNavigateTab }) => {
       <div className="bg-white rounded-3xl shadow-sm border border-stone-200/90 p-6 md:p-8 space-y-6">
         <div className="text-center max-w-2xl mx-auto space-y-2">
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-400/10 border border-amber-400/30 text-amber-900 text-xs font-semibold">
-            Interactive Community Patrika
+            {t('Interactive Community Patrika', 'इंटरैक्टिव समाज पत्रिका')}
           </span>
           <h2 className="text-3xl font-serif font-bold text-stone-900">
-            Annual Rathore Samaj E-Booklet
+            {t('Annual Rathore Samaj E-Booklet', 'वार्षिक राठौर समाज ई-पुस्तिका')}
           </h2>
           <p className="text-xs sm:text-sm text-stone-500 font-light">
-            Flip through the digitized pages of our community directory, just like the traditional printed book handed out by samiti adhyaksh.
+            {t(
+              'Flip through the digitized pages of our community directory, just like the traditional printed book handed out by samiti adhyaksh.',
+              'हमारी समाज निर्देशिका के डिजिटल पृष्ठों को ठीक वैसे ही पढ़ें जैसे समिति अध्यक्ष द्वारा वितरित पारंपरिक मुद्रित पुस्तक।'
+            )}
           </p>
         </div>
 
@@ -46,10 +51,13 @@ export const BookletTab: React.FC<BookletTabProps> = ({ onNavigateTab }) => {
           </div>
           <div className="space-y-1">
             <h4 className="font-serif font-bold text-lg text-amber-100">
-              Rathore Samaj Patrika 2026 (Digital Edition)
+              {t('Rathore Samaj Patrika 2026 (Digital Edition)', 'राठौर समाज पत्रिका 2026 (डिजिटल संस्करण)')}
             </h4>
             <p className="text-xs text-stone-300 font-light">
-              Contains 450+ Matrimonial Profiles & 120 Local Business Sponsor Ads
+              {t(
+                'Contains 450+ Matrimonial Profiles & 120 Local Business Sponsor Ads',
+                '450+ वैवाहिक बायोडाटा एवं 120 स्थानीय समाज व्यापार विज्ञापन सम्मिलित'
+              )}
             </p>
           </div>
 
@@ -62,17 +70,17 @@ export const BookletTab: React.FC<BookletTabProps> = ({ onNavigateTab }) => {
               {downloading ? (
                 <>
                   <div className="w-4 h-4 border-2 border-stone-950 border-t-transparent rounded-full animate-spin" />
-                  Generating PDF (45 MB)...
+                  {t('Generating PDF (45 MB)...', 'PDF तैयार हो रही है (45 MB)...')}
                 </>
               ) : downloadSuccess ? (
                 <>
                   <CheckCircle2 className="w-4 h-4 text-emerald-800" />
-                  PDF Downloaded!
+                  {t('PDF Downloaded!', 'PDF डाउनलोड हो गई!')}
                 </>
               ) : (
                 <>
                   <FileText className="w-4 h-4" />
-                  Download Printable PDF
+                  {t('Download Printable PDF', 'प्रिंट करने योग्य PDF डाउनलोड करें')}
                 </>
               )}
             </button>
@@ -81,7 +89,7 @@ export const BookletTab: React.FC<BookletTabProps> = ({ onNavigateTab }) => {
               onClick={() => onNavigateTab('matrimony')} 
               className="bg-white/10 hover:bg-white/20 border border-amber-400/30 text-amber-200 text-xs font-semibold px-5 py-2.5 rounded-xl transition-all flex items-center gap-2 cursor-pointer"
             >
-              <Search className="w-4 h-4 text-amber-400" /> Search Digitized Records
+              <Search className="w-4 h-4 text-amber-400" /> {t('Search Digitized Records', 'डिजिटल बायोडाटा खोजें')}
             </button>
           </div>
         </div>
@@ -91,7 +99,7 @@ export const BookletTab: React.FC<BookletTabProps> = ({ onNavigateTab }) => {
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-b border-amber-200/80 pb-3">
             <div className="flex items-center gap-2">
               <span className="font-serif font-bold text-red-950 text-sm">
-                📖 Page {currentPage + 1} of {BOOKLET_PAGES.length}
+                📖 {t('Page', 'पृष्ठ')} {currentPage + 1} {t('of', '/')} {BOOKLET_PAGES.length}
               </span>
               <span className="text-[11px] bg-amber-200/70 text-amber-950 px-2 py-0.5 rounded-md font-semibold">
                 {pageData.title.split('-')[0]}
@@ -110,7 +118,7 @@ export const BookletTab: React.FC<BookletTabProps> = ({ onNavigateTab }) => {
                       : 'bg-white border border-amber-200 text-slate-700 hover:bg-amber-100'
                   }`}
                 >
-                  Pg {p.page}
+                  {t('Pg', 'पृ.')} {p.page}
                 </button>
               ))}
             </div>
@@ -148,14 +156,14 @@ export const BookletTab: React.FC<BookletTabProps> = ({ onNavigateTab }) => {
                   disabled={currentPage === 0}
                   className="p-1.5 rounded-lg border border-amber-300 disabled:opacity-40 hover:bg-amber-200/50 text-red-950 flex items-center gap-1 text-xs font-bold"
                 >
-                  <ChevronLeft className="w-4 h-4" /> Previous
+                  <ChevronLeft className="w-4 h-4" /> {t('Previous', 'पिछला')}
                 </button>
                 <button
                   onClick={() => setCurrentPage(Math.min(BOOKLET_PAGES.length - 1, currentPage + 1))}
                   disabled={currentPage === BOOKLET_PAGES.length - 1}
                   className="p-1.5 rounded-lg border border-amber-300 disabled:opacity-40 hover:bg-amber-200/50 text-red-950 flex items-center gap-1 text-xs font-bold"
                 >
-                  Next <ChevronRight className="w-4 h-4" />
+                  {t('Next', 'अगला')} <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
             </div>
@@ -165,3 +173,4 @@ export const BookletTab: React.FC<BookletTabProps> = ({ onNavigateTab }) => {
     </div>
   );
 };
+

@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
-import { Store, PlusCircle, Phone, Tag, Star, X, Sparkles, UserPlus, Heart, Share2 } from 'lucide-react';
+import { Store, PlusCircle, Phone, Tag, Star, X, Sparkles, UserPlus, Heart, Share2, AlertCircle } from 'lucide-react';
 import { BusinessAd, TabType, AuthSession } from '../types';
+import { sanitizePhoneInput, validatePhoneNumber } from '../utils/validation';
+import { useLanguage } from '../context/LanguageContext';
 
 interface BusinessTabProps {
   authSession: AuthSession | null;
@@ -15,8 +17,11 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({
   onNavigateTab,
   onAddQuickAd
 }) => {
+  const { lang, t } = useLanguage();
   const [showQuickModal, setShowQuickModal] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [modalError, setModalError] = useState<string | null>(null);
+
   const [formState, setFormState] = useState({
     title: '',
     owner: '',
@@ -28,7 +33,6 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({
     tier: 'free' as 'free' | 'featured'
   });
 
-  // Persistent Likes State (works for existing and future ads)
   const [likedAds, setLikedAds] = useState<Set<string>>(() => {
     try {
       const stored = localStorage.getItem('samaj_liked_ads');
@@ -82,22 +86,25 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({
 
   const shareAdWhatsApp = (ad: BusinessAd, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    const text = `🛍️ *Rathore Samaj Business Directory* 🛍️
-
-*${ad.title}*
-*Category:* ${ad.category}
-*Owner:* ${ad.owner} ${ad.city ? `(${ad.city})` : ''}
-${ad.tagline || ad.description ? `*About:* ${ad.tagline || ad.description}\n` : ''}${ad.offer ? `🎁 *Special Offer:* ${ad.offer}\n` : ''}${ad.address ? `📍 *Address:* ${ad.address}\n` : ''}📞 *Contact:* ${ad.phone}
-
-✨ *Connect with Rathore Samaj businesses on our community portal:*
-https://svayaa.com/
-_Powered by Svayaa.com_`;
+    const text = lang === 'hi'
+      ? `🛍️ *राठौड़ समाज व्यापार डायरेक्टरी* 🛍️\n\n*${ad.title}*\n*श्रेणी:* ${ad.category}\n*संचालक:* ${ad.owner} ${ad.city ? `(${ad.city})` : ''}\n${ad.tagline || ad.description ? `*विवरण:* ${ad.tagline || ad.description}\n` : ''}${ad.offer ? `🎁 *विशेष ऑफर:* ${ad.offer}\n` : ''}${ad.address ? `📍 *पता:* ${ad.address}\n` : ''}📞 *संपर्क:* ${ad.phone}\n\n✨ *राठौड़ समाज व्यापार डायरेक्टरी से जुड़ें:*\nhttps://svayaa.com/`
+      : `🛍️ *Rathore Samaj Business Directory* 🛍️\n\n*${ad.title}*\n*Category:* ${ad.category}\n*Owner:* ${ad.owner} ${ad.city ? `(${ad.city})` : ''}\n${ad.tagline || ad.description ? `*About:* ${ad.tagline || ad.description}\n` : ''}${ad.offer ? `🎁 *Special Offer:* ${ad.offer}\n` : ''}${ad.address ? `📍 *Address:* ${ad.address}\n` : ''}📞 *Contact:* ${ad.phone}\n\n✨ *Connect with Rathore Samaj businesses on our community portal:*\nhttps://svayaa.com/\n_Powered by Svayaa_`;
 
     const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
     window.open(url, '_blank');
   };
 
   const categories = ['all', 'Clothing & Retail', 'Hardware & Home Imprv.', 'Jewelry & Gold'];
+
+  const translateCategory = (cat: string) => {
+    switch (cat) {
+      case 'all': return t('All Businesses', 'सभी व्यापार');
+      case 'Clothing & Retail': return t('Clothing & Retail', 'वस्त्र एवं रिटेल');
+      case 'Hardware & Home Imprv.': return t('Hardware & Home Imprv.', 'हार्डवेयर व गृह निर्माण');
+      case 'Jewelry & Gold': return t('Jewelry & Gold', 'ज्वेलरी व स्वर्ण');
+      default: return cat;
+    }
+  };
 
   const filteredAds = ads.filter(ad => {
     if (selectedCategory === 'all') return true;
@@ -106,16 +113,26 @@ _Powered by Svayaa.com_`;
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formState.title || !formState.phone) return;
+    setModalError(null);
+    if (!formState.title.trim()) {
+      setModalError(t('Shop name is required.', 'दुकान का नाम आवश्यक है।'));
+      return;
+    }
+
+    const phoneCheck = validatePhoneNumber(formState.phone, true);
+    if (!phoneCheck.valid) {
+      setModalError(lang === 'hi' ? (phoneCheck.errorHi || '') : (phoneCheck.errorEn || ''));
+      return;
+    }
 
     onAddQuickAd({
-      title: formState.title,
-      owner: formState.owner || 'Samaj Business Owner',
+      title: formState.title.trim(),
+      owner: formState.owner.trim() || 'Samaj Business Owner',
       category: formState.category,
       city: 'Indore',
-      address: formState.address || 'Main City Market',
-      phone: formState.phone,
-      tagline: formState.tagline || 'Quality services & verified products for community members.',
+      address: formState.address.trim() || 'Main City Market',
+      phone: phoneCheck.cleaned,
+      tagline: formState.tagline.trim() || 'Quality services & verified products for community members.',
       offer: formState.offer,
       rating: '5.0 ★',
       isFeatured: formState.tier === 'featured',
@@ -135,12 +152,6 @@ _Powered by Svayaa.com_`;
       offer: 'Special Samaj Member Discount',
       tier: 'free'
     });
-
-    if (formState.tier === 'featured') {
-      alert("🎉 Business Ad submitted! The ₹500 Featured Top Banner badge is enabled.");
-    } else {
-      alert("🎉 Standard Business Ad published successfully to Rathore Rishtey!");
-    }
   };
 
   return (
@@ -150,13 +161,16 @@ _Powered by Svayaa.com_`;
         <div className="space-y-2 text-center md:text-left">
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-400/10 border border-amber-400/30 text-amber-300 text-xs font-semibold">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Rathore Samaj Business Network</span>
+            <span>{t('Rathore Samaj Business Network', 'राठौड़ समाज व्यापार नेटवर्क')}</span>
           </span>
           <h2 className="text-2xl sm:text-3xl font-bold font-serif text-amber-50">
-            Promote Your Business & Shop
+            {t('Promote Your Business & Shop', 'अपने व्यापार व दुकान का प्रचार करें')}
           </h2>
           <p className="text-xs sm:text-sm text-stone-300 max-w-xl font-light leading-relaxed">
-            Reach thousands of Rathore Samaj families across MP, Rajasthan, and Maharashtra. Replace outdated printed booklets with live interactive digital storefronts.
+            {t(
+              'Reach thousands of Rathore Samaj families across MP, Rajasthan, and Maharashtra. Connect directly with verified community storefronts.',
+              'मध्यप्रदेश, राजस्थान और महाराष्ट्र के हजारों राठौड़ समाज परिवारों तक पहुँचें। समाज बंधुओं की विश्वसनीय दुकानों व सेवाओं से सीधे जुड़ें।'
+            )}
           </p>
         </div>
 
@@ -167,7 +181,7 @@ _Powered by Svayaa.com_`;
               className="bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-stone-950 font-bold px-5 py-3 rounded-xl shadow-lg transition-all text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer hover:scale-102"
             >
               <PlusCircle className="w-4 h-4 text-stone-950" />
-              <span>Post Shop Advertisement</span>
+              <span>{t('Post Shop Advertisement', 'दुकान का विज्ञापन दें')}</span>
             </button>
           ) : (
             <button 
@@ -175,7 +189,7 @@ _Powered by Svayaa.com_`;
               className="bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-stone-950 font-bold px-5 py-3 rounded-xl shadow-lg transition-all text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer hover:scale-102"
             >
               <UserPlus className="w-4 h-4 text-stone-950" />
-              <span>Sign In to Post Shop Ad</span>
+              <span>{t('Sign In to Post Shop Ad', 'विज्ञापन देने हेतु लॉग इन करें')}</span>
             </button>
           )}
         </div>
@@ -183,18 +197,20 @@ _Powered by Svayaa.com_`;
 
       {/* CATEGORY FILTER BAR */}
       <div className="flex flex-wrap items-center gap-2 bg-white p-3 rounded-2xl border border-stone-200/90 shadow-xs">
-        <span className="text-xs font-bold text-stone-700 ml-2 mr-1">Categories:</span>
+        <span className="text-xs font-bold text-stone-700 ml-2 mr-1">
+          {t('Categories:', 'श्रेणियाँ:')}
+        </span>
         {categories.map(cat => (
           <button
             key={cat}
             onClick={() => setSelectedCategory(cat)}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold capitalize transition-all cursor-pointer ${
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
               selectedCategory === cat
                 ? 'bg-[#380812] text-amber-200 shadow-xs'
                 : 'bg-stone-100 text-stone-700 hover:bg-stone-200'
             }`}
           >
-            {cat === 'all' ? 'All Businesses' : cat}
+            {translateCategory(cat)}
           </button>
         ))}
       </div>
@@ -221,15 +237,14 @@ _Powered by Svayaa.com_`;
                   </div>
                   {ad.isFeatured && (
                     <div className="absolute top-3 right-3 bg-gradient-to-r from-amber-400 to-amber-300 text-stone-950 text-xs font-bold px-2.5 py-1 rounded-md shadow flex items-center gap-1">
-                      <Star className="w-3.5 h-3.5 fill-stone-950" /> Featured
+                      <Star className="w-3.5 h-3.5 fill-stone-950" /> {t('Featured', 'फीचर्ड')}
                     </div>
                   )}
 
-                  {/* Quick Floating Like Button on Banner */}
                   <button
                     onClick={(e) => toggleLikeAd(ad.id, e)}
                     className="absolute bottom-3 right-3 bg-white/95 hover:bg-white text-stone-800 p-1.5 rounded-full shadow-md backdrop-blur-xs transition-transform hover:scale-110 cursor-pointer flex items-center gap-1 text-[11px] font-bold px-2"
-                    title={likedAds.has(ad.id.toString()) ? "Liked" : "Like business ad"}
+                    title={likedAds.has(ad.id.toString()) ? t('Liked', 'पसंद किया') : t('Like business ad', 'पसंद करें')}
                   >
                     <Heart className={`w-3.5 h-3.5 ${likedAds.has(ad.id.toString()) ? 'fill-rose-500 text-rose-500' : 'text-stone-600'}`} />
                     <span className={likedAds.has(ad.id.toString()) ? 'text-rose-600' : 'text-stone-700'}>{getAdLikes(ad.id)}</span>
@@ -241,9 +256,8 @@ _Powered by Svayaa.com_`;
                     {ad.title}
                   </h3>
 
-                  {/* ZERO-PILL METADATA LINE */}
                   <p className="text-xs text-stone-600 font-medium mb-2.5">
-                    Owner: {ad.owner} {ad.city ? `· ${ad.city}` : ''}
+                    {t('Owner:', 'संचालक:')} {ad.owner} {ad.city ? `· ${ad.city}` : ''}
                   </p>
 
                   <p className="text-xs text-stone-600 mb-3 leading-relaxed">
@@ -269,7 +283,7 @@ _Powered by Svayaa.com_`;
                 <div className="flex items-center gap-2">
                   <button
                     onClick={(e) => toggleLikeAd(ad.id, e)}
-                    title={likedAds.has(ad.id.toString()) ? "Liked" : "Like this business ad"}
+                    title={likedAds.has(ad.id.toString()) ? t('Liked', 'पसंद किया') : t('Like this business ad', 'विज्ञापन पसंद करें')}
                     className={`py-2 px-2.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
                       likedAds.has(ad.id.toString())
                         ? 'bg-rose-50 border-rose-300 text-rose-700'
@@ -282,11 +296,11 @@ _Powered by Svayaa.com_`;
 
                   <button
                     onClick={(e) => shareAdWhatsApp(ad, e)}
-                    title="Share business ad on WhatsApp"
+                    title={t('Share business ad on WhatsApp', 'व्हाट्सऐप पर साझा करें')}
                     className="flex-1 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 text-xs font-semibold py-2 px-3 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
                   >
                     <Share2 className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>Share on WhatsApp</span>
+                    <span>{t('Share on WhatsApp', 'व्हाट्सऐप शेयर')}</span>
                   </button>
                 </div>
 
@@ -294,7 +308,7 @@ _Powered by Svayaa.com_`;
                   href={`tel:${ad.phone}`} 
                   className="w-full bg-gradient-to-r from-[#380812] to-[#540e1b] hover:from-[#24050b] hover:to-[#380812] text-amber-200 font-semibold py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-xs border border-amber-500/20 cursor-pointer"
                 >
-                  <Phone className="w-3.5 h-3.5 text-amber-300" /> Call Owner ({ad.phone})
+                  <Phone className="w-3.5 h-3.5 text-amber-300" /> {t('Call Owner', 'कॉल करें')} ({ad.phone})
                 </a>
               </div>
             </div>
@@ -302,7 +316,7 @@ _Powered by Svayaa.com_`;
         })}
       </div>
 
-      {/* QUICK AD MODAL (AVAILABLE FOR SIGNED IN MEMBERS) */}
+      {/* QUICK AD MODAL */}
       {showQuickModal && (
         <div 
           className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
@@ -314,68 +328,90 @@ _Powered by Svayaa.com_`;
           >
             <button 
               onClick={() => setShowQuickModal(false)} 
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 p-1 rounded-full"
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 p-1 rounded-full cursor-pointer"
             >
               <X className="w-6 h-6" />
             </button>
 
             <h2 className="text-2xl font-serif font-bold text-red-950 mb-1 flex items-center gap-2">
-              <Store className="w-6 h-6 text-amber-700" /> Advertise Your Business
+              <Store className="w-6 h-6 text-amber-700" /> {t('Advertise Your Business', 'व्यापार का विज्ञापन दें')}
             </h2>
-            <p className="text-xs text-slate-500 mb-4">Promote your shop in the directory.</p>
+            <p className="text-xs text-slate-500 mb-4">
+              {t('Promote your shop in the directory.', 'समाज डायरेक्टरी में अपनी दुकान का प्रचार करें।')}
+            </p>
+
+            {modalError && (
+              <div className="mb-3 p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{modalError}</span>
+              </div>
+            )}
 
             <form onSubmit={handleFormSubmit} className="space-y-3 text-xs">
               <div>
-                <label className="font-bold text-slate-700 block mb-1">Shop Name *</label>
+                <label className="font-bold text-slate-700 block mb-1">{t('Shop Name *', 'दुकान का नाम *')}</label>
                 <input 
                   required 
                   type="text" 
                   value={formState.title}
                   onChange={(e) => setFormState({ ...formState, title: e.target.value })}
                   className="w-full p-2.5 border rounded-xl border-amber-300 focus:ring-2 focus:ring-amber-500" 
-                  placeholder="e.g. Rathore Shree Sarees" 
+                  placeholder={t('e.g. Rathore Shree Sarees', 'उदा. राठौड़ श्री साड़ीज़')} 
                 />
               </div>
 
               <div>
-                <label className="font-bold text-slate-700 block mb-1">Owner Name *</label>
+                <label className="font-bold text-slate-700 block mb-1">{t('Owner Name *', 'संचालक का नाम *')}</label>
                 <input 
                   required 
                   type="text" 
                   value={formState.owner}
                   onChange={(e) => setFormState({ ...formState, owner: e.target.value })}
                   className="w-full p-2.5 border rounded-xl border-amber-300 focus:ring-2 focus:ring-amber-500" 
-                  placeholder="e.g. Rameshwar Rathore" 
+                  placeholder={t('e.g. Rameshwar Rathore', 'उदा. रामेश्वर राठौड़')} 
                 />
               </div>
 
               <div>
-                <label className="font-bold text-slate-700 block mb-1">Tagline & Offer *</label>
+                <label className="font-bold text-slate-700 block mb-1">{t('Tagline & Offer *', 'विवरण एवं ऑफर *')}</label>
                 <textarea 
                   required 
                   rows={2} 
                   value={formState.tagline}
                   onChange={(e) => setFormState({ ...formState, tagline: e.target.value })}
                   className="w-full p-2.5 border rounded-xl border-amber-300 focus:ring-2 focus:ring-amber-500" 
-                  placeholder="Special offer for Rathore Samaj members..."
+                  placeholder={t('Special offer for Rathore Samaj members...', 'राठौड़ समाज सदस्यों के लिए विशेष छूट...')} 
                 />
               </div>
 
               <div>
-                <label className="font-bold text-slate-700 block mb-1">Contact Phone *</label>
+                <label className="font-bold text-slate-700 block mb-1 flex items-center justify-between">
+                  <span>{t('Contact Phone (10 Digits) *', 'संपर्क मोबाइल (10 अंक) *')}</span>
+                  <span className="text-[10px] font-mono text-stone-400">{formState.phone.length}/10</span>
+                </label>
                 <input 
                   required 
                   type="tel" 
+                  inputMode="numeric"
+                  maxLength={10}
                   value={formState.phone}
-                  onChange={(e) => setFormState({ ...formState, phone: e.target.value })}
-                  className="w-full p-2.5 border rounded-xl border-amber-300 focus:ring-2 focus:ring-amber-500" 
-                  placeholder="10-digit mobile number" 
+                  onChange={(e) => {
+                    const cleaned = sanitizePhoneInput(e.target.value);
+                    setFormState({ ...formState, phone: cleaned });
+                    if (cleaned.length > 0) {
+                      const check = validatePhoneNumber(cleaned, true);
+                      setModalError(check.valid ? null : (lang === 'hi' ? check.errorHi || null : check.errorEn || null));
+                    } else {
+                      setModalError(null);
+                    }
+                  }}
+                  className="w-full p-2.5 border rounded-xl border-amber-300 focus:ring-2 focus:ring-amber-500 font-mono" 
+                  placeholder={t('10-digit mobile number', '10 अंकों का मोबाइल नंबर')} 
                 />
               </div>
 
-              {/* Business Subscription Tier */}
               <div className="bg-amber-50 p-3.5 rounded-xl border border-amber-300 space-y-2">
-                <label className="font-bold text-amber-900 block">Select Ad Listing Type:</label>
+                <label className="font-bold text-amber-900 block">{t('Select Ad Listing Type:', 'विज्ञापन प्रकार चुनें:')}</label>
                 <div className="flex items-center gap-2">
                   <input 
                     type="radio" 
@@ -386,7 +422,7 @@ _Powered by Svayaa.com_`;
                     value="free" 
                   />
                   <label htmlFor="tier-free" className="text-slate-800 cursor-pointer">
-                    Standard Listing (Free)
+                    {t('Standard Listing (Free)', 'सामान्य विज्ञापन (निःशुल्क)')}
                   </label>
                 </div>
                 <div className="flex items-center gap-2">
@@ -399,7 +435,7 @@ _Powered by Svayaa.com_`;
                     value="featured" 
                   />
                   <label htmlFor="tier-featured" className="font-bold text-red-900 flex items-center gap-1 cursor-pointer">
-                    <Sparkles className="w-3.5 h-3.5 text-amber-600" /> Featured Top Banner Ad (₹500 / Year)
+                    <Sparkles className="w-3.5 h-3.5 text-amber-600" /> {t('Featured Top Banner Ad (₹500 / Year)', 'फीचर्ड टॉप बैनर विज्ञापन (₹500 / वर्ष)')}
                   </label>
                 </div>
               </div>
@@ -408,7 +444,7 @@ _Powered by Svayaa.com_`;
                 type="submit" 
                 className="w-full bg-amber-500 hover:bg-amber-400 text-red-950 font-bold py-3 rounded-xl shadow mt-2 cursor-pointer transition-colors"
               >
-                Submit Advertisement
+                {t('Submit Advertisement', 'विज्ञापन सबमिट करें')}
               </button>
             </form>
           </div>

@@ -135,6 +135,7 @@ export interface KootaResult {
   maxPoints: number;
   obtainedPoints: number;
   description: string;
+  hindiDescription: string;
   status: 'excellent' | 'good' | 'average' | 'poor';
 }
 
@@ -163,6 +164,7 @@ export interface KundaliMilanReport {
     hindiTitle: string;
     grade: 'Sarvottam' | 'Uttam' | 'Madhyam' | 'Asammat';
     recommendation: string;
+    hindiRecommendation: string;
     color: string;
   };
   doshaSummary: {
@@ -172,10 +174,59 @@ export interface KundaliMilanReport {
       boyManglik: boolean;
       girlManglik: boolean;
       status: string;
+      hindiStatus: string;
       isCompatible: boolean;
     };
   };
 }
+
+const PLANET_HINDI: Record<string, string> = {
+  Sun: 'सूर्य',
+  Moon: 'चंद्र',
+  Mars: 'मंगल',
+  Mercury: 'बुध',
+  Jupiter: 'गुरु',
+  Venus: 'शुक्र',
+  Saturn: 'शनि',
+  Rahu: 'राहु',
+  Ketu: 'केतु'
+};
+
+const VARNA_HINDI: Record<string, string> = {
+  Brahmin: 'ब्राह्मण',
+  Kshatriya: 'क्षत्रिय',
+  Vaishya: 'वैश्य',
+  Shudra: 'शूद्र'
+};
+
+const GANA_HINDI: Record<string, string> = {
+  Deva: 'देव',
+  Manushya: 'मनुष्य',
+  Rakshasa: 'राक्षस'
+};
+
+const NADI_HINDI: Record<string, string> = {
+  Aadi: 'आदि',
+  Madhya: 'मध्य',
+  Antya: 'अन्त्य'
+};
+
+const YONI_HINDI: Record<string, string> = {
+  Horse: 'अश्व',
+  Elephant: 'गज',
+  Sheep: 'मेष',
+  Serpent: 'सर्प',
+  Dog: 'श्वान',
+  Cat: 'मार्जार',
+  Rat: 'मूषक',
+  Cow: 'गौ',
+  Buffalo: 'महिष',
+  Tiger: 'व्याघ्र',
+  Deer: 'मृग',
+  Monkey: 'वानर',
+  Mongoose: 'नकुल',
+  Lion: 'सिंह'
+};
 
 /**
  * 1. Varna Koota (1 point)
@@ -193,13 +244,16 @@ export function calculateVarna(boyRashi: RashiInfo, girlRashi: RashiInfo): Koota
 
   let points = 0;
   let desc = '';
+  let hindiDesc = '';
 
   if (boyScore >= girlScore) {
     points = 1;
     desc = `Excellent spiritual temperament (${boyRashi.varna} - ${girlRashi.varna}). Natural mutual respect.`;
+    hindiDesc = `उत्तम आध्यात्मिक एवं कार्य स्वभाव (${VARNA_HINDI[boyRashi.varna]} - ${VARNA_HINDI[girlRashi.varna]})। परस्पर सम्मान स्वाभाविक रहेगा।`;
   } else {
     points = 0;
     desc = `Girl's varna (${girlRashi.varna}) is spiritually dominant over Boy's varna (${boyRashi.varna}).`;
+    hindiDesc = `कन्या का वर्ण (${VARNA_HINDI[girlRashi.varna]}) वर के वर्ण (${VARNA_HINDI[boyRashi.varna]}) से उच्च है।`;
   }
 
   return {
@@ -208,6 +262,7 @@ export function calculateVarna(boyRashi: RashiInfo, girlRashi: RashiInfo): Koota
     maxPoints: 1,
     obtainedPoints: points,
     description: desc,
+    hindiDescription: hindiDesc,
     status: points === 1 ? 'excellent' : 'poor'
   };
 }
@@ -218,22 +273,27 @@ export function calculateVarna(boyRashi: RashiInfo, girlRashi: RashiInfo): Koota
 export function calculateVashya(boyRashi: RashiInfo, girlRashi: RashiInfo): KootaResult {
   let points = 0;
   let desc = '';
+  let hindiDesc = '';
 
   if (boyRashi.index === girlRashi.index || boyRashi.vashya === girlRashi.vashya) {
     points = 2;
     desc = 'Same Vashya class. Perfect mutual attraction and natural harmony.';
+    hindiDesc = 'समान वश्य वर्ग। उत्कृष्ट पारस्परिक आकर्षण एवं स्वाभाविक सामंजस्य।';
   } else if (
     (boyRashi.vashya === 'Manava' && (girlRashi.vashya === 'Chatushpada' || girlRashi.vashya === 'Jalachara')) ||
     (boyRashi.vashya === 'Chatushpada' && girlRashi.vashya === 'Manava')
   ) {
     points = 1;
     desc = 'Moderate control balance. Mutual understanding can easily be built.';
+    hindiDesc = 'मध्यम वश्य संतुलन। आपसी समझ सहजता से बनती है।';
   } else if (boyRashi.vashya === 'Vanchara' && girlRashi.vashya === 'Keeta') {
     points = 0.5;
     desc = 'Minor resistance in mutual dominance.';
+    hindiDesc = 'परस्पर प्रभाव में आंशिक भिन्नता।';
   } else {
     points = 0;
     desc = 'Dissimilar Vashya attributes. Requires conscious adjustment.';
+    hindiDesc = 'भिन्न वश्य गुण। आपसी सामंजस्य हेतु समझदारी आवश्यक है।';
   }
 
   return {
@@ -242,6 +302,7 @@ export function calculateVashya(boyRashi: RashiInfo, girlRashi: RashiInfo): Koot
     maxPoints: 2,
     obtainedPoints: points,
     description: desc,
+    hindiDescription: hindiDesc,
     status: points >= 1.5 ? 'excellent' : points >= 1 ? 'good' : 'poor'
   };
 }
@@ -268,12 +329,19 @@ export function calculateTara(boyNakshatra: NakshatraInfo, girlNakshatra: Naksha
       ? 'Partially auspicious Tara balance.' 
       : 'Inauspicious Tara count. Astrological chanting recommended.';
 
+  const hindiDesc = points === 3
+    ? 'स्वास्थ्य, समृद्धि और भाग्य के लिए अत्यंत शुभ जन्म नक्षत्र योग।'
+    : points === 1.5
+      ? 'आंशिक रूप से शुभ तारा संतुलन।'
+      : 'अशुभ तारा योग। वैदिक मंत्र जाप की सलाह दी जाती है।';
+
   return {
     name: 'Tara',
     hindiName: 'तारा (भाग्य एवं स्वास्थ्य)',
     maxPoints: 3,
     obtainedPoints: points,
     description: desc,
+    hindiDescription: hindiDesc,
     status: points === 3 ? 'excellent' : points === 1.5 ? 'average' : 'poor'
   };
 }
@@ -284,22 +352,27 @@ export function calculateTara(boyNakshatra: NakshatraInfo, girlNakshatra: Naksha
 export function calculateYoni(boyNakshatra: NakshatraInfo, girlNakshatra: NakshatraInfo): KootaResult {
   const y1 = boyNakshatra.yoni;
   const y2 = girlNakshatra.yoni;
+  const y1Hi = YONI_HINDI[y1] || y1;
+  const y2Hi = YONI_HINDI[y2] || y2;
 
   let points = 0;
   let desc = '';
+  let hindiDesc = '';
 
   const isEnemy = YONI_ENEMIES.some(([a, b]) => (a === y1 && b === y2) || (a === y2 && b === y1));
 
   if (y1 === y2) {
     points = 4;
     desc = `Same Yoni (${y1}). Supreme biological and physical intimacy harmony.`;
+    hindiDesc = `समान योनि (${y1Hi})। सर्वोत्तम शारीरिक एवं जैविक अनुकूलता।`;
   } else if (isEnemy) {
     points = 0;
     desc = `Inimical Yonis (${y1} vs ${y2}). Severe instinctual clash.`;
+    hindiDesc = `शत्रु योनि (${y1Hi} बनाम ${y2Hi})। प्रकृति एवं स्वभाव में तीव्र भिन्नता।`;
   } else {
-    // Friendly vs Neutral
     points = 2.5;
     desc = `Compatible Yonis (${y1} and ${y2}). Wholesome biological balance.`;
+    hindiDesc = `अनुकूल योनियाँ (${y1Hi} एवं ${y2Hi})। संतुलित एवं सुखद दांपत्य तालमेल।`;
   }
 
   return {
@@ -308,6 +381,7 @@ export function calculateYoni(boyNakshatra: NakshatraInfo, girlNakshatra: Naksha
     maxPoints: 4,
     obtainedPoints: points,
     description: desc,
+    hindiDescription: hindiDesc,
     status: points >= 3 ? 'excellent' : points >= 2 ? 'good' : 'poor'
   };
 }
@@ -318,13 +392,17 @@ export function calculateYoni(boyNakshatra: NakshatraInfo, girlNakshatra: Naksha
 export function calculateGrahaMaitri(boyRashi: RashiInfo, girlRashi: RashiInfo): KootaResult {
   const l1 = boyRashi.lord;
   const l2 = girlRashi.lord;
+  const l1Hi = PLANET_HINDI[l1] || l1;
+  const l2Hi = PLANET_HINDI[l2] || l2;
 
   let points = 0;
   let desc = '';
+  let hindiDesc = '';
 
   if (l1 === l2) {
     points = 5;
     desc = `Same planetary lord (${l1}). Deep psychological affinity and mutual affection.`;
+    hindiDesc = `समान राशि स्वामी (${l1Hi})। गहरा मानसिक जुड़ाव और पारस्परिक स्नेह।`;
   } else {
     const l1Friends = PLANETARY_FRIENDS[l1].friends;
     const l1Enemies = PLANETARY_FRIENDS[l1].enemies;
@@ -339,18 +417,23 @@ export function calculateGrahaMaitri(boyRashi: RashiInfo, girlRashi: RashiInfo):
     if (isL1toL2Friend && isL2toL1Friend) {
       points = 5;
       desc = `Mutual best friends (${l1} and ${l2}). Wonderful mental synchronicity.`;
+      hindiDesc = `परस्पर मित्र ग्रह (${l1Hi} एवं ${l2Hi})। अद्भुत मानसिक तालमेल और विचार सामंजस्य।`;
     } else if ((isL1toL2Friend && !isL2toL1Enemy) || (isL2toL1Friend && !isL1toL2Enemy)) {
       points = 4;
       desc = `Friendly planetary relation between Moon sign lords (${l1} and ${l2}).`;
+      hindiDesc = `राशि स्वामियों (${l1Hi} एवं ${l2Hi}) के बीच सौहार्दपूर्ण मैत्री संबंध।`;
     } else if (!isL1toL2Enemy && !isL2toL1Enemy) {
       points = 3;
       desc = `Neutral planetary lords (${l1} and ${l2}). Balanced practical relationship.`;
+      hindiDesc = `सम राशि स्वामी (${l1Hi} एवं ${l2Hi})। व्यावहारिक और संतुलित संबंध।`;
     } else if (isL1toL2Enemy && isL2toL1Enemy) {
       points = 0;
       desc = `Mutual enemy planetary lords (${l1} and ${l2}). Disagreements on core perspectives.`;
+      hindiDesc = `परस्पर शत्रु राशि स्वामी (${l1Hi} एवं ${l2Hi})। वैचारिक मतभेद की संभावना।`;
     } else {
       points = 1;
       desc = `Mixed relationship between ${l1} and ${l2}. Requires open communication.`;
+      hindiDesc = `${l1Hi} और ${l2Hi} के बीच मिश्रित संबंध। खुले संवाद की आवश्यकता।`;
     }
   }
 
@@ -360,6 +443,7 @@ export function calculateGrahaMaitri(boyRashi: RashiInfo, girlRashi: RashiInfo):
     maxPoints: 5,
     obtainedPoints: points,
     description: desc,
+    hindiDescription: hindiDesc,
     status: points >= 4 ? 'excellent' : points >= 3 ? 'good' : 'poor'
   };
 }
@@ -370,22 +454,29 @@ export function calculateGrahaMaitri(boyRashi: RashiInfo, girlRashi: RashiInfo):
 export function calculateGana(boyNakshatra: NakshatraInfo, girlNakshatra: NakshatraInfo): KootaResult {
   const g1 = boyNakshatra.gana;
   const g2 = girlNakshatra.gana;
+  const g1Hi = GANA_HINDI[g1] || g1;
+  const g2Hi = GANA_HINDI[g2] || g2;
 
   let points = 0;
   let desc = '';
+  let hindiDesc = '';
 
   if (g1 === g2) {
     points = 6;
     desc = `Same Gana (${g1}). Similar temperaments, lifestyle values, and emotional reflexes.`;
+    hindiDesc = `समान गण (${g1Hi})। समान स्वभाव, जीवनशैली और भावनात्मक समझ।`;
   } else if ((g1 === 'Deva' && g2 === 'Manushya') || (g1 === 'Manushya' && g2 === 'Deva')) {
     points = 5;
     desc = 'Deva & Manushya combination. High respect and harmonious coexistence.';
+    hindiDesc = 'देव एवं मनुष्य गण का शुभ संयोग। उच्च सम्मान और सुखद सह-जीवन।';
   } else if (g1 === 'Deva' && g2 === 'Rakshasa') {
     points = 1;
     desc = 'Boy is Deva, Girl is Rakshasa. Different life outlooks and assertiveness.';
+    hindiDesc = 'वर देव गण तथा कन्या राक्षस गण। जीवन दृष्टिकोण में भिन्नता।';
   } else {
     points = 0;
     desc = `Conflicting Ganas (${g1} and ${g2}). Gana dosha indicated.`;
+    hindiDesc = `विपरीत गण (${g1Hi} एवं ${g2Hi})। गण दोष का संकेत।`;
   }
 
   return {
@@ -394,6 +485,7 @@ export function calculateGana(boyNakshatra: NakshatraInfo, girlNakshatra: Naksha
     maxPoints: 6,
     obtainedPoints: points,
     description: desc,
+    hindiDescription: hindiDesc,
     status: points >= 5 ? 'excellent' : points >= 3 ? 'average' : 'poor'
   };
 }
@@ -402,34 +494,37 @@ export function calculateGana(boyNakshatra: NakshatraInfo, girlNakshatra: Naksha
  * 7. Bhakoot Koota (7 points)
  */
 export function calculateBhakoot(boyRashi: RashiInfo, girlRashi: RashiInfo): KootaResult {
-  // Distance from Boy to Girl (1-indexed)
   const diff = ((girlRashi.index - boyRashi.index + 12) % 12) + 1;
   const reverseDiff = ((boyRashi.index - girlRashi.index + 12) % 12) + 1;
 
   let points = 0;
   let desc = '';
+  let hindiDesc = '';
 
-  // Inauspicious combinations:
-  // 2/12 (Dvidvadash), 6/8 (Shadashtak), 9/5 (Navapancham)
   const isDvidvadash = (diff === 2 && reverseDiff === 12) || (diff === 12 && reverseDiff === 2);
   const isShadashtak = (diff === 6 && reverseDiff === 8) || (diff === 8 && reverseDiff === 6);
   const isNavapancham = (diff === 5 && reverseDiff === 9) || (diff === 9 && reverseDiff === 5);
 
-  // Cancellation rule: If sign lords are same or mutual friends, Bhakoot dosha is nullified!
   const l1 = boyRashi.lord;
   const l2 = girlRashi.lord;
+  const l1Hi = PLANET_HINDI[l1] || l1;
+  const l2Hi = PLANET_HINDI[l2] || l2;
   const isLordFriends = l1 === l2 || PLANETARY_FRIENDS[l1].friends.includes(l2);
 
   if (!isDvidvadash && !isShadashtak && !isNavapancham) {
     points = 7;
     desc = `Auspicious Bhakoot relation (${diff}/${reverseDiff}). Strong emotional bonding, health, and family prosperity.`;
+    hindiDesc = `अत्यंत शुभ भकूट योग (${diff}/${reverseDiff})। प्रगाढ़ प्रेम, उत्तम स्वास्थ्य और पारिवारिक समृद्धि।`;
   } else if (isLordFriends) {
     points = 7;
     desc = `Bhakoot Dosha cancelled because Moon sign lords (${l1} and ${l2}) are friends or identical! Full 7 points awarded.`;
+    hindiDesc = `राशि स्वामियों (${l1Hi} एवं ${l2Hi}) में मित्रता या समानता के कारण भकूट दोष निरस्त! पूरे 7 अंक प्राप्त।`;
   } else {
     points = 0;
     const doshaName = isDvidvadash ? 'Dwi-Dwadash (2/12)' : isShadashtak ? 'Shad-Ashtak (6/8)' : 'Nava-Pancham (5/9)';
+    const doshaNameHi = isDvidvadash ? 'द्वि-द्वादश (2/12)' : isShadashtak ? 'षडाष्टक (6/8)' : 'नव-पंचम (5/9)';
     desc = `${doshaName} position without lord cancellation. Astrological remedies suggested.`;
+    hindiDesc = `${doshaNameHi} योग (स्वामी मैत्री के बिना)। ज्योतिषीय शांति उपाय अनुशंसित।`;
   }
 
   return {
@@ -438,6 +533,7 @@ export function calculateBhakoot(boyRashi: RashiInfo, girlRashi: RashiInfo): Koo
     maxPoints: 7,
     obtainedPoints: points,
     description: desc,
+    hindiDescription: hindiDesc,
     status: points === 7 ? 'excellent' : 'poor'
   };
 }
@@ -448,22 +544,26 @@ export function calculateBhakoot(boyRashi: RashiInfo, girlRashi: RashiInfo): Koo
 export function calculateNadi(boyNakshatra: NakshatraInfo, girlNakshatra: NakshatraInfo): KootaResult {
   const n1 = boyNakshatra.nadi;
   const n2 = girlNakshatra.nadi;
+  const n1Hi = NADI_HINDI[n1] || n1;
+  const n2Hi = NADI_HINDI[n2] || n2;
 
   let points = 0;
   let desc = '';
+  let hindiDesc = '';
 
   if (n1 !== n2) {
     points = 8;
     desc = `Different Nadis (${n1} & ${n2}). Excellent genetic health, progeny well-being, and physiological balance.`;
+    hindiDesc = `भिन्न नाड़ियाँ (${n1Hi} एवं ${n2Hi})। उत्तम स्वास्थ्य, संतान सुख और अनुवांशिक संतुलन।`;
   } else {
-    // Same Nadi: Check standard Vedic cancellation rules
-    // Cancellation 1: Same Nakshatra but different charanas/padas or different Rashis
     if (boyNakshatra.index !== girlNakshatra.index && boyNakshatra.rashiIndex !== girlNakshatra.rashiIndex) {
       points = 8;
       desc = `Same Nadi (${n1}) but Moon signs are different. Nadi Dosha cancelled by Vedic exemption.`;
+      hindiDesc = `समान नाड़ी (${n1Hi}) किंतु चंद्र राशियाँ भिन्न होने से वैदिक नियमानुसार नाड़ी दोष परिहार हो गया है।`;
     } else {
       points = 0;
       desc = `Same Nadi (${n1}). Traditional Nadi Dosha. Maha-Mrityunjaya Japa or gold donation suggested.`;
+      hindiDesc = `समान नाड़ी (${n1Hi})। पारंपरिक नाड़ी दोष। महामृत्युंजय जाप या स्वर्ण दान अनुशंसित।`;
     }
   }
 
@@ -473,6 +573,7 @@ export function calculateNadi(boyNakshatra: NakshatraInfo, girlNakshatra: Naksha
     maxPoints: 8,
     obtainedPoints: points,
     description: desc,
+    hindiDescription: hindiDesc,
     status: points === 8 ? 'excellent' : 'poor'
   };
 }
@@ -518,19 +619,24 @@ export function performKundaliMilan(
 
   // Manglik compatibility check
   let manglikStatus = '';
+  let manglikHindiStatus = '';
   let manglikCompatible = false;
 
   if (boyManglik && girlManglik) {
     manglikStatus = 'Both are Manglik. Kuja Dosha is completely cancelled (दोष निवारण). Highly auspicious!';
+    manglikHindiStatus = 'दोनों मांगलिक हैं। मंगल दोष का स्वतः पूर्ण निवारण हो गया है। विवाह अत्यंत शुभ है!';
     manglikCompatible = true;
   } else if (!boyManglik && !girlManglik) {
     manglikStatus = 'Neither partner is Manglik. Perfect harmony without Mars affliction.';
+    manglikHindiStatus = 'दोनों में से कोई मांगलिक नहीं है। मंगल दोष से पूर्णतः मुक्त उत्तम सामंजस्य।';
     manglikCompatible = true;
   } else if (boyManglik && !girlManglik) {
     manglikStatus = 'Boy is Manglik while Girl is Non-Manglik. Astrological remedies (Kumbh Vivah) or further consultation advised.';
+    manglikHindiStatus = 'वर मांगलिक है जबकि वधू अमांगलिक है। ज्योतिषीय परामर्श एवं कुंभ विवाह आदि उपाय की सलाह दी जाती है।';
     manglikCompatible = false;
   } else {
     manglikStatus = 'Girl is Manglik while Boy is Non-Manglik. Traditional remedies or horoscope chart analysis recommended.';
+    manglikHindiStatus = 'वधू मांगलिक है जबकि वर अमांगलिक है। पारंपरिक शांति उपाय एवं विस्तृत कुंडली विश्लेषण की सलाह दी जाती है।';
     manglikCompatible = false;
   }
 
@@ -543,6 +649,7 @@ export function performKundaliMilan(
       hindiTitle: 'अत्यधिक शुभ मिलन - वैवाहिक जीवन अत्यंत सुखमय रहेगा',
       grade: 'Sarvottam',
       recommendation: 'Outstanding Gun Milan score (28+ Gunas). High psychological, physical, and familial harmony recommended for marriage.',
+      hindiRecommendation: 'सर्वोत्कृष्ट गुण मिलान (28+ गुण)। मानसिक, शारीरिक एवं पारिवारिक सामंजस्य अत्युत्तम है — विवाह हेतु श्रेष्ठ।',
       color: 'emerald'
     };
   } else if (totalGunas >= 21) {
@@ -551,6 +658,7 @@ export function performKundaliMilan(
       hindiTitle: 'विवाह हेतु उत्तम मिलन - सुख एवं समृद्धिदायक',
       grade: 'Uttam',
       recommendation: 'Healthy Gun Milan score (21 to 27.5 Gunas). Compatibility is well above traditional threshold (18). Marriage is auspicious.',
+      hindiRecommendation: 'उत्तम गुण मिलान (21 से 27.5 गुण)। पारंपरिक न्यूनतम सीमा (18 गुण) से काफी बेहतर — विवाह शुभ एवं सुखद रहेगा।',
       color: 'teal'
     };
   } else if (totalGunas >= 18) {
@@ -559,6 +667,7 @@ export function performKundaliMilan(
       hindiTitle: 'विवाह योग्य मिलन - सामान्य सामंजस्य',
       grade: 'Madhyam',
       recommendation: 'Meets the minimum Vedic passing threshold (18 Gunas). Specific remedies can be performed for weaker kootas.',
+      hindiRecommendation: 'न्यूनतम वैदिक सीमा (18 गुण) पूर्ण होती है। कमज़ोर कूटों हेतु सामान्य ज्योतिषीय उपाय किए जा सकते हैं।',
       color: 'amber'
     };
   } else {
@@ -567,6 +676,7 @@ export function performKundaliMilan(
       hindiTitle: 'अल्प गुण मिलन - ज्योतिषी परामर्श आवश्यक',
       grade: 'Asammat',
       recommendation: 'Score is under 18 Gunas. Detailed family chart analysis and Vedic shanti rituals are recommended prior to finalizing.',
+      hindiRecommendation: 'कुल स्कोर 18 गुणों से कम है। विवाह निर्णय से पूर्व विस्तृत जन्मपत्रिका विश्लेषण एवं वैदिक शांति अनुष्ठान आवश्यक हैं।',
       color: 'rose'
     };
   }
@@ -599,6 +709,7 @@ export function performKundaliMilan(
         boyManglik,
         girlManglik,
         status: manglikStatus,
+        hindiStatus: manglikHindiStatus,
         isCompatible: manglikCompatible
       }
     }

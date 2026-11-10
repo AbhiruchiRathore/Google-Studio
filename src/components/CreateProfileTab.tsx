@@ -1,7 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Lock, UserCheck, ArrowRight, ShieldCheck, Users, Home } from 'lucide-react';
+import { Lock, ShieldCheck, Users, AlertCircle } from 'lucide-react';
 import { MatrimonyProfile, TabType, AuthSession } from '../types';
 import { GoogleSignInModal } from './GoogleSignInModal';
+import {
+  getExistingDeviceGoogleSession,
+  isAndroidEnvironment,
+  signInWithAndroidWebView,
+  signInWithDesktopBrowser
+} from './SignUpTab';
+import { sanitizePhoneInput, validatePhoneNumber } from '../utils/validation';
+import { useLanguage } from '../context/LanguageContext';
 
 interface CreateProfileTabProps {
   authSession: AuthSession | null;
@@ -16,14 +24,18 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
   onAddProfile,
   onNavigateTab
 }) => {
+  const { lang, t } = useLanguage();
   const [showGoogleModal, setShowGoogleModal] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+
   const [formData, setFormData] = useState({
     name: authSession?.name || '',
     gender: 'Male' as 'Male' | 'Female',
     dob: '',
     birthTime: '',
     gotra: '',
-    phone: authSession?.phone || '',
+    phone: sanitizePhoneInput(authSession?.phone || ''),
     education: '',
     occupation: '',
     income: '',
@@ -32,7 +44,6 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
     bio: '',
     height: "5' 7\"",
     photoUrl: authSession?.photoUrl || '',
-    // Family Details
     fatherName: '',
     fatherOccupation: '',
     motherName: '',
@@ -46,7 +57,7 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
       setFormData(prev => ({
         ...prev,
         name: prev.name || authSession.name || '',
-        phone: prev.phone || authSession.phone || '',
+        phone: prev.phone || sanitizePhoneInput(authSession.phone || ''),
         photoUrl: prev.photoUrl || authSession.photoUrl || ''
       }));
     }
@@ -54,6 +65,17 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
+    if (name === 'phone') {
+      const cleaned = sanitizePhoneInput(value);
+      setFormData(prev => ({ ...prev, phone: cleaned }));
+      if (cleaned.length > 0) {
+        const check = validatePhoneNumber(cleaned, true);
+        setPhoneError(check.valid ? null : (lang === 'hi' ? check.errorHi || null : check.errorEn || null));
+      } else {
+        setPhoneError(null);
+      }
+      return;
+    }
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
@@ -72,14 +94,39 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
   const handleGoogleSuccess = (session: AuthSession) => {
     setShowGoogleModal(false);
     onLogin(session);
-    alert(`✅ Connected with Google as ${session.name}! You can now fill out your profile details.`);
+  };
+
+  const handleDirectGoogleClick = async () => {
+    const existing = getExistingDeviceGoogleSession();
+    if (existing) {
+      onLogin(existing);
+      return;
+    }
+    try {
+      if (isAndroidEnvironment()) {
+        await signInWithAndroidWebView(onLogin);
+      } else {
+        await signInWithDesktopBrowser(onLogin);
+      }
+    } catch {
+      setShowGoogleModal(true);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setFormError(null);
 
-    if (!formData.name || !formData.phone || !formData.gotra || !formData.education) {
-      alert("Please fill in all required fields.");
+    if (!formData.name.trim() || !formData.gotra.trim() || !formData.education.trim()) {
+      setFormError(t('Please fill in all required fields.', 'कृपया सभी आवश्यक विवरण भरें।'));
+      return;
+    }
+
+    const phoneCheck = validatePhoneNumber(formData.phone, true);
+    if (!phoneCheck.valid) {
+      const msg = lang === 'hi' ? (phoneCheck.errorHi || '') : (phoneCheck.errorEn || '');
+      setPhoneError(msg);
+      setFormError(msg);
       return;
     }
 
@@ -91,26 +138,26 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
 
     const newProfile: MatrimonyProfile = {
       id: Date.now(),
-      name: formData.name,
+      name: formData.name.trim(),
       gender: formData.gender,
       dob: formData.dob,
       birthTime: formData.birthTime,
       age: calculatedAge,
       height: formData.height || "5' 7\"",
-      gotra: formData.gotra,
-      phone: formData.phone,
-      contact: formData.phone,
-      education: formData.education,
-      profession: formData.occupation,
+      gotra: formData.gotra.trim(),
+      phone: phoneCheck.cleaned,
+      contact: phoneCheck.cleaned,
+      education: formData.education.trim(),
+      profession: formData.occupation.trim(),
       income: formData.income || 'Not Specified',
-      native: formData.native,
-      city: formData.location || formData.native || 'Indore',
+      native: formData.native.trim(),
+      city: formData.location.trim() || formData.native.trim() || 'Indore',
       state: 'Madhya Pradesh',
-      location: formData.location || formData.native,
+      location: formData.location.trim() || formData.native.trim(),
       about: `Maternal Gotra: ${formData.maternalGotra || 'Not specified'}. ${formData.bio}`,
       familyDetails: familyDetailsFormatted,
       photo: formData.photoUrl.trim() !== '' 
-        ? formData.photoUrl 
+        ? formData.photoUrl.trim()
         : formData.gender === 'Female' 
           ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80' 
           : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80',
@@ -119,11 +166,9 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
     };
 
     onAddProfile(newProfile);
-    alert("🎉 Success! Your profile has been successfully published to the Rathore Rishtey directory.");
     onNavigateTab('matrimony');
   };
 
-  // If user is not signed in yet, show auth gate
   if (!authSession) {
     return (
       <div className="space-y-6 max-w-md mx-auto py-8">
@@ -139,16 +184,21 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
           </div>
 
           <div>
-            <h2 className="text-2xl font-serif font-bold text-red-950">Sign In to Create Profile</h2>
+            <h2 className="text-2xl font-serif font-bold text-red-950">
+              {t('Sign In to Create Profile', 'प्रोफ़ाइल बनाने के लिए लॉग इन करें')}
+            </h2>
             <p className="text-xs text-slate-600 mt-1">
-              Please sign in first. Once signed in, you can create your profile, post business ads, and access these tabs directly from the top navigation.
+              {t(
+                'Please sign in first. Once signed in, you can create your profile, post business ads, and access all features.',
+                'कृपया पहले लॉग इन करें। लॉग इन करने के बाद आप बायोडाटा बना सकते हैं, विज्ञापन दे सकते हैं और सभी सुविधाएं देख सकते हैं।'
+              )}
             </p>
           </div>
 
           <div className="space-y-3 pt-2">
             <button 
               type="button"
-              onClick={() => setShowGoogleModal(true)} 
+              onClick={handleDirectGoogleClick} 
               className="w-full flex items-center justify-center gap-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold py-3 px-4 rounded-xl shadow-xs transition-all text-xs cursor-pointer"
             >
               <svg className="w-4 h-4" viewBox="0 0 24 24">
@@ -157,7 +207,7 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
                 <path fill="#FBBC05" d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.19C.43 8.1 0 9.8 0 12s.43 3.9 1.19 5.42l4.09-3.15z"/>
                 <path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.23 0 3.17 2.68 1.19 6.58l4.09 3.15c.95-2.83 3.6-4.98 6.72-4.98z"/>
               </svg>
-              Continue with Google (Permissions Required)
+              {t('Continue with Google', 'Google के साथ जारी रखें')}
             </button>
 
             <button 
@@ -165,12 +215,15 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
               onClick={() => onNavigateTab('signup')} 
               className="w-full bg-red-900 hover:bg-red-800 text-amber-100 font-bold py-3 rounded-xl shadow-lg transition-all text-xs cursor-pointer"
             >
-              Sign In with Mobile OTP
+              {t('Sign In / Create Samaj Account', 'लॉग इन / नया समाज खाता बनाएं')}
             </button>
           </div>
 
           <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-500">
-            Publishing your profile also unlocks <strong>unlimited biodata views</strong> across the entire Rathore Samaj directory.
+            {t(
+              'Publishing your profile also unlocks unlimited biodata views across the Rathore Samaj directory.',
+              'अपनी प्रोफ़ाइल प्रकाशित करने से पूरे राठौड़ समाज डायरेक्टरी में असीमित बायोडाटा संपर्क अनलॉक होते हैं।'
+            )}
           </div>
         </div>
       </div>
@@ -184,15 +237,20 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <span className="bg-emerald-50 text-emerald-800 text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1 border border-emerald-200">
-                <ShieldCheck className="w-3 h-3 text-emerald-600" /> Signed In
+                <ShieldCheck className="w-3 h-3 text-emerald-600" /> {t('Signed In', 'लॉग इन सक्रिय')}
               </span>
               <span className="text-xs text-stone-500">
                 {authSession.name || `+91 ${authSession.phone}`}
               </span>
             </div>
-            <h2 className="text-2xl font-serif font-bold text-stone-900 mt-1">Create Matrimonial Profile</h2>
+            <h2 className="text-2xl font-serif font-bold text-stone-900 mt-1">
+              {t('Create Matrimonial Profile', 'वैवाहिक प्रोफ़ाइल (बायोडाटा) बनाएं')}
+            </h2>
             <p className="text-xs text-stone-500 font-light">
-              Fill out your details to list your profile on Rathore Rishtey & unlock unlimited directory access.
+              {t(
+                'Fill out your details to list your profile on Rathore Rishtey & unlock unlimited directory access.',
+                'राठौड़ रिश्ते पोर्टल पर अपना बायोडाटा जोड़ने के लिए नीचे जानकारी भरें।'
+              )}
             </p>
           </div>
           <button 
@@ -200,14 +258,23 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
             onClick={() => onNavigateTab('matrimony')} 
             className="text-xs text-stone-400 hover:text-stone-700 font-semibold p-1.5 rounded-lg hover:bg-stone-100 cursor-pointer transition-colors"
           >
-            Cancel ✕
+            {t('Cancel ✕', 'रद्द करें ✕')}
           </button>
         </div>
+
+        {formError && (
+          <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+            <span>{formError}</span>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Full Name *</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                {t('Full Name *', 'पूरा नाम *')}
+              </label>
               <input 
                 type="text" 
                 name="name"
@@ -215,11 +282,13 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
                 onChange={handleChange}
                 required 
                 className="w-full border border-amber-300 rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-amber-500" 
-                placeholder="e.g., Rohit Rathore" 
+                placeholder={t('e.g., Rohit Rathore', 'उदा. रोहित राठौड़')} 
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Gender *</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                {t('Gender *', 'लिंग *')}
+              </label>
               <select 
                 name="gender"
                 value={formData.gender}
@@ -227,15 +296,17 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
                 required 
                 className="w-full border border-amber-300 rounded-lg p-2.5 text-xs bg-white focus:ring-2 focus:ring-amber-500"
               >
-                <option value="Male">Male (Boy)</option>
-                <option value="Female">Female (Girl)</option>
+                <option value="Male">{t('Male (Groom)', 'पुरुष (वर)')}</option>
+                <option value="Female">{t('Female (Bride)', 'महिला (वधू)')}</option>
               </select>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Date of Birth *</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                {t('Date of Birth *', 'जन्म तिथि *')}
+              </label>
               <input 
                 type="date" 
                 name="dob"
@@ -246,7 +317,9 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Birth Time</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                {t('Birth Time', 'जन्म समय')}
+              </label>
               <input 
                 type="time" 
                 name="birthTime"
@@ -256,7 +329,9 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Height</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                {t('Height', 'ऊँचाई (कद)')}
+              </label>
               <input 
                 type="text" 
                 name="height"
@@ -270,7 +345,9 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Gotra *</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                {t('Gotra *', 'गोत्र *')}
+              </label>
               <input 
                 type="text" 
                 name="gotra"
@@ -278,26 +355,38 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
                 onChange={handleChange}
                 required 
                 className="w-full border border-amber-300 rounded-lg p-2.5 text-xs" 
-                placeholder="e.g., Rathore / Solanki / Kadamaiyye" 
+                placeholder={t('e.g., Rathore / Solanki / Kadamaiye', 'उदा. पिंडोरिया / सोलंकी / इंदुके')} 
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Contact Number *</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                <span>{t('Contact Number (10 Digits) *', 'संपर्क नंबर (10 अंक) *')}</span>
+                <span className="text-[10px] font-mono text-stone-400">{formData.phone.length}/10</span>
+              </label>
               <input 
                 type="tel" 
+                inputMode="numeric"
+                maxLength={10}
                 name="phone"
                 value={formData.phone}
                 onChange={handleChange}
                 required 
-                className="w-full border border-amber-300 rounded-lg p-2.5 text-xs" 
-                placeholder="10-digit mobile number" 
+                className={`w-full border rounded-lg p-2.5 text-xs font-mono ${
+                  phoneError ? 'border-rose-400 focus:ring-rose-500' : 'border-amber-300 focus:ring-amber-500'
+                }`} 
+                placeholder={t('10-digit real mobile number', '10 अंकों का वास्तविक मोबाइल नंबर')} 
               />
+              {phoneError && (
+                <p className="text-[11px] text-rose-600 font-medium mt-1">{phoneError}</p>
+              )}
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Education *</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                {t('Education *', 'शिक्षा *')}
+              </label>
               <input 
                 type="text" 
                 name="education"
@@ -305,11 +394,13 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
                 onChange={handleChange}
                 required 
                 className="w-full border border-amber-300 rounded-lg p-2.5 text-xs" 
-                placeholder="e.g., B.Tech, MBA, Graduate" 
+                placeholder={t('e.g., B.Tech, MBA, Graduate', 'उदा. बी.टेक, एम.कॉम')} 
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Occupation *</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                {t('Occupation *', 'व्यवसाय / नौकरी *')}
+              </label>
               <input 
                 type="text" 
                 name="occupation"
@@ -317,18 +408,20 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
                 onChange={handleChange}
                 required 
                 className="w-full border border-amber-300 rounded-lg p-2.5 text-xs" 
-                placeholder="e.g., Software Engineer, Business" 
+                placeholder={t('e.g., Software Engineer, Business', 'उदा. सॉफ्टवेयर इंजीनियर / व्यापार')} 
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Annual Income</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                {t('Annual Income', 'वार्षिक / मासिक आय')}
+              </label>
               <input 
                 type="text" 
                 name="income"
                 value={formData.income}
                 onChange={handleChange}
                 className="w-full border border-amber-300 rounded-lg p-2.5 text-xs" 
-                placeholder="e.g., 6 LPA" 
+                placeholder={t('e.g., 6 LPA', 'उदा. ₹6 लाख वार्षिक')} 
               />
             </div>
           </div>
@@ -337,80 +430,92 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
           <div className="p-4 bg-amber-50/60 rounded-xl border border-amber-200 space-y-3">
             <span className="font-bold text-red-950 text-xs flex items-center gap-1.5 uppercase tracking-wide">
               <Users className="w-4 h-4 text-amber-700" />
-              Family Details
+              {t('Family Details', 'पारिवारिक विवरण')}
             </span>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Father's Name</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  {t("Father's Name", 'पिता का नाम')}
+                </label>
                 <input 
                   type="text" 
                   name="fatherName"
                   value={formData.fatherName}
                   onChange={handleChange}
                   className="w-full border border-amber-300 rounded-lg p-2.5 text-xs bg-white" 
-                  placeholder="e.g. Shri Ramchandra Rathore" 
+                  placeholder={t('e.g. Shri Ramchandra Rathore', 'उदा. श्री रामचंद्र राठौड़')} 
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Father's Occupation</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  {t("Father's Occupation", 'पिता का व्यवसाय')}
+                </label>
                 <input 
                   type="text" 
                   name="fatherOccupation"
                   value={formData.fatherOccupation}
                   onChange={handleChange}
                   className="w-full border border-amber-300 rounded-lg p-2.5 text-xs bg-white" 
-                  placeholder="e.g. Business / Retired Gov Service" 
+                  placeholder={t('e.g. Business / Govt Service', 'उदा. व्यापार / शासकीय सेवा')} 
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Mother's Name</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  {t("Mother's Name", 'माता का नाम')}
+                </label>
                 <input 
                   type="text" 
                   name="motherName"
                   value={formData.motherName}
                   onChange={handleChange}
                   className="w-full border border-amber-300 rounded-lg p-2.5 text-xs bg-white" 
-                  placeholder="e.g. Smt. Lata Rathore" 
+                  placeholder={t('e.g. Smt. Lata Rathore', 'उदा. श्रीमती लता राठौड़')} 
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Maternal Gotra (Mother's Side)</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  {t("Maternal Gotra (Mama Gotra)", 'मामा गोत्र (ननिहाल)')}
+                </label>
                 <input 
                   type="text" 
                   name="maternalGotra"
                   value={formData.maternalGotra}
                   onChange={handleChange}
                   className="w-full border border-amber-300 rounded-lg p-2.5 text-xs bg-white" 
-                  placeholder="e.g. Magroriya / Chauhan" 
+                  placeholder={t('e.g. Magroriya / Chauhan', 'उदा. मगरोरिया / भोजपुरिया')} 
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Grandfather's Name</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  {t("Grandfather's Name", 'दादाजी का नाम')}
+                </label>
                 <input 
                   type="text" 
                   name="grandfatherName"
                   value={formData.grandfatherName}
                   onChange={handleChange}
                   className="w-full border border-amber-300 rounded-lg p-2.5 text-xs bg-white" 
-                  placeholder="e.g. Late Shri Gangadharji Rathore" 
+                  placeholder={t('e.g. Late Shri Gangadharji Rathore', 'उदा. स्व. श्री गंगाधरजी राठौड़')} 
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Siblings</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  {t('Siblings (Brothers / Sisters)', 'भाई / बहन')}
+                </label>
                 <input 
                   type="text" 
                   name="siblings"
                   value={formData.siblings}
                   onChange={handleChange}
                   className="w-full border border-amber-300 rounded-lg p-2.5 text-xs bg-white" 
-                  placeholder="e.g. 1 brother (married), 1 sister" 
+                  placeholder={t('e.g. 1 brother, 1 sister', 'उदा. 1 भाई, 1 बहन')} 
                 />
               </div>
             </div>
@@ -418,7 +523,9 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Native Place / Hometown *</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                {t('Native Place / Hometown *', 'मूल निवास / जन्मस्थान *')}
+              </label>
               <input 
                 type="text" 
                 name="native"
@@ -426,36 +533,42 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
                 onChange={handleChange}
                 required 
                 className="w-full border border-amber-300 rounded-lg p-2.5 text-xs" 
-                placeholder="e.g., Khargone, Indore" 
+                placeholder={t('e.g., Khargone, Indore', 'उदा. नांदेड़, इंदौर')} 
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Current City / Location</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                {t('Current City / Location', 'वर्तमान शहर')}
+              </label>
               <input 
                 type="text" 
                 name="location"
                 value={formData.location}
                 onChange={handleChange}
                 className="w-full border border-amber-300 rounded-lg p-2.5 text-xs" 
-                placeholder="e.g., Pune" 
+                placeholder={t('e.g., Pune', 'उदा. पुणे / छ. संभाजीनगर')} 
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">Photo Image URL (Optional)</label>
+            <label className="block text-xs font-bold text-slate-700 mb-1">
+              {t('Photo Image URL (Optional)', 'फ़ोटो इमेज लिंक (वैकल्पिक)')}
+            </label>
             <input 
               type="url" 
               name="photoUrl"
               value={formData.photoUrl}
               onChange={handleChange}
               className="w-full border border-amber-300 rounded-lg p-2.5 text-xs" 
-              placeholder="https://... (or leave blank for standard Samaj avatar)" 
+              placeholder={t('https://... (or leave blank for standard Samaj avatar)', 'https://... (खाली छोड़ सकते हैं)')} 
             />
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">About / Expectations / Bio *</label>
+            <label className="block text-xs font-bold text-slate-700 mb-1">
+              {t('About / Expectations / Bio *', 'परिचय / अपेक्षाएं *')}
+            </label>
             <textarea 
               name="bio"
               value={formData.bio}
@@ -463,7 +576,10 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
               rows={3} 
               required 
               className="w-full border border-amber-300 rounded-lg p-2.5 text-xs" 
-              placeholder="Write briefly about education, family background, and expectations..." 
+              placeholder={t(
+                'Write briefly about education, family background, and expectations...',
+                'शिक्षा, पारिवारिक पृष्ठभूमि और जीवनसाथी की अपेक्षाओं के बारे में संक्षेप में लिखें...'
+              )} 
             />
           </div>
 
@@ -471,7 +587,7 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
             type="submit" 
             className="w-full bg-gradient-to-r from-[#380812] to-[#540e1b] hover:from-[#24050b] hover:to-[#380812] text-amber-200 font-bold py-3.5 rounded-xl text-xs sm:text-sm shadow-md transition-all cursor-pointer border border-amber-400/30 hover:scale-[1.01]"
           >
-            Publish Profile to Directory & Unlock Contacts
+            {t('Publish Profile to Directory & Unlock Contacts', 'प्रोफ़ाइल प्रकाशित करें और संपर्क अनलॉक करें')}
           </button>
         </form>
       </div>

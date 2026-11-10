@@ -1,12 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { 
   Search, GraduationCap, Briefcase, Eye, Phone, X, ShieldAlert, Sparkles, 
-  UserPlus, Lock, ShieldCheck, ArrowRight, Users, Home, Heart, MapPin, 
-  MessageCircle, CheckCircle2, ChevronRight, Award, Share2, Compass,
-  MessageSquare, UserCheck, Flame
+  UserPlus, Lock, ShieldCheck, ArrowRight, Users, Heart, 
+  MessageCircle, Share2, Compass
 } from 'lucide-react';
 import { MatrimonyProfile, GenderType, TabType, AuthSession, ProfileAdmirer } from '../types';
 import { ChatModal } from './ChatModal';
+import { useLanguage } from '../context/LanguageContext';
 
 interface MatrimonyTabProps {
   authSession: AuthSession | null;
@@ -31,6 +31,7 @@ export const MatrimonyTab: React.FC<MatrimonyTabProps> = ({
   onAddQuickProfile,
   onSelectKundaliProfile
 }) => {
+  const { lang, t } = useLanguage();
   const [search, setSearch] = useState('');
   const [genderFilter, setGenderFilter] = useState<GenderType>('all');
   const [gotraFilter, setGotraFilter] = useState('');
@@ -43,7 +44,7 @@ export const MatrimonyTab: React.FC<MatrimonyTabProps> = ({
   const [activeChatProfile, setActiveChatProfile] = useState<MatrimonyProfile | null>(null);
 
   // Admirers: Who Liked My Profile
-  const [admirers, setAdmirers] = useState<ProfileAdmirer[]>(() => {
+  const [admirers] = useState<ProfileAdmirer[]>(() => {
     try {
       const stored = localStorage.getItem('samaj_profile_admirers');
       if (stored) return JSON.parse(stored);
@@ -147,7 +148,21 @@ export const MatrimonyTab: React.FC<MatrimonyTabProps> = ({
 
   const shareProfileWhatsApp = (p: MatrimonyProfile, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    const text = `🚩 *Rathore Rishtey - Matrimonial Biodata* 🚩
+    const text = lang === 'hi'
+      ? `🚩 *राठौर रिश्ते - वैवाहिक बायोडाटा* 🚩
+
+*प्रत्याशी:* ${p.name}
+*आयु एवं कद:* ${p.age} वर्ष · ${p.height || "5' 6\""}
+*गोत्र:* ${p.gotra}
+*शहर एवं राज्य:* ${p.city}, ${p.state || 'भारत'}
+*शिक्षा:* ${p.education}
+${p.profession ? `*व्यवसाय:* ${p.profession}\n` : ''}${p.income ? `*मासिक/वार्षिक आय:* ${p.income}\n` : ''}*पारिवारिक विवरण:* ${p.familyDetails || 'प्रतिष्ठित राठौर समाज परिवार'}
+${p.about ? `*अतिरिक्त जानकारी:* ${p.about}\n` : ''}*संपर्क सूत्र:* ${p.contact}
+
+✨ *राठौर रिश्ते पोर्टल पर पूरा प्रोफ़ाइल और कुंडली मिलान देखें:*
+https://svayaa.com/
+_Powered by Svayaa_`
+      : `🚩 *Rathore Rishtey - Matrimonial Biodata* 🚩
 
 *Candidate:* ${p.name}
 *Age & Height:* ${p.age} Yrs · ${p.height || "5' 6\""}
@@ -159,7 +174,7 @@ ${p.about ? `*About:* ${p.about}\n` : ''}*Contact:* ${p.contact}
 
 ✨ *View full profile & Kundali Milan on Rathore Rishtey Portal:*
 https://svayaa.com/
-_Powered by Svayaa.com_`;
+_Powered by Svayaa_`;
 
     const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
     window.open(url, '_blank');
@@ -227,13 +242,16 @@ _Powered by Svayaa.com_`;
             <div className="space-y-3 max-w-xl text-center md:text-left">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-400/10 border border-amber-400/30 text-amber-300 text-xs font-semibold">
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>Samaj Privacy & Trust Protection</span>
+                <span>{t('Samaj Privacy & Trust Protection', 'समाज गोपनीयता एवं विश्वास सुरक्षा')}</span>
               </div>
               <h2 className="text-2xl sm:text-3xl font-serif font-bold text-amber-50">
-                Sign In to View Matrimony Biodatas
+                {t('Sign In to View Matrimony Biodatas', 'वैवाहिक बायोडाटा देखने के लिए साइन इन करें')}
               </h2>
               <p className="text-xs sm:text-sm text-stone-300 leading-relaxed font-light">
-                To respect the privacy of Rathore Samaj families and safeguard candidate contact details, biodata records are accessible to verified community members.
+                {t(
+                  'To respect the privacy of Rathore Samaj families and safeguard candidate contact details, biodata records are accessible to verified community members.',
+                  'राठौर समाज के परिवारों की गोपनीयता और संपर्क विवरण की सुरक्षा के लिए, बायोडाटा केवल सत्यापित समाज सदस्यों के लिए उपलब्ध हैं।'
+                )}
               </p>
             </div>
 
@@ -242,7 +260,7 @@ _Powered by Svayaa.com_`;
               className="bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-stone-950 font-bold px-6 py-3.5 rounded-xl shadow-lg transition-all text-xs sm:text-sm shrink-0 flex items-center gap-2 cursor-pointer hover:scale-102"
             >
               <UserPlus className="w-4 h-4 text-stone-950" />
-              <span>Sign In / Register</span>
+              <span>{t('Sign In / Register', 'लॉग इन / रजिस्टर करें')}</span>
             </button>
           </div>
 
@@ -252,9 +270,12 @@ _Powered by Svayaa.com_`;
               <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-900 border border-amber-200/60 flex items-center justify-center font-bold">
                 <ShieldCheck className="w-5 h-5 text-amber-800" />
               </div>
-              <h4 className="font-serif font-bold text-sm text-stone-900">100% Samaj Verified</h4>
+              <h4 className="font-serif font-bold text-sm text-stone-900">{t('100% Samaj Verified', '100% समाज सत्यापित')}</h4>
               <p className="text-stone-600 leading-relaxed">
-                Biodatas screened for authentic Gotra lineage, education, and family background across MP, Maharashtra & beyond.
+                {t(
+                  'Biodatas screened for authentic Gotra lineage, education, and family background across MP, Maharashtra & beyond.',
+                  'मध्यप्रदेश, महाराष्ट्र एवं अन्य राज्यों के प्रतिष्ठित परिवारों के गोत्र, शिक्षा व पारिवारिक पृष्ठभूमि की जाँच के साथ।'
+                )}
               </p>
             </div>
 
@@ -262,9 +283,12 @@ _Powered by Svayaa.com_`;
               <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-900 border border-amber-200/60 flex items-center justify-center font-bold">
                 <Sparkles className="w-5 h-5 text-amber-800" />
               </div>
-              <h4 className="font-serif font-bold text-sm text-stone-900">3 Free Direct Contacts</h4>
+              <h4 className="font-serif font-bold text-sm text-stone-900">{t('3 Free Direct Contacts', '3 निःशुल्क सीधे संपर्क')}</h4>
               <p className="text-stone-600 leading-relaxed">
-                Immediately explore and unlock verified phone numbers for up to 3 candidates upon sign-in.
+                {t(
+                  'Immediately explore and unlock verified phone numbers for up to 3 candidates upon sign-in.',
+                  'साइन इन करते ही आप 3 प्रत्याशियों के सत्यापित मोबाइल नंबर तुरंत देख और अनलॉक कर सकते हैं।'
+                )}
               </p>
             </div>
 
@@ -272,9 +296,12 @@ _Powered by Svayaa.com_`;
               <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-900 border border-amber-200/60 flex items-center justify-center font-bold">
                 <Lock className="w-5 h-5 text-amber-800" />
               </div>
-              <h4 className="font-serif font-bold text-sm text-stone-900">Mutual Community Access</h4>
+              <h4 className="font-serif font-bold text-sm text-stone-900">{t('Mutual Community Access', 'पारस्परिक समाज पहुंच')}</h4>
               <p className="text-stone-600 leading-relaxed">
-                Contribute your own family details to unlock unlimited biodatas and expand the community directory network.
+                {t(
+                  'Contribute your own family details to unlock unlimited biodatas and expand the community directory network.',
+                  'असीमित बायोडाटा अनलॉक करने और समाज डायरेक्टरी नेटवर्क को बढ़ाने के लिए अपना पारिवारिक विवरण जोड़ें।'
+                )}
               </p>
             </div>
           </div>
@@ -287,16 +314,19 @@ _Powered by Svayaa.com_`;
               <Lock className="w-8 h-8" />
             </div>
             <h3 className="text-2xl font-serif font-bold text-white drop-shadow-sm">
-              450+ Verified Samaj Biodatas
+              {t('450+ Verified Samaj Biodatas', '450+ सत्यापित समाज बायोडाटा')}
             </h3>
             <p className="text-xs sm:text-sm text-stone-200 max-w-md drop-shadow-sm font-light">
-              Sign in with your Google account or mobile number to view verified candidate photos, educational credentials, and direct family contact numbers.
+              {t(
+                'Sign in with your Google account or mobile number to view verified candidate photos, educational credentials, and direct family contact numbers.',
+                'प्रत्याशियों के फोटो, शैक्षणिक योग्यता और सीधे पारिवारिक संपर्क नंबर देखने के लिए Google या मोबाइल नंबर से साइन इन करें।'
+              )}
             </p>
             <button
               onClick={() => onNavigateTab('signup')}
               className="bg-gradient-to-r from-amber-400 to-amber-300 text-stone-950 font-bold px-6 py-2.5 rounded-xl text-xs shadow-md flex items-center gap-2 cursor-pointer transition-transform hover:scale-105"
             >
-              <span>Unlock Directory Access</span>
+              <span>{t('Unlock Directory Access', 'डायरेक्टरी एक्सेस अनलॉक करें')}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
@@ -333,7 +363,7 @@ _Powered by Svayaa.com_`;
           }`}
         >
           <Users className="w-4 h-4" />
-          <span>All Bios ({profiles.length})</span>
+          <span>{t(`All Bios (${profiles.length})`, `सभी बायोडाटा (${profiles.length})`)}</span>
         </button>
 
         <button
@@ -345,7 +375,7 @@ _Powered by Svayaa.com_`;
           }`}
         >
           <Heart className={`w-4 h-4 ${viewMode === 'liked_by_me' ? 'fill-white text-white' : 'fill-rose-500 text-rose-500'}`} />
-          <span>Profiles I Liked ({likedProfiles.size})</span>
+          <span>{t(`Profiles I Liked (${likedProfiles.size})`, `पसंद किए गए (${likedProfiles.size})`)}</span>
         </button>
 
         <button
@@ -357,7 +387,7 @@ _Powered by Svayaa.com_`;
           }`}
         >
           <Sparkles className="w-4 h-4 text-amber-500" />
-          <span>Who Liked My Profile ({admirers.length})</span>
+          <span>{t(`Who Liked My Profile (${admirers.length})`, `मेरी प्रोफ़ाइल किसने पसंद की (${admirers.length})`)}</span>
         </button>
       </div>
 
@@ -373,7 +403,7 @@ _Powered by Svayaa.com_`;
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search name, qualification, profession..."
+              placeholder={t('Search name, qualification, profession...', 'नाम, शिक्षा या व्यवसाय खोजें...')}
               className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-stone-200 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 text-sm bg-stone-50/50 transition-all"
             />
           </div>
@@ -389,7 +419,7 @@ _Powered by Svayaa.com_`;
                     : 'text-stone-700 hover:text-stone-900'
                 }`}
               >
-                All (समस्त)
+                {t('All', 'समस्त')}
               </button>
               <button
                 onClick={() => setGenderFilter('Male')}
@@ -399,7 +429,7 @@ _Powered by Svayaa.com_`;
                     : 'text-stone-700 hover:text-stone-900'
                 }`}
               >
-                Grooms (वर)
+                {t('Grooms', 'वर')}
               </button>
               <button
                 onClick={() => setGenderFilter('Female')}
@@ -409,7 +439,7 @@ _Powered by Svayaa.com_`;
                     : 'text-stone-700 hover:text-stone-900'
                 }`}
               >
-                Brides (वधु)
+                {t('Brides', 'वधु')}
               </button>
             </div>
 
@@ -418,7 +448,7 @@ _Powered by Svayaa.com_`;
               type="text"
               value={gotraFilter}
               onChange={(e) => setGotraFilter(e.target.value)}
-              placeholder="Filter Gotra (गोत्र)..."
+              placeholder={t('Filter Gotra...', 'गोत्र फ़िल्टर करें...')}
               className="px-3.5 py-2 rounded-xl border border-stone-200 text-xs w-36 focus:outline-none focus:ring-2 focus:ring-amber-500/50 bg-stone-50/50"
             />
 
@@ -427,7 +457,7 @@ _Powered by Svayaa.com_`;
               type="text"
               value={cityFilter}
               onChange={(e) => setCityFilter(e.target.value)}
-              placeholder="Filter City (शहर)..."
+              placeholder={t('Filter City...', 'शहर फ़िल्टर करें...')}
               className="px-3.5 py-2 rounded-xl border border-stone-200 text-xs w-36 focus:outline-none focus:ring-2 focus:ring-amber-500/50 bg-stone-50/50"
             />
           </div>
@@ -436,7 +466,11 @@ _Powered by Svayaa.com_`;
         {/* Counter & Action - CLICK TO GO TO SEPARATE ADD FAMILY DETAILS PAGE */}
         <div className="flex flex-col sm:flex-row justify-between items-center text-xs text-stone-500 pt-3 border-t border-stone-100 gap-2">
           <span className="font-medium text-stone-600">
-            Showing <strong className="text-stone-900">{filteredProfiles.length}</strong> verified Rathore Samaj Biodatas
+            {lang === 'hi' ? (
+              <><strong className="text-stone-900">{filteredProfiles.length}</strong> सत्यापित राठौर समाज बायोडाटा दिखाए जा रहे हैं</>
+            ) : (
+              <>Showing <strong className="text-stone-900">{filteredProfiles.length}</strong> verified Rathore Samaj Biodatas</>
+            )}
           </span>
           <button 
             type="button"
@@ -444,7 +478,7 @@ _Powered by Svayaa.com_`;
             onClick={() => onNavigateTab('family-details')}
           >
             <Users className="w-3.5 h-3.5 text-amber-800" />
-            <span>+ Click to register family details (Open Dedicated Page)</span>
+            <span>{t('+ Register family details', '+ पारिवारिक विवरण दर्ज करें')}</span>
           </button>
         </div>
       </div>
@@ -457,14 +491,17 @@ _Powered by Svayaa.com_`;
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-serif font-bold text-lg sm:text-xl text-stone-900">
-                  Who Liked My Profile (प्रोफ़ाइल प्रशंसक एवं रिश्ते प्रस्ताव)
+                  {t('Who Liked My Profile', 'प्रोफ़ाइल प्रशंसक एवं रिश्ते प्रस्ताव')}
                 </h3>
                 <span className="text-xs bg-[#380812] text-amber-200 font-bold px-2.5 py-0.5 rounded-full">
-                  {admirers.length} Samaj Families
+                  {admirers.length} {t('Samaj Families', 'समाज परिवार')}
                 </span>
               </div>
               <p className="text-xs text-stone-600 mt-1 max-w-2xl leading-relaxed">
-                These verified Rathore Samaj candidates & families recently liked your published profile and expressed interest in connecting for matrimonial alliance.
+                {t(
+                  'These verified Rathore Samaj candidates & families recently liked your published profile and expressed interest in connecting for matrimonial alliance.',
+                  'इन सत्यापित राठौर समाज परिवारों ने हाल ही में आपका प्रोफ़ाइल पसंद किया है और वैवाहिक संबंध के लिए संपर्क करना चाहते हैं।'
+                )}
               </p>
             </div>
             {!hasRegisteredProfile && (
@@ -473,7 +510,7 @@ _Powered by Svayaa.com_`;
                 className="bg-[#380812] hover:bg-[#540e1b] text-amber-200 text-xs font-semibold px-4 py-2.5 rounded-xl transition-colors cursor-pointer shrink-0 shadow-xs flex items-center gap-1.5"
               >
                 <Users className="w-3.5 h-3.5 text-amber-300" />
-                <span>Register Family Details for More Inquiries</span>
+                <span>{t('Register Family Details for More Inquiries', 'अधिक प्रस्तावों के लिए परिवार विवरण जोड़ें')}</span>
               </button>
             )}
           </div>
@@ -514,21 +551,21 @@ _Powered by Svayaa.com_`;
                           <ShieldCheck className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                         </div>
                         <p className="text-xs text-stone-600 font-medium">
-                          Gotra: {adm.admirerGotra} · {adm.admirerCity}
+                          {t('Gotra:', 'गोत्र:')} {adm.admirerGotra} · {adm.admirerCity}
                         </p>
                         <span className="text-[10px] text-rose-600 font-bold flex items-center gap-1 mt-0.5">
-                          <Heart className="w-3 h-3 fill-rose-500 text-rose-500" /> Liked your profile {adm.likedAt}
+                          <Heart className="w-3 h-3 fill-rose-500 text-rose-500" /> {t(`Liked your profile ${adm.likedAt}`, `प्रोफ़ाइल पसंद किया (${adm.likedAt})`)}
                         </span>
                       </div>
                     </div>
 
                     <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200/80 text-xs space-y-1">
                       <p className="text-stone-700 font-medium">
-                        <strong>Qualification:</strong> {adm.admirerEducation}
+                        <strong>{t('Qualification:', 'योग्यता:')}</strong> {adm.admirerEducation}
                       </p>
                       {adm.admirerProfession && (
                         <p className="text-stone-700 font-medium">
-                          <strong>Profession:</strong> {adm.admirerProfession}
+                          <strong>{t('Profession:', 'व्यवसाय:')}</strong> {adm.admirerProfession}
                         </p>
                       )}
                       {adm.message && (
@@ -545,23 +582,23 @@ _Powered by Svayaa.com_`;
                       className="flex-1 bg-gradient-to-r from-[#380812] to-[#540e1b] hover:from-[#24050b] hover:to-[#380812] text-amber-200 text-xs font-semibold py-2.5 px-3 rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer border border-amber-500/20"
                     >
                       <MessageCircle className="w-3.5 h-3.5 text-amber-300" />
-                      <span>Chat with Family</span>
+                      <span>{t('Chat with Family', 'परिवार से चैट करें')}</span>
                     </button>
 
                     {onSelectKundaliProfile && (
                       <button
                         onClick={() => onSelectKundaliProfile(candidateProfile.id, candidateProfile.gender)}
-                        title="Kundali Milan (३६ गुण)"
+                        title={t('Kundali Milan (36 Gun)', 'कुंडली मिलान (३६ गुण)')}
                         className="bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300/80 text-xs font-semibold py-2.5 px-3 rounded-xl transition-all cursor-pointer flex items-center gap-1 shrink-0"
                       >
                         <Compass className="w-3.5 h-3.5 text-amber-700" />
-                        <span className="hidden sm:inline">Milan</span>
+                        <span className="hidden sm:inline">{t('Milan', 'मिलान')}</span>
                       </button>
                     )}
 
                     <a
                       href={`tel:${adm.admirerPhone}`}
-                      title={`Call ${adm.admirerName} (${adm.admirerPhone})`}
+                      title={`${t('Call', 'कॉल करें')} ${adm.admirerName} (${adm.admirerPhone})`}
                       className="p-2.5 rounded-xl border border-stone-200 bg-stone-50 hover:bg-stone-100 text-stone-700 text-xs transition-colors cursor-pointer shrink-0"
                     >
                       <Phone className="w-3.5 h-3.5 text-emerald-700" />
@@ -582,9 +619,13 @@ _Powered by Svayaa.com_`;
               <Sparkles className="w-4 h-4 text-amber-900" />
             </div>
             <div>
-              <p className="font-bold text-stone-900">Unlock Unlimited Community Contacts</p>
+              <p className="font-bold text-stone-900">{t('Unlock Unlimited Community Contacts', 'असीमित समाज संपर्क अनलॉक करें')}</p>
               <p className="text-stone-600">
-                You have <strong>{remainingFreeContacts} of 3 free view unlocks</strong> remaining. Register your family details to browse without limits!
+                {lang === 'hi' ? (
+                  <>आपके पास <strong>3 में से {remainingFreeContacts} निःशुल्क व्यू</strong> शेष हैं। असीमित बायोडाटा देखने के लिए अपने परिवार का विवरण दर्ज करें!</>
+                ) : (
+                  <>You have <strong>{remainingFreeContacts} of 3 free view unlocks</strong> remaining. Register your family details to browse without limits!</>
+                )}
               </p>
             </div>
           </div>
@@ -593,7 +634,7 @@ _Powered by Svayaa.com_`;
             className="bg-[#380812] hover:bg-[#540e1b] text-amber-200 font-semibold px-4 py-2 rounded-xl text-xs shrink-0 shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <Users className="w-3.5 h-3.5 text-amber-300" />
-            <span>Go to Add Family Details Page</span>
+            <span>{t('Add Family Details', 'परिवार का विवरण जोड़ें')}</span>
           </button>
         </div>
       )}
@@ -604,26 +645,29 @@ _Powered by Svayaa.com_`;
           <div className="w-16 h-16 bg-rose-50 text-rose-600 rounded-2xl mx-auto flex items-center justify-center border border-rose-200">
             <Heart className="w-8 h-8 fill-rose-500 text-rose-500" />
           </div>
-          <h3 className="font-serif font-bold text-xl text-stone-900">No Liked Profiles Yet</h3>
+          <h3 className="font-serif font-bold text-xl text-stone-900">{t('No Liked Profiles Yet', 'अभी कोई प्रोफ़ाइल पसंद नहीं की गई है')}</h3>
           <p className="text-xs text-stone-600 leading-relaxed">
-            You haven&apos;t liked any matrimonial profiles yet. Tap the heart (❤️) icon on any candidate card to save their biodata here for easy family discussions, direct chat, and Kundali Milan.
+            {t(
+              "You haven't liked any matrimonial profiles yet. Tap the heart (❤️) icon on any candidate card to save their biodata here for easy family discussions, direct chat, and Kundali Milan.",
+              'आपने अभी तक किसी भी वैवाहिक प्रोफ़ाइल को पसंद नहीं किया है। किसी भी प्रत्याशी के कार्ड पर दिल (❤️) के आइकन पर टैप करके उसे यहाँ सहेजें।'
+            )}
           </p>
           <button
             onClick={() => setViewMode('all')}
             className="bg-[#380812] hover:bg-[#24050b] text-amber-200 text-xs font-bold px-5 py-2.5 rounded-xl transition-colors cursor-pointer"
           >
-            Browse All Profiles
+            {t('Browse All Profiles', 'सभी प्रोफ़ाइल देखें')}
           </button>
         </div>
       ) : filteredProfiles.length === 0 ? (
         <div className="bg-white rounded-2xl border border-stone-200/90 p-12 text-center text-stone-500">
-          <p className="text-base font-serif font-bold text-stone-800">No profiles found matching your search filters.</p>
-          <p className="text-xs text-stone-500 mt-1">Try clearing your search keyword, gotra, or city filter.</p>
+          <p className="text-base font-serif font-bold text-stone-800">{t('No profiles found matching your search filters.', 'आपके खोज फ़िल्टर से मेल खाती कोई प्रोफ़ाइल नहीं मिली।')}</p>
+          <p className="text-xs text-stone-500 mt-1">{t('Try clearing your search keyword, gotra, or city filter.', 'खोज शब्द, गोत्र या शहर का फ़िल्टर साफ़ करके पुनः प्रयास करें।')}</p>
           <button
             onClick={() => { setSearch(''); setGenderFilter('all'); setGotraFilter(''); setCityFilter(''); }}
             className="mt-4 bg-gradient-to-r from-amber-400 to-amber-300 text-stone-950 font-bold px-4 py-2 rounded-xl text-xs shadow-xs cursor-pointer hover:scale-102 transition-transform"
           >
-            Reset Filters
+            {t('Reset Filters', 'फ़िल्टर रीसेट करें')}
           </button>
         </div>
       ) : (
@@ -655,14 +699,14 @@ _Powered by Svayaa.com_`;
                   {/* Verified Badge */}
                   <div className="absolute top-3 left-3 bg-[#24050b]/90 text-amber-300 text-[11px] font-semibold px-2.5 py-1 rounded-md shadow-sm border border-amber-500/30 flex items-center gap-1 backdrop-blur-xs">
                     <ShieldCheck className="w-3 h-3 text-amber-400" />
-                    <span>Gotra: {p.gotra}</span>
+                    <span>{t('Gotra:', 'गोत्र:')} {p.gotra}</span>
                   </div>
 
                   {/* Quick Floating Like Button on Photo */}
                   <button
                     onClick={(e) => toggleLikeProfile(p.id, e)}
                     className="absolute top-3 right-3 bg-white/90 hover:bg-white text-stone-800 p-1.5 rounded-full shadow-md backdrop-blur-xs transition-transform hover:scale-110 cursor-pointer flex items-center gap-1 text-[11px] font-bold px-2"
-                    title={likedProfiles.has(p.id.toString()) ? "Liked" : "Like profile"}
+                    title={likedProfiles.has(p.id.toString()) ? t('Liked', 'पसंद किया') : t('Like profile', 'प्रोफ़ाइल पसंद करें')}
                   >
                     <Heart className={`w-3.5 h-3.5 ${likedProfiles.has(p.id.toString()) ? 'fill-rose-500 text-rose-500' : 'text-stone-600'}`} />
                     <span className={likedProfiles.has(p.id.toString()) ? 'text-rose-600' : 'text-stone-700'}>{getProfileLikes(p.id)}</span>
@@ -680,7 +724,7 @@ _Powered by Svayaa.com_`;
                         </h3>
                         {/* ZERO PILL METADATA DISCIPLINE */}
                         <p className="text-xs text-stone-600 font-medium mt-1">
-                          {p.age} Yrs · {p.height || "5' 6\""} · {p.city}, {p.state || 'India'}
+                          {p.age} {t('Yrs', 'वर्ष')} · {p.height || "5' 6\""} · {p.city}, {p.state || t('India', 'भारत')}
                         </p>
                       </div>
                     </div>
@@ -701,7 +745,7 @@ _Powered by Svayaa.com_`;
                       )}
                       {p.income && p.income.trim() !== '' && p.income !== '---' && p.income !== 'Not specified' && (
                         <div className="text-[11px] text-emerald-800 font-semibold pl-6">
-                          Income: {p.income}
+                          {t('Income:', 'आय:')} {p.income}
                         </div>
                       )}
                     </div>
@@ -714,33 +758,33 @@ _Powered by Svayaa.com_`;
                       className="flex-1 bg-gradient-to-r from-[#380812] to-[#540e1b] hover:from-[#24050b] hover:to-[#380812] text-amber-200 text-xs font-semibold py-2.5 px-3 rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer border border-amber-500/20"
                     >
                       <Eye className="w-3.5 h-3.5 text-amber-300" />
-                      <span>View Biodata</span>
+                      <span>{t('View Biodata', 'बायोडाटा देखें')}</span>
                     </button>
 
                     {/* Direct Interactive Chat Button */}
                     <button
                       onClick={() => setActiveChatProfile(p)}
-                      title={`Chat with ${p.name}'s family`}
+                      title={`${t('Chat with family', 'परिवार से चैट करें')} (${p.name})`}
                       className="bg-amber-100/80 hover:bg-amber-200 text-[#380812] border border-amber-300/80 text-xs font-semibold py-2.5 px-2.5 sm:px-3 rounded-xl transition-all cursor-pointer flex items-center gap-1 shrink-0"
                     >
                       <MessageCircle className="w-3.5 h-3.5 text-amber-900" />
-                      <span className="hidden sm:inline">Chat</span>
+                      <span className="hidden sm:inline">{t('Chat', 'चैट')}</span>
                     </button>
 
                     {onSelectKundaliProfile && (
                       <button
                         onClick={() => onSelectKundaliProfile(p.id, p.gender)}
-                        title="Kundali Milan (३६ गुण)"
+                        title={t('Kundali Milan (36 Gun)', 'कुंडली मिलान (३६ गुण)')}
                         className="bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300/80 text-xs font-semibold py-2.5 px-2.5 sm:px-3 rounded-xl transition-all cursor-pointer flex items-center gap-1 shrink-0"
                       >
                         <Compass className="w-3.5 h-3.5 text-amber-700" />
-                        <span className="hidden sm:inline">Milan</span>
+                        <span className="hidden sm:inline">{t('Milan', 'मिलान')}</span>
                       </button>
                     )}
 
                     <button
                       onClick={(e) => toggleLikeProfile(p.id, e)}
-                      title={likedProfiles.has(p.id.toString()) ? "Liked" : "Like biodata"}
+                      title={likedProfiles.has(p.id.toString()) ? t('Liked', 'पसंद किया') : t('Like biodata', 'बायोडाटा पसंद करें')}
                       className={`py-2.5 px-2.5 sm:px-3 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
                         likedProfiles.has(p.id.toString())
                           ? 'bg-rose-50 border-rose-300 text-rose-700'
@@ -753,11 +797,11 @@ _Powered by Svayaa.com_`;
 
                     <button
                       onClick={(e) => shareProfileWhatsApp(p, e)}
-                      title="Share biodata on WhatsApp"
+                      title={t('Share biodata on WhatsApp', 'व्हाट्सएप पर शेयर करें')}
                       className="bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 text-xs font-semibold py-2.5 px-2.5 sm:px-3 rounded-xl transition-all cursor-pointer flex items-center gap-1 shrink-0"
                     >
                       <Share2 className="w-3.5 h-3.5 text-emerald-600" />
-                      <span className="hidden sm:inline">Share</span>
+                      <span className="hidden sm:inline">{t('Share', 'शेयर')}</span>
                     </button>
                   </div>
                 </div>
@@ -798,9 +842,13 @@ _Powered by Svayaa.com_`;
                 <div className="flex items-center justify-between bg-amber-50/80 p-2.5 rounded-xl text-xs font-semibold text-amber-950 border border-amber-200/60">
                   <span className="flex items-center gap-1.5">
                     <ShieldCheck className="w-3.5 h-3.5 text-amber-700" />
-                    <span>{hasRegisteredProfile ? 'Status: Unlocked (Family Details Registered)' : `Free Contacts Left: ${remainingFreeContacts}`}</span>
+                    <span>
+                      {hasRegisteredProfile
+                        ? t('Status: Unlocked (Family Details Registered)', 'स्थिति: अनलॉक्ड (परिवार विवरण पंजीकृत)')
+                        : t(`Free Contacts Left: ${remainingFreeContacts}`, `शेष निःशुल्क संपर्क: ${remainingFreeContacts}`)}
+                    </span>
                   </span>
-                  <span className="text-stone-500 hidden sm:inline text-[11px]">Rathore Samaj Verified</span>
+                  <span className="text-stone-500 hidden sm:inline text-[11px]">{t('Rathore Samaj Verified', 'राठौर समाज सत्यापित')}</span>
                 </div>
 
                 {/* Profile Header */}
@@ -816,18 +864,18 @@ _Powered by Svayaa.com_`;
                   <div className="w-full text-center sm:text-left space-y-1">
                     {/* ZERO PILL LINE */}
                     <p className="text-xs text-amber-800 font-semibold tracking-wide">
-                      Gotra: {activeProfile.gotra} · {activeProfile.city}, {activeProfile.state || 'India'}
+                      {t('Gotra:', 'गोत्र:')} {activeProfile.gotra} · {activeProfile.city}, {activeProfile.state || t('India', 'भारत')}
                     </p>
 
                     <h2 className="text-2xl font-bold font-serif text-stone-900">
                       {activeProfile.name}
                     </h2>
                     <p className="text-xs text-stone-600 font-medium">
-                      Age: {activeProfile.age} Yrs {activeProfile.dob ? `(DOB: ${activeProfile.dob})` : ''} · Height: {activeProfile.height || "5' 6\""} · {activeProfile.gender}
+                      {t('Age:', 'आयु:')} {activeProfile.age} {t('Yrs', 'वर्ष')} {activeProfile.dob ? `(${t('DOB:', 'जन्म तिथि:')} ${activeProfile.dob})` : ''} · {t('Height:', 'कद:')} {activeProfile.height || "5' 6\""} · {activeProfile.gender === 'Male' ? t('Male', 'वर (पुरुष)') : t('Female', 'वधु (महिला)')}
                     </p>
                     {activeProfile.income && activeProfile.income.trim() !== '' && activeProfile.income !== '---' && activeProfile.income !== 'Not specified' && (
                       <p className="text-xs text-emerald-800 font-bold">
-                        Package / Income: {activeProfile.income}
+                        {t('Package / Income:', 'आय:')} {activeProfile.income}
                       </p>
                     )}
                   </div>
@@ -837,12 +885,12 @@ _Powered by Svayaa.com_`;
                 <div className="space-y-3 border-t border-stone-100 pt-3 text-xs max-h-[48vh] overflow-y-auto pr-1">
                   <div className={`grid grid-cols-1 ${activeProfile.profession && activeProfile.profession.trim() !== '' && activeProfile.profession !== '---' && activeProfile.profession !== 'Not specified' ? 'sm:grid-cols-2' : ''} gap-2.5 bg-stone-50 p-3.5 rounded-xl border border-stone-200/80`}>
                     <div>
-                      <span className="text-stone-500 font-medium">Education:</span>
+                      <span className="text-stone-500 font-medium">{t('Education:', 'शिक्षा:')}</span>
                       <p className="font-semibold text-stone-800 mt-0.5">{activeProfile.education}</p>
                     </div>
                     {activeProfile.profession && activeProfile.profession.trim() !== '' && activeProfile.profession !== '---' && activeProfile.profession !== 'Not specified' && (
                       <div>
-                        <span className="text-stone-500 font-medium">Profession:</span>
+                        <span className="text-stone-500 font-medium">{t('Profession:', 'व्यवसाय:')}</span>
                         <p className="font-semibold text-stone-800 mt-0.5">{activeProfile.profession}</p>
                       </div>
                     )}
@@ -852,7 +900,7 @@ _Powered by Svayaa.com_`;
                     <div className="bg-amber-50/50 p-3.5 rounded-xl border border-amber-200/60 space-y-1">
                       <span className="text-amber-900 font-bold uppercase text-[10px] tracking-wider flex items-center gap-1.5">
                         <Users className="w-3.5 h-3.5 text-amber-700" />
-                        Full Family Details (पारिवारिक विवरण):
+                        {t('Full Family Details:', 'पारिवारिक विवरण:')}
                       </span>
                       <p className="font-medium text-stone-800 leading-relaxed">{activeProfile.familyDetails}</p>
                     </div>
@@ -861,7 +909,7 @@ _Powered by Svayaa.com_`;
                   {activeProfile.about && (
                     <div className="bg-stone-50 p-3.5 rounded-xl border border-stone-200/80 space-y-1">
                       <span className="text-stone-500 font-bold uppercase text-[10px] tracking-wider">
-                        Additional Lineage & Notes:
+                        {t('Additional Lineage & Notes:', 'अतिरिक्त वंश एवं परिचय:')}
                       </span>
                       <p className="font-medium text-stone-800 leading-relaxed">{activeProfile.about}</p>
                     </div>
@@ -880,10 +928,10 @@ _Powered by Svayaa.com_`;
                     >
                       <span className="flex items-center gap-2">
                         <Compass className="w-4 h-4 text-amber-700 group-hover:rotate-45 transition-transform" />
-                        <span>Match Kundali with {activeProfile.name} (वैदिक ३६ गुण मिलान)</span>
+                        <span>{t(`Match Kundali with ${activeProfile.name}`, `${activeProfile.name} के साथ कुंडली मिलान (वैदिक ३६ गुण)`)}</span>
                       </span>
                       <span className="text-[11px] bg-[#380812] text-amber-200 px-2.5 py-1 rounded-lg font-semibold">
-                        Check Milan →
+                        {t('Check Milan →', 'मिलान देखें →')}
                       </span>
                     </button>
                   )}
@@ -892,7 +940,7 @@ _Powered by Svayaa.com_`;
                   <div className="bg-emerald-50 border border-emerald-300 p-4 rounded-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                     <div>
                       <span className="text-[10px] text-emerald-800 font-bold uppercase tracking-wider">
-                        Verified Contact Numbers:
+                        {t('Verified Contact Numbers:', 'सत्यापित संपर्क नंबर:')}
                       </span>
                       <p className="text-emerald-950 font-extrabold text-sm mt-0.5">{activeProfile.contact}</p>
                     </div>
@@ -904,10 +952,10 @@ _Powered by Svayaa.com_`;
                           setActiveChatProfile(prof);
                         }}
                         className="bg-gradient-to-r from-[#380812] to-[#540e1b] hover:from-[#24050b] hover:to-[#380812] text-amber-200 font-semibold px-3.5 py-2 rounded-lg text-xs flex items-center justify-center gap-1.5 shadow-xs cursor-pointer border border-amber-500/20"
-                        title="Chat with candidate family"
+                        title={t('Chat with candidate family', 'परिवार से चैट करें')}
                       >
                         <MessageCircle className="w-3.5 h-3.5 text-amber-300" />
-                        <span>Chat with Family</span>
+                        <span>{t('Chat with Family', 'परिवार से चैट')}</span>
                       </button>
 
                       <button
@@ -917,7 +965,7 @@ _Powered by Svayaa.com_`;
                             ? 'bg-rose-50 border-rose-300 text-rose-700'
                             : 'bg-white border-stone-300 text-stone-700 hover:bg-stone-100'
                         }`}
-                        title="Like biodata"
+                        title={t('Like biodata', 'बायोडाटा पसंद करें')}
                       >
                         <Heart className={`w-3.5 h-3.5 ${likedProfiles.has(activeProfile.id.toString()) ? 'fill-rose-500 text-rose-500' : 'text-stone-500'}`} />
                         <span>{getProfileLikes(activeProfile.id)}</span>
@@ -926,17 +974,17 @@ _Powered by Svayaa.com_`;
                       <button
                         onClick={(e) => shareProfileWhatsApp(activeProfile, e)}
                         className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3 py-2 rounded-lg text-xs flex items-center justify-center gap-1.5 shadow-xs cursor-pointer transition-colors"
-                        title="Share on WhatsApp"
+                        title={t('Share on WhatsApp', 'व्हाट्सएप पर शेयर करें')}
                       >
                         <Share2 className="w-3.5 h-3.5" />
-                        <span>WhatsApp</span>
+                        <span>{t('WhatsApp', 'व्हाट्सएप')}</span>
                       </button>
 
                       <a 
                         href={`tel:${activeProfile.contact.split(',')[0].trim()}`} 
                         className="flex-1 sm:flex-initial bg-emerald-700 hover:bg-emerald-800 text-white font-semibold px-4 py-2 rounded-lg text-xs flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
                       >
-                        <Phone className="w-3.5 h-3.5" /> Call Family
+                        <Phone className="w-3.5 h-3.5" /> {t('Call Family', 'कॉल करें')}
                       </a>
                     </div>
                   </div>
@@ -948,16 +996,22 @@ _Powered by Svayaa.com_`;
                 <div className="w-16 h-16 bg-amber-100 rounded-2xl mx-auto flex items-center justify-center shadow-inner border border-amber-300">
                   <ShieldAlert className="w-8 h-8 text-amber-800" />
                 </div>
-                <h3 className="text-2xl font-serif font-bold text-stone-900">Free View Limit Reached</h3>
+                <h3 className="text-2xl font-serif font-bold text-stone-900">{t('Free View Limit Reached', 'निःशुल्क व्यू सीमा समाप्त')}</h3>
                 <p className="text-xs text-stone-600 max-w-sm mx-auto leading-relaxed">
-                  You have viewed 3 free biodatas. To view unlimited community profiles and support fellow Rathore families, please register your family details on our dedicated page.
+                  {t(
+                    'You have viewed 3 free biodatas. To view unlimited community profiles and support fellow Rathore families, please register your family details on our dedicated page.',
+                    'आपने 3 निःशुल्क बायोडाटा देख लिए हैं। असीमित समाज प्रोफ़ाइल देखने के लिए, कृपया अपना पारिवारिक विवरण दर्ज करें।'
+                  )}
                 </p>
                 <div className="bg-amber-50 p-4 rounded-2xl border border-amber-200 text-left space-y-1.5 max-w-sm mx-auto text-xs">
                   <p className="font-bold text-amber-900 flex items-center gap-1.5">
-                    <Sparkles className="w-4 h-4 text-amber-700" /> Community Mutual Sharing Policy
+                    <Sparkles className="w-4 h-4 text-amber-700" /> {t('Community Mutual Sharing Policy', 'समाज पारस्परिक सहयोग नीति')}
                   </p>
                   <p className="text-stone-600 leading-relaxed">
-                    By submitting your family details, you keep the Rathore Samaj directory authentic and verified for everyone.
+                    {t(
+                      'By submitting your family details, you keep the Rathore Samaj directory authentic and verified for everyone.',
+                      'अपना पारिवारिक विवरण जोड़कर आप राठौर समाज डायरेक्टरी को सभी के लिए विश्वसनीय और सत्यापित बनाए रखते हैं।'
+                    )}
                   </p>
                 </div>
                 <button 
@@ -967,7 +1021,7 @@ _Powered by Svayaa.com_`;
                   }} 
                   className="w-full max-w-sm mx-auto bg-gradient-to-r from-[#380812] to-[#540e1b] hover:from-[#24050b] hover:to-[#380812] text-amber-200 font-bold py-3 rounded-xl shadow-md block text-xs cursor-pointer transition-all border border-amber-400/30"
                 >
-                  📝 Open Add Family Details Page (Unlock Unlimited Access)
+                  {t('📝 Open Add Family Details Page (Unlock Unlimited Access)', '📝 परिवार विवरण दर्ज करें (असीमित एक्सेस अनलॉक करें)')}
                 </button>
               </div>
             )}
