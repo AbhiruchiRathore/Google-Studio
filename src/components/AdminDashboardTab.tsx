@@ -22,7 +22,7 @@ export const DEFAULT_ADMIN_CONFIG: AdminRuntimeConfig = {
   annualPlanPrice: 499,
   lifetimePlanPrice: 1499,
   adsMonetizationEnabled: false,
-  bannerBroadcastMessage: '॥ जय माताजी की ॥ राठौड़ रिश्ते पोर्टल पर आपका स्वागत है। समस्त परिचय पत्र पूर्णतः समाज सत्यापित हैं।',
+  bannerBroadcastMessage: 'Jai Mataji Ki! Welcome to Rathore Rishtey Portal. All community matrimonial biodatas are verified.',
   isBroadcastActive: true,
   requireAdminVerification: false,
   kundaliAstrologerServiceEnabled: true,
@@ -96,6 +96,7 @@ export const AdminDashboardTab: React.FC<AdminDashboardTabProps> = ({
     sessionStorage.removeItem('samaj_admin_session');
     setUsername('');
     setPassword('');
+    onNavigateTab('signup');
   };
 
   // Filtered Profiles for Admin Moderation
@@ -233,7 +234,7 @@ export const AdminDashboardTab: React.FC<AdminDashboardTabProps> = ({
           <span className="text-[10px] font-bold text-stone-400 uppercase">Total Candidates</span>
           <p className="text-2xl font-bold font-serif text-stone-900 mt-1">{profiles.length}</p>
           <span className="text-[11px] text-stone-500 font-medium">
-            {totalGrooms} वर · {totalBrides} वधु
+            {totalGrooms} Grooms · {totalBrides} Brides
           </span>
         </div>
 

@@ -13,11 +13,11 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateTab }) => {
         
         {/* Top Blessing & Motto */}
         <div className="text-center pb-6 border-b border-amber-500/20">
-          <p className="text-xs sm:text-sm font-serif text-amber-200/90 tracking-widest">
-            ॥ संघे शक्तिः कलियुगे • ॥ जय माताजी की • जय श्री राम ॥
+          <p className="text-xs sm:text-sm font-serif text-amber-200/90 tracking-widest uppercase">
+            Rathore Kshatriya Rajput Samaj • Digital Matrimonial & Community Network
           </p>
           <p className="text-[11px] text-stone-400 mt-1">
-            समस्त राठौड़ क्षत्रिय समाज का गौरवशाली डिजिटल संगम
+            Dedicated to bringing community families together through verified digital networking
           </p>
         </div>
 
@@ -29,7 +29,7 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateTab }) => {
                 RR
               </div>
               <p className="font-bold text-amber-100 text-sm font-serif tracking-wide">
-                Rathore Rishtey • राठौड़ रिश्ते
+                Rathore Rishtey • Matrimonial Network
               </p>
             </div>
             <p className="text-stone-400 max-w-md">
@@ -48,13 +48,13 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateTab }) => {
               onClick={() => { onNavigateTab('kundali'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} 
               className="hover:text-amber-300 font-semibold text-amber-200/90 cursor-pointer transition-colors"
             >
-              Kundali Milan (३६ गुण)
+              Kundali Milan (36 Gunas)
             </button>
             <button 
               onClick={() => { onNavigateTab('guest-list'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} 
               className="hover:text-amber-300 cursor-pointer transition-colors"
             >
-              Guest List (अतिथि सूची)
+              Guest List Planner
             </button>
             <button 
               onClick={() => { onNavigateTab('directory'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} 
@@ -79,12 +79,6 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateTab }) => {
               className="hover:text-amber-300 cursor-pointer transition-colors"
             >
               Add Family Details
-            </button>
-            <button 
-              onClick={() => { onNavigateTab('admin'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} 
-              className="hover:text-amber-300 text-stone-400 font-medium cursor-pointer transition-colors"
-            >
-              Admin Portal
             </button>
           </div>
         </div>

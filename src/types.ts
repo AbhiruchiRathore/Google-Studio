@@ -96,13 +96,25 @@ export interface SamajEvent {
 }
 
 export interface AuthSession {
-  method: 'Google' | 'Phone';
+  method: 'Google' | 'Phone' | 'Password' | 'UsernamePassword';
   name?: string;
   email?: string;
   photoUrl?: string;
   phone?: string;
+  username?: string;
   loggedInAt: string;
   verified?: boolean;
+}
+
+export interface UserAccount {
+  id: string;
+  username: string;
+  fullName: string;
+  password: string;
+  phone?: string;
+  email?: string;
+  gotra?: string;
+  createdAt: string;
 }
 
 export interface ChatMessage {

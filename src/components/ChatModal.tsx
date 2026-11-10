@@ -13,7 +13,7 @@ interface ChatModalProps {
 }
 
 const QUICK_PROMPTS = [
-  "जय माताजी की! We saw your biodata and would like to connect.",
+  "Jai Mataji Ki! We saw your biodata and would like to connect.",
   "Greetings! Can we speak with the candidate's parents regarding Gotra?",
   "Kindly share your family's astrological Kundali / Patrika details.",
   "We are also from the same region. Let's exchange family contact numbers."
@@ -49,7 +49,7 @@ export const ChatModal: React.FC<ChatModalProps> = ({
         profileId: profile.id,
         sender: 'candidate',
         senderName: `${profile.name}'s Family`,
-        text: `जय माताजी की! Welcome to ${profile.name}'s verified matrimonial profile. Feel free to ask about our Gotra (${profile.gotra}), family background, or schedule a parent-to-parent conversation.`,
+        text: `Jai Mataji Ki! Welcome to ${profile.name}'s verified matrimonial profile. Feel free to ask about our Gotra (${profile.gotra}), family background, or schedule a parent-to-parent conversation.`,
         timestamp: 'Active today'
       }
     ];
@@ -105,7 +105,7 @@ export const ChatModal: React.FC<ChatModalProps> = ({
         profileId: profile.id,
         sender: 'candidate',
         senderName: `${profile.name}'s Family`,
-        text: `जय माताजी की! Thank you for reaching out. We have received your note regarding ${profile.name} (${profile.gotra} Gotra). Our elders will review the details and respond shortly. You may also reach us directly at ${profile.contact}.`,
+        text: `Jai Mataji Ki! Thank you for reaching out. We have received your note regarding ${profile.name} (${profile.gotra} Gotra). Our elders will review the details and respond shortly. You may also reach us directly at ${profile.contact}.`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
       saveMessages([...updated, replyMsg]);

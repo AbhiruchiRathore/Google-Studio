@@ -48,7 +48,7 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
                 <ShieldCheck className="w-4 h-4 text-amber-300 fill-amber-300/20" />
               </div>
               <p className="text-[11px] text-amber-200/85 font-medium tracking-wide flex items-center gap-1">
-                <span className="text-amber-300 font-serif">शुभ विवाह</span> • डिजिटल वैवाहिक एवं व्यापार निर्देशिका
+                <span className="text-amber-300 font-serif font-semibold">Shubh Vivah</span> • Digital Matrimonial & Business Directory
               </p>
             </div>
           </div>
@@ -80,7 +80,7 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
             >
               <Compass className="w-4 h-4 text-amber-300" />
               <span>Kundali Milan</span>
-              <span className="text-[10px] bg-amber-400 text-stone-950 font-extrabold px-1.5 py-0.2 rounded-md">३६ गुण</span>
+              <span className="text-[10px] bg-amber-400 text-stone-950 font-extrabold px-1.5 py-0.2 rounded-md">36 Gunas</span>
               {currentTab === 'kundali' && (
                 <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-gradient-to-r from-amber-300 via-amber-200 to-amber-300 rounded-full" />
               )}
@@ -96,7 +96,7 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
             >
               <ClipboardList className="w-4 h-4 text-amber-300" />
               <span>Guest List</span>
-              <span className="text-[10px] bg-rose-500/80 text-white font-bold px-1.5 py-0.2 rounded-md">अतिथि</span>
+              <span className="text-[10px] bg-rose-500/80 text-white font-bold px-1.5 py-0.2 rounded-md">Planner</span>
               {currentTab === 'guest-list' && (
                 <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-gradient-to-r from-amber-300 via-amber-200 to-amber-300 rounded-full" />
               )}
@@ -201,22 +201,22 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
 
           {/* Account Actions */}
           <div className="hidden md:flex items-center space-x-2.5">
-            {/* Admin Portal Button */}
-            <button
-              onClick={() => handleTabClick('admin')}
-              title="Admin Portal (Username & Password Protected)"
-              className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all border cursor-pointer flex items-center gap-1.5 ${
-                currentTab === 'admin'
-                  ? 'bg-amber-300 text-[#4c0d1b] border-amber-200 font-bold shadow-sm'
-                  : 'bg-black/30 text-amber-200/80 hover:text-amber-100 hover:bg-black/45 border-amber-400/25'
-              }`}
-            >
-              <Lock className="w-3.5 h-3.5 text-amber-300" />
-              <span className="text-[11px] font-medium">Admin</span>
-            </button>
-
             {authSession ? (
               <div className="flex items-center gap-2">
+                {authSession.username === 'AdminAbhi' && (
+                  <button
+                    onClick={() => handleTabClick('admin')}
+                    title="Open Admin Dashboard"
+                    className={`flex items-center gap-1.5 px-2.5 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                      currentTab === 'admin'
+                        ? 'bg-amber-300 text-[#4c0d1b] border-amber-200 shadow-sm'
+                        : 'bg-black/30 text-amber-200 border-amber-400/30 hover:bg-black/45'
+                    }`}
+                  >
+                    <span>Admin Dashboard</span>
+                  </button>
+                )}
+
                 <button
                   onClick={() => handleTabClick('dashboard')}
                   title="Open Member Dashboard"
@@ -284,7 +284,7 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
             <span className="flex items-center gap-2.5">
               <Compass className="w-4 h-4 text-amber-300" /> Kundali Milan
             </span>
-            <span className="text-[10px] bg-amber-400 text-stone-950 font-extrabold px-1.5 py-0.2 rounded-md">३६ गुण</span>
+            <span className="text-[10px] bg-amber-400 text-stone-950 font-extrabold px-1.5 py-0.2 rounded-md">36 Gunas</span>
           </button>
           <button 
             onClick={() => handleTabClick('guest-list')} 
@@ -295,7 +295,7 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
             <span className="flex items-center gap-2.5">
               <ClipboardList className="w-4 h-4 text-amber-300" /> Guest List Planner
             </span>
-            <span className="text-[10px] bg-rose-500/80 text-white font-bold px-1.5 py-0.2 rounded-md">अतिथि</span>
+            <span className="text-[10px] bg-rose-500/80 text-white font-bold px-1.5 py-0.2 rounded-md">Planner</span>
           </button>
           <button 
             onClick={() => handleTabClick('directory')} 
@@ -321,17 +321,6 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
           >
             <Calendar className="w-4 h-4 text-amber-300" /> Samaj Events & News
           </button>
-          <button 
-            onClick={() => handleTabClick('admin')} 
-            className={`w-full text-left px-3.5 py-2 rounded-xl font-medium text-xs flex items-center justify-between border border-amber-400/30 bg-black/25 ${
-              currentTab === 'admin' ? 'bg-amber-300 text-[#4c0d1b] font-bold' : 'text-amber-200'
-            }`}
-          >
-            <span className="flex items-center gap-2">
-              <Lock className="w-3.5 h-3.5 text-amber-300" /> Admin Dashboard (Password Protected)
-            </span>
-            <span className="text-[10px] bg-rose-900 text-rose-200 px-1.5 py-0.5 rounded">AdminAbhi</span>
-          </button>
 
           {/* Member actions in mobile menu if logged in */}
           {authSession ? (
@@ -346,6 +335,14 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
               >
                 <LayoutDashboard className="w-4 h-4" /> Member Dashboard
               </button>
+              {authSession.username === 'AdminAbhi' && (
+                <button 
+                  onClick={() => handleTabClick('admin')} 
+                  className="w-full bg-amber-400/20 border border-amber-300/50 text-amber-100 font-bold py-2.5 rounded-xl text-xs text-center flex items-center justify-center gap-1.5"
+                >
+                  <span>Open Admin Dashboard (AdminAbhi)</span>
+                </button>
+              )}
               <button 
                 onClick={() => handleTabClick('create-profile')} 
                 className="w-full bg-rose-900/70 border border-amber-300/30 text-amber-100 font-bold py-2.5 rounded-xl text-xs text-center flex items-center justify-center gap-1.5"

@@ -173,9 +173,6 @@ export const FamilyDetailsTab: React.FC<FamilyDetailsTabProps> = ({
           <div>
             <h1 className="text-xl sm:text-2xl font-serif font-bold text-stone-900 flex items-center gap-2">
               Add Family Details
-              <span className="text-xs font-sans font-medium text-amber-900 bg-amber-100 px-2 py-0.5 rounded-md">
-                पारिवारिक विवरण
-              </span>
             </h1>
             <p className="text-xs text-stone-500">
               Register your family lineage & biodata into the Rathore Samaj Matrimony Directory
@@ -198,7 +195,7 @@ export const FamilyDetailsTab: React.FC<FamilyDetailsTabProps> = ({
         </div>
         <div className="space-y-1 text-center sm:text-left">
           <h2 className="text-lg font-serif font-bold text-amber-200 flex items-center justify-center sm:justify-start gap-2">
-            Why Register Family Details? (पारिवारिक पंजीकरण का महत्व)
+            Why Register Family Details?
           </h2>
           <p className="text-xs text-stone-300 leading-relaxed font-light">
             Our Samaj thrives on mutual trust and verified connections. By contributing your family details, your biodata is securely visible to verified community families, and you instantly unlock unlimited views to 450+ candidate contacts across India.
@@ -222,14 +219,14 @@ export const FamilyDetailsTab: React.FC<FamilyDetailsTabProps> = ({
           <div className="flex items-center gap-2 border-b border-amber-200/60 pb-2">
             <User className="w-4 h-4 text-red-900" />
             <h3 className="font-bold text-red-950 text-sm uppercase tracking-wider">
-              1. Candidate Details (प्रत्याशी विवरण)
+              1. Candidate Details
             </h3>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
             <div className="sm:col-span-2">
               <label className="font-bold block text-slate-700 mb-1.5">
-                Candidate Full Name (प्रत्याशी का पूरा नाम)
+                Candidate Full Name
               </label>
               <input 
                 type="text" 
@@ -242,21 +239,21 @@ export const FamilyDetailsTab: React.FC<FamilyDetailsTabProps> = ({
 
             <div>
               <label className="font-bold block text-slate-700 mb-1.5">
-                Gender (लिंग) *
+                Gender *
               </label>
               <select 
                 value={form.gender}
                 onChange={(e) => setForm({ ...form, gender: e.target.value as 'Male' | 'Female' })}
                 className="w-full p-2.5 border rounded-xl border-amber-300 bg-white font-medium focus:ring-2 focus:ring-amber-500 focus:outline-none"
               >
-                <option value="Male">Groom / वर (Male)</option>
-                <option value="Female">Bride / वधु (Female)</option>
+                <option value="Male">Groom (Male)</option>
+                <option value="Female">Bride (Female)</option>
               </select>
             </div>
 
             <div>
               <label className="font-bold block text-slate-700 mb-1.5">
-                Age in Years (उम्र)
+                Age in Years
               </label>
               <input 
                 type="number" 
@@ -276,14 +273,14 @@ export const FamilyDetailsTab: React.FC<FamilyDetailsTabProps> = ({
           <div className="flex items-center gap-2 border-b border-amber-200/60 pb-2">
             <Home className="w-4 h-4 text-red-900" />
             <h3 className="font-bold text-red-950 text-sm uppercase tracking-wider">
-              2. Parents & Grandfather (माता-पिता एवं दादाजी विवरण)
+              2. Parents & Grandfather Details
             </h3>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
             <div>
               <label className="font-bold block text-slate-700 mb-1.5">
-                Father's Name (पिताजी का नाम) <span className="text-red-600">*</span>
+                Father's Name <span className="text-red-600">*</span>
               </label>
               <input 
                 required 
@@ -297,7 +294,7 @@ export const FamilyDetailsTab: React.FC<FamilyDetailsTabProps> = ({
 
             <div>
               <label className="font-bold block text-slate-700 mb-1.5">
-                Father's Occupation (पिताजी का व्यवसाय)
+                Father's Occupation
               </label>
               <input 
                 type="text" 
@@ -310,7 +307,7 @@ export const FamilyDetailsTab: React.FC<FamilyDetailsTabProps> = ({
 
             <div>
               <label className="font-bold block text-slate-700 mb-1.5">
-                Mother's Name (माताजी का नाम)
+                Mother's Name
               </label>
               <input 
                 type="text" 
@@ -323,20 +320,20 @@ export const FamilyDetailsTab: React.FC<FamilyDetailsTabProps> = ({
 
             <div>
               <label className="font-bold block text-slate-700 mb-1.5">
-                Mother's Status / Occupation (माताजी का कार्य)
+                Mother's Status / Occupation
               </label>
               <input 
                 type="text" 
                 value={form.motherOccupation}
                 onChange={(e) => setForm({ ...form, motherOccupation: e.target.value })}
                 className="w-full p-2.5 border rounded-xl border-amber-300 bg-white focus:ring-2 focus:ring-amber-500 focus:outline-none" 
-                placeholder="e.g. Homemaker (गृहणी) / Teacher" 
+                placeholder="e.g. Homemaker / Teacher" 
               />
             </div>
 
             <div className="sm:col-span-2">
               <label className="font-bold block text-slate-700 mb-1.5">
-                Grandfather's Name (दादाजी का नाम)
+                Grandfather's Name
               </label>
               <input 
                 type="text" 
@@ -354,14 +351,14 @@ export const FamilyDetailsTab: React.FC<FamilyDetailsTabProps> = ({
           <div className="flex items-center gap-2 border-b border-amber-200/60 pb-2">
             <ShieldCheck className="w-4 h-4 text-red-900" />
             <h3 className="font-bold text-red-950 text-sm uppercase tracking-wider">
-              3. Gotra & Clan Details (स्वगोत्र, ननिहाल गोत्र एवं कुलदेवी)
+              3. Gotra & Clan Details
             </h3>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
             <div>
               <label className="font-bold block text-slate-700 mb-1.5">
-                Self Gotra (स्वगोत्र / राठौड़ गोत्र) <span className="text-red-600">*</span>
+                Self Gotra <span className="text-red-600">*</span>
               </label>
               <input 
                 required 
@@ -375,7 +372,7 @@ export const FamilyDetailsTab: React.FC<FamilyDetailsTabProps> = ({
 
             <div>
               <label className="font-bold block text-slate-700 mb-1.5">
-                Maternal Gotra (मातृक / ननिहाल गोत्र)
+                Maternal Gotra
               </label>
               <input 
                 type="text" 
@@ -388,7 +385,7 @@ export const FamilyDetailsTab: React.FC<FamilyDetailsTabProps> = ({
 
             <div>
               <label className="font-bold block text-slate-700 mb-1.5">
-                Kuldevi / Kuldevta (कुलदेवी)
+                Kuldevi / Kuldevta
               </label>
               <input 
                 type="text" 
@@ -406,14 +403,14 @@ export const FamilyDetailsTab: React.FC<FamilyDetailsTabProps> = ({
           <div className="flex items-center gap-2 border-b border-amber-200/60 pb-2">
             <Users className="w-4 h-4 text-red-900" />
             <h3 className="font-bold text-red-950 text-sm uppercase tracking-wider">
-              4. Siblings Details (भाई एवं बहन विवरण)
+              4. Siblings Details
             </h3>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
             <div>
               <label className="font-bold block text-slate-700 mb-1.5">
-                Brothers (भाई विवरण)
+                Brothers
               </label>
               <input 
                 type="text" 
@@ -426,7 +423,7 @@ export const FamilyDetailsTab: React.FC<FamilyDetailsTabProps> = ({
 
             <div>
               <label className="font-bold block text-slate-700 mb-1.5">
-                Sisters (बहन विवरण)
+                Sisters
               </label>
               <input 
                 type="text" 
@@ -444,14 +441,14 @@ export const FamilyDetailsTab: React.FC<FamilyDetailsTabProps> = ({
           <div className="flex items-center gap-2 border-b border-amber-200/60 pb-2">
             <Phone className="w-4 h-4 text-red-900" />
             <h3 className="font-bold text-red-950 text-sm uppercase tracking-wider">
-              5. Hometown & Contact Information (मूल निवास एवं संपर्क सूत्र)
+              5. Hometown & Contact Information
             </h3>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
             <div>
               <label className="font-bold block text-slate-700 mb-1.5">
-                Native Place / Hometown (मूल निवास) <span className="text-red-600">*</span>
+                Native Place / Hometown <span className="text-red-600">*</span>
               </label>
               <input 
                 required 
@@ -465,7 +462,7 @@ export const FamilyDetailsTab: React.FC<FamilyDetailsTabProps> = ({
 
             <div>
               <label className="font-bold block text-slate-700 mb-1.5">
-                Current City of Residence (वर्तमान शहर)
+                Current City of Residence
               </label>
               <input 
                 type="text" 
@@ -478,7 +475,7 @@ export const FamilyDetailsTab: React.FC<FamilyDetailsTabProps> = ({
 
             <div>
               <label className="font-bold block text-slate-700 mb-1.5">
-                State (राज्य)
+                State
               </label>
               <input 
                 type="text" 
@@ -505,7 +502,7 @@ export const FamilyDetailsTab: React.FC<FamilyDetailsTabProps> = ({
 
             <div>
               <label className="font-bold block text-slate-700 mb-1.5">
-                Secondary Phone Number (वैकल्पिक संपर्क)
+                Secondary Phone Number (Optional)
               </label>
               <input 
                 type="tel" 
@@ -518,7 +515,7 @@ export const FamilyDetailsTab: React.FC<FamilyDetailsTabProps> = ({
 
             <div className="sm:col-span-3">
               <label className="font-bold block text-slate-700 mb-1.5">
-                Family Status & Background Notes (पारिवारिक परिचय व प्रतिष्ठा)
+                Family Status & Background Notes
               </label>
               <textarea 
                 rows={3}

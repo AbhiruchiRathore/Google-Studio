@@ -337,12 +337,12 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
           <div className="p-4 bg-amber-50/60 rounded-xl border border-amber-200 space-y-3">
             <span className="font-bold text-red-950 text-xs flex items-center gap-1.5 uppercase tracking-wide">
               <Users className="w-4 h-4 text-amber-700" />
-              Family Details (पारिवारिक विवरण)
+              Family Details
             </span>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Father's Name (पिताजी का नाम)</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Father's Name</label>
                 <input 
                   type="text" 
                   name="fatherName"
@@ -378,7 +378,7 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Maternal Gotra (ननिहाल गोत्र)</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Maternal Gotra (Mother's Side)</label>
                 <input 
                   type="text" 
                   name="maternalGotra"
@@ -392,7 +392,7 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Grandfather's Name (दादाजी का नाम)</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Grandfather's Name</label>
                 <input 
                   type="text" 
                   name="grandfatherName"
@@ -403,7 +403,7 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Siblings (भाई-बहन)</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Siblings</label>
                 <input 
                   type="text" 
                   name="siblings"

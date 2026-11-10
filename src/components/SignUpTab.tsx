@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   LogOut, CheckCircle2, Copy, Check, ExternalLink, 
-  AlertTriangle, RefreshCw, Sparkles, HelpCircle 
+  AlertTriangle, RefreshCw, Sparkles, HelpCircle,
+  User, Lock, Eye, EyeOff, Phone, UserPlus, LogIn,
+  AlertCircle, ArrowRight, ShieldCheck
 } from 'lucide-react';
-import { AuthSession, TabType } from '../types';
+import { AuthSession, TabType, UserAccount } from '../types';
 import { GoogleSignInModal } from './GoogleSignInModal';
 import { auth } from '../firebase';
 import { GoogleAuthProvider, signInWithRedirect, signInWithPopup, signOut } from 'firebase/auth';
@@ -16,6 +18,29 @@ interface SignUpTabProps {
   hasRegisteredProfile?: boolean;
   unlockedCount?: number;
 }
+
+// Initial seeded accounts so existing testing accounts work out-of-the-box
+const INITIAL_ACCOUNTS: UserAccount[] = [
+  {
+    id: 'user_admin_demo',
+    username: 'abhiruchi97',
+    fullName: 'Abhiruchi Rathore',
+    password: 'Abhiruchi@123',
+    phone: '9826012345',
+    email: 'abhiruchirathore97@gmail.com',
+    gotra: 'Indruke',
+    createdAt: '2026-01-01T00:00:00.000Z'
+  },
+  {
+    id: 'user_member_demo',
+    username: 'rathore_member',
+    fullName: 'Rathore Samaj Member',
+    password: 'Member@123',
+    phone: '9820011223',
+    gotra: 'Pindoria',
+    createdAt: '2026-01-01T00:00:00.000Z'
+  }
+];
 
 /**
  * Authentication Method 1: Desktop Browser
@@ -105,13 +130,46 @@ export default function SignUpTab({
   const [copiedDomain, setCopiedDomain] = useState(false);
   const [isSigningIn, setIsSigningIn] = useState(false);
 
-  // Dispatches to Desktop browser (signInWithPopup) or Android APK WebView (signInWithRedirect)
+  // Authentication Mode: 'login' or 'signup'
+  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
+
+  // Sign Up Form State
+  const [signupFullName, setSignupFullName] = useState('');
+  const [signupUsername, setSignupUsername] = useState('');
+  const [signupPhone, setSignupPhone] = useState('');
+  const [signupPassword, setSignupPassword] = useState('');
+  const [signupConfirmPassword, setSignupConfirmPassword] = useState('');
+  const [showSignupPassword, setShowSignupPassword] = useState(false);
+  const [signupError, setSignupError] = useState<string | null>(null);
+  const [signupSuccessInfo, setSignupSuccessInfo] = useState<{ username: string; fullName: string } | null>(null);
+
+  // Log In Form State
+  const [loginIdentifier, setLoginIdentifier] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
+
+  // Load registered accounts
+  const getStoredAccounts = (): UserAccount[] => {
+    try {
+      const stored = localStorage.getItem('samaj_user_accounts');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.error("Error reading accounts:", e);
+    }
+    return INITIAL_ACCOUNTS;
+  };
+
+  // Google Sign-In Handler
   const handleGoogleSignIn = async () => {
     if (isAndroidEnvironment()) {
-      // Android APK (WebView) flow - preserving working redirect flow
       await signInWithAndroidWebView();
     } else {
-      // Desktop browser flow: execute native Firebase signInWithPopup()
       setIsSigningIn(true);
       try {
         await signInWithDesktopBrowser((session) => {
@@ -120,7 +178,6 @@ export default function SignUpTab({
         });
       } catch (error: any) {
         console.warn("Desktop Google Sign-In caught error:", error?.code, error?.message);
-        // Firebase closes popup after 1s if domain is not on Authorized Domains list
         if (
           error?.code === 'auth/unauthorized-domain' ||
           error?.code === 'auth/popup-closed-by-user' ||
@@ -143,8 +200,152 @@ export default function SignUpTab({
     onNavigateTab('dashboard');
   };
 
-  // Backwards compatibility alias
-  const handleRealGoogleSignIn = handleGoogleSignIn;
+  // Sign Up Handler
+  const handleSignupSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setSignupError(null);
+
+    const cleanUsername = signupUsername.trim().toLowerCase();
+    const cleanFullName = signupFullName.trim();
+    const cleanPassword = signupPassword.trim();
+
+    if (!cleanFullName) {
+      setSignupError('Please enter your full name.');
+      return;
+    }
+
+    if (!cleanUsername || cleanUsername.length < 3) {
+      setSignupError('Username must be at least 3 characters.');
+      return;
+    }
+
+    // Alphanumeric with underscores allowed
+    if (!/^[a-zA-Z0-9_]+$/.test(cleanUsername)) {
+      setSignupError('Username can only contain letters, numbers, and underscores (_).');
+      return;
+    }
+
+    if (!cleanPassword || cleanPassword.length < 4) {
+      setSignupError('Password must be at least 4 characters.');
+      return;
+    }
+
+    if (cleanPassword !== signupConfirmPassword.trim()) {
+      setSignupError('Passwords do not match.');
+      return;
+    }
+
+    const accounts = getStoredAccounts();
+    const existing = accounts.find(
+      acc => acc.username.toLowerCase() === cleanUsername || (acc.phone && acc.phone === signupPhone.trim())
+    );
+
+    if (existing) {
+      setSignupError(`Username "${cleanUsername}" is already registered. Please choose another username or log in.`);
+      return;
+    }
+
+    // Create and save account
+    const newAccount: UserAccount = {
+      id: `user_${Date.now()}`,
+      username: cleanUsername,
+      fullName: cleanFullName,
+      password: cleanPassword,
+      phone: signupPhone.trim() || undefined,
+      createdAt: new Date().toISOString()
+    };
+
+    const updated = [newAccount, ...accounts];
+    try {
+      localStorage.setItem('samaj_user_accounts', JSON.stringify(updated));
+    } catch (err) {
+      console.error("Error saving account:", err);
+    }
+
+    // Set success state
+    setSignupSuccessInfo({
+      username: cleanUsername,
+      fullName: cleanFullName
+    });
+
+    // Auto pre-fill login fields
+    setLoginIdentifier(cleanUsername);
+    setLoginPassword(cleanPassword);
+    setLoginError(null);
+
+    // Switch view to provide login option as requested
+    setAuthMode('login');
+  };
+
+  // Log In Handler
+  const handleLoginSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError(null);
+
+    const rawIdentifier = loginIdentifier.trim();
+    const identifier = rawIdentifier.toLowerCase();
+    const password = loginPassword.trim();
+
+    if (!identifier) {
+      setLoginError('Please enter your username or mobile number.');
+      return;
+    }
+
+    if (!password) {
+      setLoginError('Please enter your password.');
+      return;
+    }
+
+    // 1. Check for Admin Credentials (AdminAbhi / Abhiruchi@123)
+    if (
+      (identifier === 'adminabhi' || rawIdentifier === 'AdminAbhi') &&
+      password === 'Abhiruchi@123'
+    ) {
+      sessionStorage.setItem('samaj_admin_session', 'active');
+      const adminSession: AuthSession = {
+        method: 'UsernamePassword',
+        name: 'Admin Abhiruchi',
+        username: 'AdminAbhi',
+        loggedInAt: new Date().toISOString(),
+        verified: true
+      };
+
+      onLogin(adminSession);
+      onNavigateTab('admin');
+      return;
+    }
+
+    const accounts = getStoredAccounts();
+    const matched = accounts.find(acc => 
+      acc.username.toLowerCase() === identifier || 
+      (acc.phone && acc.phone === identifier) ||
+      (acc.email && acc.email.toLowerCase() === identifier)
+    );
+
+    if (!matched) {
+      setLoginError('This username is not registered. Please sign up first.');
+      return;
+    }
+
+    if (matched.password !== password) {
+      setLoginError('Incorrect password. Please verify and try again.');
+      return;
+    }
+
+    // Successful login
+    const session: AuthSession = {
+      method: 'UsernamePassword',
+      name: matched.fullName || matched.username,
+      username: matched.username,
+      phone: matched.phone || '',
+      email: matched.email || '',
+      loggedInAt: new Date().toISOString(),
+      verified: true
+    };
+
+    onLogin(session);
+    onNavigateTab('dashboard');
+  };
 
   if (authSession) {
     return (
@@ -159,9 +360,30 @@ export default function SignUpTab({
           </div>
           <div>
             <h2 className="text-2xl font-serif font-bold text-stone-900">Welcome, {authSession.name || 'Samaj Member'}</h2>
-            <p className="text-xs text-stone-500 mt-1">Verified via {authSession.method}</p>
+            <p className="text-xs text-stone-500 mt-1">
+              Verified via {authSession.method === 'UsernamePassword' ? 'Username & Password' : authSession.method}
+            </p>
+            {authSession.username && (
+              <p className="text-xs font-mono text-amber-900 bg-amber-50 px-2.5 py-1 rounded-md inline-block mt-2 border border-amber-200">
+                @{authSession.username}
+              </p>
+            )}
           </div>
-          <button onClick={onLogout} className="w-full border border-stone-300 hover:bg-stone-50 text-stone-700 font-semibold py-3 rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer transition-colors">
+          <div className="grid grid-cols-2 gap-3 pt-2">
+            <button
+              onClick={() => onNavigateTab('dashboard')}
+              className="bg-gradient-to-r from-amber-300 to-amber-400 text-[#4c0d1b] font-bold py-2.5 px-3 rounded-xl text-xs shadow-xs hover:brightness-105 cursor-pointer"
+            >
+              Member Dashboard
+            </button>
+            <button
+              onClick={() => onNavigateTab('matrimony')}
+              className="bg-[#6e1628] hover:bg-[#851834] text-amber-100 font-bold py-2.5 px-3 rounded-xl text-xs shadow-xs cursor-pointer"
+            >
+              Browse Biodatas
+            </button>
+          </div>
+          <button onClick={onLogout} className="w-full border border-stone-300 hover:bg-stone-50 text-stone-700 font-semibold py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer transition-colors">
             <LogOut className="w-4 h-4" /> Sign Out
           </button>
         </div>
@@ -173,19 +395,26 @@ export default function SignUpTab({
     <div className="space-y-6 max-w-md mx-auto py-8 px-4">
       <GoogleSignInModal isOpen={showGoogleModal} onClose={() => setShowGoogleModal(false)} onSuccess={handleModalSuccess} />
 
-      <div className="bg-white p-6 md:p-8 rounded-3xl border border-stone-200/90 shadow-sm space-y-6 text-center">
-        <div>
+      <div className="bg-white p-6 md:p-8 rounded-3xl border border-stone-200/90 shadow-sm space-y-6">
+        <div className="text-center">
+          <div className="w-12 h-12 bg-gradient-to-br from-amber-300 to-amber-500 rounded-2xl mx-auto flex items-center justify-center text-[#4c0d1b] font-serif font-bold text-lg border border-amber-200 shadow-xs mb-3">
+            RR
+          </div>
           <h2 className="text-2xl font-serif font-bold text-stone-900">Welcome to Rathore Rishtey</h2>
-          <p className="text-xs text-stone-500 mt-1 font-light">Sign in to view matrimonial biodatas and member directory.</p>
+          <p className="text-xs text-stone-500 mt-1 font-light">
+            Rathore Rajput Community • Matrimonial & Business Directory
+          </p>
         </div>
 
-        <div className="space-y-5">
-          {/* Option 1: Google Sign-In Button */}
+        {/* ========================================================= */}
+        {/* SECTION 1: CONTINUE WITH GOOGLE (Preserved 1-Click Flow)  */}
+        {/* ========================================================= */}
+        <div className="space-y-3">
           <button 
             type="button" 
-            onClick={handleRealGoogleSignIn} 
+            onClick={handleGoogleSignIn} 
             disabled={isSigningIn}
-            className="w-full flex items-center justify-center gap-3 bg-white border border-stone-300 hover:bg-stone-50/80 active:bg-stone-100 text-stone-700 font-semibold py-3.5 px-4 rounded-xl shadow-2xs hover:shadow-xs transition-all text-xs cursor-pointer disabled:opacity-60"
+            className="w-full flex items-center justify-center gap-3 bg-white border border-stone-300 hover:bg-stone-50/80 active:bg-stone-100 text-stone-700 font-semibold py-3 px-4 rounded-xl shadow-2xs hover:shadow-xs transition-all text-xs cursor-pointer disabled:opacity-60"
           >
             {isSigningIn ? (
               <RefreshCw className="w-4 h-4 animate-spin text-amber-700" />
@@ -270,7 +499,6 @@ export default function SignUpTab({
             </div>
           )}
 
-          {/* Helper toggle if panel is not open */}
           {!unauthorizedDomain && (
             <button
               type="button"
@@ -281,6 +509,282 @@ export default function SignUpTab({
               <span>Need help with Firebase Authorized Domains?</span>
             </button>
           )}
+        </div>
+
+        {/* Divider */}
+        <div className="relative flex items-center justify-center my-4">
+          <div className="border-t border-stone-200 w-full"></div>
+          <span className="bg-white px-3 text-[11px] text-stone-400 uppercase tracking-wider font-semibold absolute">
+            OR USE SAMAJ ACCOUNT
+          </span>
+        </div>
+
+        {/* ========================================================= */}
+        {/* SECTION 2: SIGN UP / LOG IN TOGGLE TABS                   */}
+        {/* ========================================================= */}
+        <div className="flex rounded-2xl bg-stone-100 p-1 border border-stone-200">
+          <button
+            type="button"
+            onClick={() => {
+              setAuthMode('login');
+              setLoginError(null);
+            }}
+            className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              authMode === 'login'
+                ? 'bg-white text-[#4c0d1b] shadow-xs border border-stone-200/80 font-bold'
+                : 'text-stone-500 hover:text-stone-800'
+            }`}
+          >
+            <LogIn className="w-3.5 h-3.5 text-amber-700" />
+            <span>Log In</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setAuthMode('signup');
+              setSignupError(null);
+            }}
+            className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              authMode === 'signup'
+                ? 'bg-white text-[#4c0d1b] shadow-xs border border-stone-200/80 font-bold'
+                : 'text-stone-500 hover:text-stone-800'
+            }`}
+          >
+            <UserPlus className="w-3.5 h-3.5 text-amber-700" />
+            <span>Sign Up</span>
+          </button>
+        </div>
+
+        {/* ========================================================= */}
+        {/* SUCCESS NOTIFICATION AFTER SIGN UP                        */}
+        {/* Once user signs up, give them clear login option          */}
+        {/* ========================================================= */}
+        {signupSuccessInfo && authMode === 'login' && (
+          <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-left space-y-2 animate-in fade-in">
+            <div className="flex items-start gap-2.5">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+              <div>
+                <h4 className="font-bold text-emerald-950 text-xs">
+                  🎉 Congratulations! Your account has been created successfully!
+                </h4>
+                <p className="text-[11px] text-emerald-800 mt-0.5">
+                  Your Username: <strong className="font-mono bg-white px-1.5 py-0.5 rounded border border-emerald-200 text-emerald-900">@{signupSuccessInfo.username}</strong>
+                </p>
+                <p className="text-[11px] text-emerald-700 mt-1">
+                  Enter your password below to <strong>Sign In</strong>.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================= */}
+        {/* FORM A: LOG IN WITH USERNAME & PASSWORD                   */}
+        {/* ========================================================= */}
+        {authMode === 'login' && (
+          <form onSubmit={handleLoginSubmit} className="space-y-4 text-left animate-in fade-in">
+            {loginError && (
+              <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
+                <span>{loginError}</span>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-bold text-stone-700 mb-1 flex items-center gap-1.5">
+                <User className="w-3.5 h-3.5 text-stone-400" />
+                <span>Username or Mobile Number</span>
+              </label>
+              <input
+                type="text"
+                value={loginIdentifier}
+                onChange={(e) => setLoginIdentifier(e.target.value)}
+                placeholder="e.g. abhiruchi97 or 9826012345"
+                required
+                className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#851834] bg-stone-50/50"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-stone-700 mb-1 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5 text-stone-400" />
+                  <span>Password</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowLoginPassword(!showLoginPassword)}
+                  className="text-[11px] text-stone-400 hover:text-stone-600 flex items-center gap-1 cursor-pointer"
+                >
+                  {showLoginPassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                  <span>{showLoginPassword ? "Hide" : "Show"}</span>
+                </button>
+              </label>
+              <div className="relative">
+                <input
+                  type={showLoginPassword ? "text" : "password"}
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  placeholder="Enter your account password"
+                  required
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#851834] bg-stone-50/50"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="w-full bg-gradient-to-r from-[#6e1628] via-[#851834] to-[#6e1628] text-amber-100 hover:text-white font-bold py-3 rounded-xl text-xs shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer border border-amber-300/30"
+            >
+              <LogIn className="w-4 h-4 text-amber-300" />
+              <span>Sign In with Password</span>
+            </button>
+
+            <div className="text-center pt-2">
+              <p className="text-xs text-stone-500">
+                Don't have an account?{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMode('signup');
+                    setSignupError(null);
+                  }}
+                  className="text-[#851834] font-bold hover:underline cursor-pointer"
+                >
+                  Create one now
+                </button>
+              </p>
+            </div>
+          </form>
+        )}
+
+        {/* ========================================================= */}
+        {/* FORM B: SIGN UP WITH USERNAME & PASSWORD                  */}
+        {/* ========================================================= */}
+        {authMode === 'signup' && (
+          <form onSubmit={handleSignupSubmit} className="space-y-3.5 text-left animate-in fade-in">
+            {signupError && (
+              <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
+                <span>{signupError}</span>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-bold text-stone-700 mb-1 flex items-center gap-1.5">
+                <User className="w-3.5 h-3.5 text-stone-400" />
+                <span>Full Name *</span>
+              </label>
+              <input
+                type="text"
+                value={signupFullName}
+                onChange={(e) => setSignupFullName(e.target.value)}
+                placeholder="e.g. Abhiruchi Rathore"
+                required
+                className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#851834] bg-stone-50/50"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1">
+                  Username *
+                </label>
+                <input
+                  type="text"
+                  value={signupUsername}
+                  onChange={(e) => setSignupUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                  placeholder="e.g. abhiruchi97"
+                  required
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#851834] bg-stone-50/50"
+                />
+                <span className="text-[10px] text-stone-400">Unique login handle</span>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1 flex items-center gap-1">
+                  <Phone className="w-3 h-3 text-stone-400" />
+                  <span>Mobile Number (Optional)</span>
+                </label>
+                <input
+                  type="tel"
+                  value={signupPhone}
+                  onChange={(e) => setSignupPhone(e.target.value.replace(/[^0-9]/g, '').slice(0, 10))}
+                  placeholder="10 digit phone"
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#851834] bg-stone-50/50"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1 flex items-center justify-between">
+                  <span>Password *</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowSignupPassword(!showSignupPassword)}
+                    className="text-[10px] text-stone-400 hover:text-stone-600 cursor-pointer"
+                  >
+                    {showSignupPassword ? "Hide" : "Show"}
+                  </button>
+                </label>
+                <input
+                  type={showSignupPassword ? "text" : "password"}
+                  value={signupPassword}
+                  onChange={(e) => setSignupPassword(e.target.value)}
+                  placeholder="Min 4 characters"
+                  required
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#851834] bg-stone-50/50"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-stone-700 mb-1">
+                  Confirm Password *
+                </label>
+                <input
+                  type={showSignupPassword ? "text" : "password"}
+                  value={signupConfirmPassword}
+                  onChange={(e) => setSignupConfirmPassword(e.target.value)}
+                  placeholder="Re-enter password"
+                  required
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#851834] bg-stone-50/50"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="w-full bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-stone-950 font-bold py-3 rounded-xl text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer mt-2"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>Create Account</span>
+            </button>
+
+            <div className="text-center pt-2">
+              <p className="text-xs text-stone-500">
+                Already registered?{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMode('login');
+                    setLoginError(null);
+                  }}
+                  className="text-[#851834] font-bold hover:underline cursor-pointer"
+                >
+                  Log In here
+                </button>
+              </p>
+            </div>
+          </form>
+        )}
+
+        <div className="border-t border-stone-100 pt-3 text-center">
+          <p className="text-[11px] text-stone-400 flex items-center justify-center gap-1.5">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+            <span>100% Verified Rathore Rajput Community Platform</span>
+          </p>
         </div>
       </div>
     </div>

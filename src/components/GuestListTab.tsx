@@ -14,7 +14,7 @@ interface GuestListTabProps {
 const DEFAULT_OCCASIONS: GuestListOccasion[] = [
   {
     id: 'occ-1',
-    title: 'Shubh Vivah (Wedding) • शुभ विवाह आमंत्रण सूची',
+    title: 'Shubh Vivah (Wedding & Reception Guest List)',
     date: '2026-12-11',
     venue: 'Royal Rajput Palace & Banquet Hall, Indore',
     description: 'Central wedding reception, baraat and community feast guest list.',
@@ -79,7 +79,7 @@ const DEFAULT_OCCASIONS: GuestListOccasion[] = [
   },
   {
     id: 'occ-2',
-    title: 'Sagai & Roka Ceremony (सगाई / रोका)',
+    title: 'Sagai & Roka Ceremony (Engagement)',
     date: '2026-11-28',
     venue: 'Samaj Kalyan Bhavan, Nanded',
     description: 'Close family engagement and Gotra milan ceremony.',
@@ -325,7 +325,7 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({ authSession, onNavig
 
   // Handler: Send Individual Personalized Invitation on WhatsApp
   const handleSendPersonalInviteWhatsApp = (guest: GuestItem) => {
-    const text = `॥ श्री गणेशाय नमः ॥\n॥ जय माताजी की ॥\n\nआदरणीय *${guest.name} जी*,\n\nसस्नेह निमंत्रण स्वीकार करें। हमारे परिवार में मांगलिक प्रसंग (*${activeOccasion.title}*) पर आप सपरिवार सादर आमंत्रित हैं।\n\n📅 दिनांक: ${activeOccasion.date || 'शुभ मुहूर्त'}\n📍 स्थान: ${activeOccasion.venue || 'आयोजन स्थल'}\n\nआपकी गरिमामयी उपस्थिति हमारे परिवार का गौरव बढ़ाएगी।\n\nविनीत:\nराठौड़ परिवार एवं स्वजन\nसंपर्क: +91 9826012345`;
+    const text = `Jai Mataji Ki!\n\nDear *${guest.name}*,\n\nPlease accept our warm regards and cordial invitation. You and your family are cordially invited to celebrate the auspicious occasion of *${activeOccasion.title}* with us.\n\n📅 Date: ${activeOccasion.date || 'To be announced'}\n📍 Venue: ${activeOccasion.venue || 'Event Venue'}\n\nYour presence and blessings will make this celebration truly special.\n\nWarm regards,\nRathore Family\nContact: +91 9826012345`;
 
     const cleanPhone = guest.phone.replace(/[^0-9]/g, '');
     const phoneWithCode = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
@@ -344,7 +344,7 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({ authSession, onNavig
         <div className="space-y-2">
           <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-amber-400/10 border border-amber-400/30 text-amber-300 text-xs font-semibold">
             <Users className="w-3.5 h-3.5" />
-            <span>॥ पारिवारिक एवं विवाह आमंत्रण सूची ॥</span>
+            <span>Family & Wedding Guest Directory</span>
           </div>
           <h2 className="text-2xl sm:text-3xl font-serif font-bold text-amber-50">
             Samaj Guest List & Invitation Planner
@@ -650,7 +650,7 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({ authSession, onNavig
             <form onSubmit={handleSaveGuest} className="space-y-4 text-xs">
               <div>
                 <label className="block font-bold text-stone-700 uppercase tracking-wider mb-1">
-                  Guest Full Name (अतिथि का नाम) *
+                  Guest Full Name *
                 </label>
                 <input 
                   type="text"
@@ -665,7 +665,7 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({ authSession, onNavig
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-stone-700 uppercase tracking-wider mb-1">
-                    Phone / Mobile (मोबाइल) *
+                    Phone / Mobile *
                   </label>
                   <input 
                     type="tel"
@@ -679,26 +679,26 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({ authSession, onNavig
 
                 <div>
                   <label className="block font-bold text-stone-700 uppercase tracking-wider mb-1">
-                    Relation / Side (पक्ष / नाता)
+                    Relation / Side
                   </label>
                   <select
                     value={guestForm.category}
                     onChange={(e) => setGuestForm({ ...guestForm, category: e.target.value as any })}
                     className="w-full bg-stone-50 border border-stone-300 rounded-xl px-3.5 py-2.5 focus:outline-hidden focus:border-amber-600 text-stone-900 font-medium"
                   >
-                    <option value="Family/Relatives">Family/Relatives (परिवार/रिश्तेदार)</option>
-                    <option value="Groom Side">Groom Side (वर पक्ष)</option>
-                    <option value="Bride Side">Bride Side (वधु पक्ष)</option>
-                    <option value="Friends">Friends (मित्रगण)</option>
-                    <option value="Samaj Dignitaries">Samaj Dignitaries (समाज पदाधिकारी)</option>
-                    <option value="Other">Other (अन्य)</option>
+                    <option value="Family/Relatives">Family & Relatives</option>
+                    <option value="Groom Side">Groom Side</option>
+                    <option value="Bride Side">Bride Side</option>
+                    <option value="Friends">Friends & Colleagues</option>
+                    <option value="Samaj Dignitaries">Samaj Dignitaries</option>
+                    <option value="Other">Other</option>
                   </select>
                 </div>
               </div>
 
               <div>
                 <label className="block font-bold text-stone-700 uppercase tracking-wider mb-1">
-                  Postal Address & Street (पता) *
+                  Postal Address & Street *
                 </label>
                 <input 
                   type="text"
@@ -713,7 +713,7 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({ authSession, onNavig
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-stone-700 uppercase tracking-wider mb-1">
-                    City / Native Place (शहर)
+                    City / Native Place
                   </label>
                   <input 
                     type="text"
@@ -726,7 +726,7 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({ authSession, onNavig
 
                 <div>
                   <label className="block font-bold text-stone-700 uppercase tracking-wider mb-1">
-                    Number of Attendees (पंगत/व्यक्ति)
+                    Number of Attendees
                   </label>
                   <input 
                     type="number"
@@ -742,23 +742,23 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({ authSession, onNavig
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-bold text-stone-700 uppercase tracking-wider mb-1">
-                    Invitation Card Status (आमंत्रण स्थिति)
+                    Invitation Card Status
                   </label>
                   <select
                     value={guestForm.status}
                     onChange={(e) => setGuestForm({ ...guestForm, status: e.target.value as any })}
                     className="w-full bg-stone-50 border border-stone-300 rounded-xl px-3.5 py-2.5 focus:outline-hidden focus:border-amber-600 text-stone-900 font-medium"
                   >
-                    <option value="Pending">Pending (कार्ड भेजना बाकी है) ⏳</option>
-                    <option value="Card Sent">Card Sent (पत्रिका भेज दी गई) ✉️</option>
-                    <option value="Confirmed">Confirmed (आना सुनिश्चित है) ✅</option>
-                    <option value="Declined">Declined (असमर्थता जताई) ❌</option>
+                    <option value="Pending">Pending (Card Yet to Send) ⏳</option>
+                    <option value="Card Sent">Card Sent ✉️</option>
+                    <option value="Confirmed">Confirmed Attending ✅</option>
+                    <option value="Declined">Declined ❌</option>
                   </select>
                 </div>
 
                 <div>
                   <label className="block font-bold text-stone-700 uppercase tracking-wider mb-1">
-                    Special Notes (विशेष निर्देश)
+                    Special Notes
                   </label>
                   <input 
                     type="text"
@@ -818,7 +818,7 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({ authSession, onNavig
             <form onSubmit={handleCreateOccasion} className="space-y-4 text-xs">
               <div>
                 <label className="block font-bold text-stone-700 uppercase tracking-wider mb-1">
-                  Occasion Title (मांगलिक प्रसंग नाम) *
+                  Occasion Title *
                 </label>
                 <input 
                   type="text"
@@ -832,7 +832,7 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({ authSession, onNavig
 
               <div>
                 <label className="block font-bold text-stone-700 uppercase tracking-wider mb-1">
-                  Date of Event (दिनांक)
+                  Date of Event
                 </label>
                 <input 
                   type="date"
@@ -844,7 +844,7 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({ authSession, onNavig
 
               <div>
                 <label className="block font-bold text-stone-700 uppercase tracking-wider mb-1">
-                  Venue / Location (स्थान)
+                  Venue / Location
                 </label>
                 <input 
                   type="text"

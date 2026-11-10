@@ -513,7 +513,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 </span>
               </div>
               <p className="text-[11px] text-stone-400 font-light mt-0.5">
-                Rathore Rishtey • शुभ विवाह एवं व्यापार व्यवस्थापक
+                Rathore Rishtey • Member Workspace & Management
               </p>
             </div>
           </div>
@@ -1043,8 +1043,8 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                         onChange={(e) => setEditingProfile({ ...editingProfile, gender: e.target.value as 'Male' | 'Female' })}
                         className="w-full p-2.5 rounded-xl border border-stone-200 bg-white"
                       >
-                        <option value="Male">Male (Groom / वर)</option>
-                        <option value="Female">Female (Bride / वधु)</option>
+                        <option value="Male">Male (Groom)</option>
+                        <option value="Female">Female (Bride)</option>
                       </select>
                     </div>
 
@@ -1061,7 +1061,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                     </div>
 
                     <div>
-                      <label className="block font-bold text-stone-700 mb-1">Gotra (गोत्र) *</label>
+                      <label className="block font-bold text-stone-700 mb-1">Gotra *</label>
                       <input
                         type="text"
                         required
@@ -1345,9 +1345,9 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                         onChange={(e) => setEditingProfile({ ...editingProfile, status: e.target.value as ProfileStatus })}
                         className="w-full p-2.5 rounded-xl border border-stone-200 bg-white"
                       >
-                        <option value="active">Active • Live on Directory (प्रकाशित)</option>
-                        <option value="draft">Draft • In Review (प्रारूप)</option>
-                        <option value="archived">Archived • Paused (स्थगित)</option>
+                        <option value="active">Active • Live on Directory</option>
+                        <option value="draft">Draft • In Review</option>
+                        <option value="archived">Archived • Paused</option>
                       </select>
                     </div>
 
@@ -1448,9 +1448,9 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                       onChange={(e) => setEditingAd({ ...editingAd, category: e.target.value })}
                       className="w-full p-2.5 rounded-xl border border-stone-200 bg-white"
                     >
-                      <option value="Clothing & Retail">Clothing & Retail (वस्त्र एवं परिधान)</option>
-                      <option value="Hardware & Home Imprv.">Hardware & Home Imprv. (हार्डवेयर)</option>
-                      <option value="Jewelry & Gold">Jewelry & Gold (स्वर्ण आभूषण)</option>
+                      <option value="Clothing & Retail">Clothing & Retail</option>
+                      <option value="Hardware & Home Imprv.">Hardware & Home Imprv.</option>
+                      <option value="Jewelry & Gold">Jewelry & Gold</option>
                       <option value="Wedding Services & Catering">Wedding Planning & Catering</option>
                       <option value="Healthcare & Pharmacy">Healthcare & Pharmacy</option>
                       <option value="Food & Restaurants">Food & Sweets</option>
@@ -1515,8 +1515,8 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                       onChange={(e) => setEditingAd({ ...editingAd, status: e.target.value as any })}
                       className="w-full p-2.5 rounded-xl border border-stone-200 bg-white"
                     >
-                      <option value="active">Active • Live in Directory (सक्रिय)</option>
-                      <option value="draft">Draft • Private Review (प्रारूप)</option>
+                      <option value="active">Active • Live in Directory</option>
+                      <option value="draft">Draft • Private Review</option>
                       <option value="paused">Paused • Temporarily Inactive</option>
                     </select>
                   </div>
@@ -1788,7 +1788,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                       className="bg-gradient-to-r from-amber-300 via-amber-400 to-amber-500 hover:from-amber-200 hover:to-amber-400 text-[#4c0d1b] font-bold px-6 py-3 rounded-2xl text-xs shadow-md transition-all inline-flex items-center gap-2 cursor-pointer font-serif hover:scale-102"
                     >
                       <Plus className="w-4 h-4" />
-                      <span>{searchQuery ? "Clear Search Filter" : "Create Your First Profile (बायोडाटा बनाएं)"}</span>
+                      <span>{searchQuery ? "Clear Search Filter" : "Create Your First Profile"}</span>
                     </button>
                   </div>
                 </div>
@@ -1975,7 +1975,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                       className="bg-gradient-to-r from-amber-300 via-amber-400 to-amber-500 hover:from-amber-200 hover:to-amber-400 text-[#4c0d1b] font-bold px-6 py-3 rounded-2xl text-xs shadow-md transition-all inline-flex items-center gap-2 cursor-pointer font-serif hover:scale-102"
                     >
                       <Plus className="w-4 h-4" />
-                      <span>{searchQuery ? "Clear Search Filter" : "Post Your First Business Ad (व्यापार विज्ञापन जोड़ें)"}</span>
+                      <span>{searchQuery ? "Clear Search Filter" : "Post Your First Business Ad"}</span>
                     </button>
                   </div>
                 </div>
@@ -2634,7 +2634,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             <div className="space-y-4">
               <div className="text-center pb-2 border-b border-rose-100">
                 <span className="text-[10px] font-serif text-[#851834] font-bold tracking-widest uppercase">
-                  ॥ शुभ विवाह • वर-वधु परिचय पत्र (Live Preview) ॥
+                  Candidate Matrimonial Profile (Live Preview)
                 </span>
               </div>
 
@@ -2709,7 +2709,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
 
             <div className="text-center pb-2 border-b border-rose-100">
               <span className="text-[10px] font-serif text-[#851834] font-bold tracking-widest uppercase">
-                ॥ व्यापार निर्देशिका • Live Storefront Preview ॥
+                Business Directory • Live Storefront Preview
               </span>
             </div>
 
