@@ -1,6 +1,8 @@
 import React from 'react';
 import { TabType } from '../types';
 import { useLanguage } from '../context/LanguageContext';
+import { useAdminConfig } from '../context/AdminConfigContext';
+import { BrandLogo } from './BrandLogo';
 
 interface FooterProps {
   onNavigateTab: (tab: TabType) => void;
@@ -8,10 +10,11 @@ interface FooterProps {
 
 export const Footer: React.FC<FooterProps> = ({ onNavigateTab }) => {
   const { t } = useLanguage();
+  const { config } = useAdminConfig();
 
   return (
-    <footer className="bg-gradient-to-b from-[#24050b] to-[#140205] text-stone-300 border-t border-amber-500/30 py-10 px-4 sm:px-6 lg:px-8 mt-16">
-      <div className="max-w-7xl mx-auto space-y-8">
+    <footer className="bg-gradient-to-b from-[#24050b] to-[#140205] text-stone-300 border-t border-amber-500/30 pt-8 sm:pt-10 pb-[calc(5.25rem+var(--sab))] sm:pb-[calc(2.5rem+var(--sab))] px-4 sm:px-6 lg:px-8 mt-10 sm:mt-16">
+      <div className="max-w-7xl mx-auto space-y-6 sm:space-y-8">
         
         {/* Top Blessing & Motto */}
         <div className="text-center pb-6 border-b border-amber-500/20">
@@ -32,13 +35,8 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateTab }) => {
         {/* Main Footer Grid */}
         <div className="flex flex-col md:flex-row justify-between items-center gap-6 text-xs">
           <div className="text-center md:text-left space-y-1.5">
-            <div className="flex items-center justify-center md:justify-start gap-2">
-              <div className="w-7 h-7 rounded-lg bg-amber-400/20 border border-amber-400/40 text-amber-300 font-bold flex items-center justify-center text-xs font-serif">
-                RR
-              </div>
-              <p className="font-bold text-amber-100 text-sm font-serif tracking-wide">
-                {t('Rathore Rishtey • Matrimonial Network', 'राठौड़ रिश्ते • वैवाहिक नेटवर्क')}
-              </p>
+            <div className="flex items-center justify-center md:justify-start">
+              <BrandLogo size="sm" tone="gold" />
             </div>
             <p className="text-stone-400 max-w-md">
               {t(
@@ -49,48 +47,62 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateTab }) => {
           </div>
 
           <div className="flex flex-wrap justify-center gap-6 text-xs text-stone-300">
-            <button 
-              onClick={() => { onNavigateTab('matrimony'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} 
-              className="hover:text-amber-300 cursor-pointer transition-colors"
-            >
-              {t('Matrimony Bios', 'वैवाहिक बायोडाटा')}
-            </button>
-            <button 
-              onClick={() => { onNavigateTab('kundali'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} 
-              className="hover:text-amber-300 font-semibold text-amber-200/90 cursor-pointer transition-colors"
-            >
-              {t('Kundali Milan (36 Gunas)', 'कुंडली मिलान (३६ गुण)')}
-            </button>
-            <button 
-              onClick={() => { onNavigateTab('guest-list'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} 
-              className="hover:text-amber-300 cursor-pointer transition-colors"
-            >
-              {t('Guest List Planner', 'अतिथि सूची प्लानर')}
-            </button>
-            <button 
-              onClick={() => { onNavigateTab('directory'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} 
-              className="hover:text-amber-300 cursor-pointer transition-colors"
-            >
-              {t('Business Ads', 'व्यापार निर्देशिका')}
-            </button>
-            <button 
-              onClick={() => { onNavigateTab('booklet'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} 
-              className="hover:text-amber-300 cursor-pointer transition-colors"
-            >
-              {t('Digital E-Booklet', 'डिजिटल ई-पत्रिका')}
-            </button>
-            <button 
-              onClick={() => { onNavigateTab('events'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} 
-              className="hover:text-amber-300 cursor-pointer transition-colors"
-            >
-              {t('Samaj Events', 'समाज कार्यक्रम')}
-            </button>
-            <button 
-              onClick={() => { onNavigateTab('family-details'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} 
-              className="hover:text-amber-300 cursor-pointer transition-colors"
-            >
-              {t('Add Family Details', 'पारिवारिक विवरण जोड़ें')}
-            </button>
+            {config.featureMatrimonyEnabled && (
+              <button 
+                onClick={() => { onNavigateTab('matrimony'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} 
+                className="hover:text-amber-300 cursor-pointer transition-colors"
+              >
+                {t('Matrimony Bios', 'वैवाहिक बायोडाटा')}
+              </button>
+            )}
+            {config.featureKundaliEnabled && (
+              <button 
+                onClick={() => { onNavigateTab('kundali'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} 
+                className="hover:text-amber-300 font-semibold text-amber-200/90 cursor-pointer transition-colors"
+              >
+                {t('Kundali Milan (36 Gunas)', 'कुंडली मिलान (३६ गुण)')}
+              </button>
+            )}
+            {config.featureGuestListEnabled && (
+              <button 
+                onClick={() => { onNavigateTab('guest-list'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} 
+                className="hover:text-amber-300 cursor-pointer transition-colors"
+              >
+                {t('Guest List Planner', 'अतिथि सूची प्लानर')}
+              </button>
+            )}
+            {config.featureBusinessDirectoryEnabled && (
+              <button 
+                onClick={() => { onNavigateTab('directory'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} 
+                className="hover:text-amber-300 cursor-pointer transition-colors"
+              >
+                {t('Business Ads', 'व्यापार निर्देशिका')}
+              </button>
+            )}
+            {config.featureBookletEnabled && (
+              <button 
+                onClick={() => { onNavigateTab('booklet'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} 
+                className="hover:text-amber-300 cursor-pointer transition-colors"
+              >
+                {t('Digital E-Booklet', 'डिजिटल ई-पत्रिका')}
+              </button>
+            )}
+            {config.featureEventsEnabled && (
+              <button 
+                onClick={() => { onNavigateTab('events'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} 
+                className="hover:text-amber-300 cursor-pointer transition-colors"
+              >
+                {t('Samaj Events', 'समाज कार्यक्रम')}
+              </button>
+            )}
+            {config.featureProfileCreationEnabled && (
+              <button 
+                onClick={() => { onNavigateTab('family-details'); window.scrollTo({ top: 0, behavior: 'smooth' }); }} 
+                className="hover:text-amber-300 cursor-pointer transition-colors"
+              >
+                {t('Add Family Details', 'पारिवारिक विवरण जोड़ें')}
+              </button>
+            )}
           </div>
         </div>
 

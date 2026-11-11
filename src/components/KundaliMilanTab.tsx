@@ -10,6 +10,7 @@ import {
   KundaliMilanReport 
 } from '../utils/kundaliMilan';
 import { useLanguage } from '../context/LanguageContext';
+import { useAdminConfig } from '../context/AdminConfigContext';
 import { shareViaWhatsApp, printHtmlDocument, downloadPrintableHtml, escapeHtml } from '../utils/shareAndPrint';
 
 interface KundaliMilanTabProps {
@@ -28,6 +29,7 @@ export const KundaliMilanTab: React.FC<KundaliMilanTabProps> = ({
   preselectedGirlId
 }) => {
   const { lang, t } = useLanguage();
+  const { config } = useAdminConfig();
   const [matchMode, setMatchMode] = useState<'samaj' | 'custom'>('samaj');
   const [showPrintModal, setShowPrintModal] = useState(false);
 
@@ -681,13 +683,15 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleShareWhatsApp}
-              className="bg-emerald-700 hover:bg-emerald-800 text-white font-semibold px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-            >
-              <Share2 className="w-3.5 h-3.5" />
-              <span>{t('Share on WhatsApp', 'व्हाट्सएप पर साझा करें')}</span>
-            </button>
+            {config.featureWhatsAppShareEnabled && (
+              <button
+                onClick={handleShareWhatsApp}
+                className="bg-emerald-700 hover:bg-emerald-800 text-white font-semibold px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+              >
+                <Share2 className="w-3.5 h-3.5" />
+                <span>{t('Share on WhatsApp', 'व्हाट्सएप पर साझा करें')}</span>
+              </button>
+            )}
             <button
               onClick={handlePrint}
               className="bg-stone-200 hover:bg-stone-300 text-stone-800 font-semibold px-3 py-2 rounded-xl flex items-center gap-1.5 transition-colors cursor-pointer"
@@ -826,6 +830,33 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
                 {t('Rathore Rishtey Astrological Consultation', 'राठौर रिश्ते ज्योतिष परामर्श')}
               </span>
             </div>
+
+            {config.kundaliAstrologerServiceEnabled && (
+              <div className="mt-3 bg-gradient-to-r from-amber-50 to-rose-50/60 border border-amber-300 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="space-y-1">
+                  <p className="font-serif font-bold text-stone-900 text-xs flex items-center gap-1.5">
+                    <Star className="w-4 h-4 text-amber-600 fill-amber-500" />
+                    <span>{t('Pandit & Vedic Astrologer Patrika Verification', 'पंडित जी द्वारा वैदिक पत्रिका एवं दोष निवारण परामर्श')}</span>
+                  </p>
+                  <p className="text-[11px] text-stone-600 leading-relaxed">
+                    {t(
+                      'For detailed Manglik, Nadi Dosha Puja, and Shubh Muhurat guidance, share this 36-Guna scorecard with your family Samaj Pandit.',
+                      'मांगलिक, नाड़ी दोष निवारण एवं शुभ विवाह मुहूर्त हेतु यह 36-गुण मिलान रिपोर्ट अपने कुलगुरु / समाज पंडित जी को दिखाएँ।'
+                    )}
+                  </p>
+                </div>
+                {config.featureWhatsAppShareEnabled && (
+                  <button
+                    type="button"
+                    onClick={handleShareWhatsApp}
+                    className="bg-[#380812] hover:bg-[#24050b] text-amber-200 font-bold px-3.5 py-2 rounded-xl text-[11px] shrink-0 flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Share2 className="w-3.5 h-3.5 text-amber-300" />
+                    <span>{t('Send to Pandit / Family', 'पंडित जी को भेजें')}</span>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -833,11 +864,11 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
       {/* PRINT & DOWNLOAD CERTIFICATE MODAL */}
       {showPrintModal && (
         <div
-          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-start sm:items-center justify-center px-3 sm:px-4 pt-[calc(0.75rem+var(--sat))] pb-[calc(1rem+var(--sab))] overflow-y-auto"
           onClick={() => setShowPrintModal(false)}
         >
           <div
-            className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-amber-300 relative space-y-4"
+            className="bg-white rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl border border-amber-300 relative space-y-4 my-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <button

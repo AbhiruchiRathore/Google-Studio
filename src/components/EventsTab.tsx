@@ -1,15 +1,19 @@
 import React, { useState } from 'react';
 import { Calendar, MapPin, ExternalLink, PlusCircle, X, CheckCircle2 } from 'lucide-react';
-import { SamajEvent } from '../types';
+import { SamajEvent, AuthSession } from '../types';
 import { useLanguage } from '../context/LanguageContext';
+import { useAdminConfig } from '../context/AdminConfigContext';
 
 interface EventsTabProps {
+  authSession?: AuthSession | null;
   events: SamajEvent[];
   onAddEvent: (event: SamajEvent) => void;
 }
 
-export const EventsTab: React.FC<EventsTabProps> = ({ events, onAddEvent }) => {
+export const EventsTab: React.FC<EventsTabProps> = ({ authSession, events, onAddEvent }) => {
   const { t } = useLanguage();
+  const { config } = useAdminConfig();
+  const canPostEvent = config.allowUserEventPosting || authSession?.username === 'AdminAbhi';
   const [showAddModal, setShowAddModal] = useState(false);
   const [successToast, setSuccessToast] = useState(false);
   const [newEvent, setNewEvent] = useState({
@@ -24,7 +28,7 @@ export const EventsTab: React.FC<EventsTabProps> = ({ events, onAddEvent }) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newEvent.title || !newEvent.date || !newEvent.location) return;
+    if (!canPostEvent || !newEvent.title || !newEvent.date || !newEvent.location) return;
 
     onAddEvent({
       id: Date.now(),
@@ -67,12 +71,18 @@ export const EventsTab: React.FC<EventsTabProps> = ({ events, onAddEvent }) => {
           </p>
         </div>
 
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="bg-gradient-to-r from-[#380812] to-[#540e1b] hover:from-[#24050b] hover:to-[#380812] text-amber-200 font-semibold px-4 py-2.5 rounded-xl text-xs shadow-sm flex items-center gap-2 shrink-0 cursor-pointer border border-amber-500/20 transition-all hover:scale-102"
-        >
-          <PlusCircle className="w-4 h-4 text-amber-300" /> {t('Post Event Notice', 'कार्यक्रम सूचना जोड़ें')}
-        </button>
+        {canPostEvent ? (
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="bg-gradient-to-r from-[#380812] to-[#540e1b] hover:from-[#24050b] hover:to-[#380812] text-amber-200 font-semibold px-4 py-2.5 rounded-xl text-xs shadow-sm flex items-center gap-2 shrink-0 cursor-pointer border border-amber-500/20 transition-all hover:scale-102"
+          >
+            <PlusCircle className="w-4 h-4 text-amber-300" /> {t('Post Event Notice', 'कार्यक्रम सूचना जोड़ें')}
+          </button>
+        ) : (
+          <span className="text-[11px] font-semibold text-stone-500 bg-stone-100 px-3 py-2 rounded-xl border border-stone-200 shrink-0">
+            {t('Official Samiti Notices Only', 'केवल समिति द्वारा प्रकाशित सूचनाएँ')}
+          </span>
+        )}
       </div>
 
       {successToast && (
@@ -141,11 +151,11 @@ export const EventsTab: React.FC<EventsTabProps> = ({ events, onAddEvent }) => {
       {/* POST EVENT MODAL */}
       {showAddModal && (
         <div 
-          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-start sm:items-center justify-center px-3 sm:px-4 pt-[calc(0.75rem+var(--sat))] pb-[calc(1rem+var(--sab))] overflow-y-auto"
           onClick={() => setShowAddModal(false)}
         >
           <div 
-            className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-amber-300 relative my-8"
+            className="bg-white rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl border border-amber-300 relative my-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <button 
@@ -175,7 +185,7 @@ export const EventsTab: React.FC<EventsTabProps> = ({ events, onAddEvent }) => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                 <div>
                   <label className="font-bold text-slate-700 block mb-1">{t('Date *', 'दिनांक *')}</label>
                   <input 

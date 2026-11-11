@@ -10,6 +10,7 @@ import {
 } from './SignUpTab';
 import { sanitizePhoneInput, validatePhoneNumber } from '../utils/validation';
 import { useLanguage } from '../context/LanguageContext';
+import { MultiPhotoUploadField } from './MultiPhotoUploadField';
 
 interface CreateProfileTabProps {
   authSession: AuthSession | null;
@@ -47,7 +48,7 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
     location: '',
     bio: '',
     height: "5' 7\"",
-    photoUrl: authSession?.photoUrl || '',
+    photos: authSession?.photoUrl ? [authSession.photoUrl] : ([] as string[]),
     fatherName: '',
     fatherOccupation: '',
     motherName: '',
@@ -62,7 +63,7 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
         ...prev,
         name: prev.name || authSession.name || '',
         phone: prev.phone || sanitizePhoneInput(authSession.phone || ''),
-        photoUrl: prev.photoUrl || authSession.photoUrl || ''
+        photos: prev.photos.length > 0 ? prev.photos : (authSession.photoUrl ? [authSession.photoUrl] : [])
       }));
     }
   }, [authSession]);
@@ -160,11 +161,12 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
       location: formData.location.trim() || formData.native.trim(),
       about: `Maternal Gotra: ${formData.maternalGotra || 'Not specified'}. ${formData.bio}`,
       familyDetails: familyDetailsFormatted,
-      photo: formData.photoUrl.trim() !== '' 
-        ? formData.photoUrl.trim()
-        : formData.gender === 'Female' 
-          ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80' 
+      photo: formData.photos[0] && formData.photos[0].trim() !== ''
+        ? formData.photos[0].trim()
+        : formData.gender === 'Female'
+          ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80'
           : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80',
+      gallery: formData.photos.length > 0 ? formData.photos : undefined,
       verified: true,
       createdAt: new Date().toISOString()
     };
@@ -623,19 +625,17 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
             </div>
           </div>
 
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">
-              {t('Photo Image URL (Optional)', 'फ़ोटो इमेज लिंक (वैकल्पिक)')}
-            </label>
-            <input 
-              type="url" 
-              name="photoUrl"
-              value={formData.photoUrl}
-              onChange={handleChange}
-              className="w-full border border-amber-300 rounded-lg p-2.5 text-xs" 
-              placeholder={t('https://... (or leave blank for standard Samaj avatar)', 'https://... (खाली छोड़ सकते हैं)')} 
-            />
-          </div>
+          <MultiPhotoUploadField
+            label={t('Candidate Photos (Upload 1 to 6 Photos)', 'प्रत्याशी की फ़ोटो (1 से 6 फ़ोटो अपलोड करें)')}
+            photos={formData.photos}
+            onChange={(nextPhotos) => setFormData((prev) => ({ ...prev, photos: nextPhotos }))}
+            maxPhotos={6}
+            maxDimension={720}
+            helperText={t(
+              'Select multiple portrait or traditional photos — Photo #1 is shown as the main profile picture',
+              'एक से अधिक फ़ोटो चुनें — पहली फ़ोटो मुख्य प्रोफ़ाइल फ़ोटो के रूप में दिखेगी'
+            )}
+          />
 
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">

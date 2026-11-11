@@ -75,6 +75,8 @@ export interface BusinessAd {
   offer?: string;
   rating?: string;
   isFeatured?: boolean;
+  adTier?: 'standard' | 'featured' | 'spotlight';
+  adPricePaid?: number;
   status?: 'active' | 'draft' | 'paused';
   viewsCount?: number;
   inquiriesCount?: number;
@@ -166,17 +168,49 @@ export interface GuestListOccasion {
   createdAt: string;
 }
 
+export interface UserSubscriptionStatus {
+  active: boolean;
+  plan: 'annual' | 'lifetime';
+  pricePaid: number;
+  activatedAt: string;
+}
+
 export interface AdminRuntimeConfig {
+  // Monetization & Subscription Controls
   subscriptionEnabled: boolean;
   contactAccessMode: 'free' | 'limited_3_views' | 'subscription_required';
+  annualPlanEnabled: boolean;
   annualPlanPrice: number;
+  lifetimePlanEnabled: boolean;
   lifetimePlanPrice: number;
+
+  // Shop Advertisement Monetization & Pricing
   adsMonetizationEnabled: boolean;
+  featuredAdsEnabled: boolean;
+  adBillingCycle: 'monthly' | 'quarterly' | 'yearly';
+  standardAdPrice: number;
+  featuredAdPrice: number;
+  spotlightAdPrice: number;
+
+  // All App Feature Toggles
+  featureMatrimonyEnabled: boolean;
+  featureChatEnabled: boolean;
+  featureLikesEnabled: boolean;
+  featureKundaliEnabled: boolean;
+  kundaliAstrologerServiceEnabled: boolean;
+  featureGuestListEnabled: boolean;
+  featureBusinessDirectoryEnabled: boolean;
+  featureBookletEnabled: boolean;
+  allowGuestDownloads: boolean;
+  featureEventsEnabled: boolean;
+  allowUserEventPosting: boolean;
+  featureProfileCreationEnabled: boolean;
+  requireAdminVerification: boolean;
+  featureWhatsAppShareEnabled: boolean;
+
+  // Broadcast Banner
   bannerBroadcastMessage: string;
   isBroadcastActive: boolean;
-  requireAdminVerification: boolean;
-  kundaliAstrologerServiceEnabled: boolean;
-  allowGuestDownloads: boolean;
 }
 
 

@@ -3,7 +3,9 @@ import { Store, PlusCircle, Phone, Tag, Star, X, Sparkles, UserPlus, Heart, Shar
 import { BusinessAd, TabType, AuthSession } from '../types';
 import { sanitizePhoneInput, validatePhoneNumber } from '../utils/validation';
 import { useLanguage } from '../context/LanguageContext';
+import { useAdminConfig } from '../context/AdminConfigContext';
 import { shareViaWhatsApp } from '../utils/shareAndPrint';
+import { ImageUploadField } from './ImageUploadField';
 
 interface BusinessTabProps {
   authSession: AuthSession | null;
@@ -19,9 +21,17 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({
   onAddQuickAd
 }) => {
   const { lang, t } = useLanguage();
+  const { config } = useAdminConfig();
   const [showQuickModal, setShowQuickModal] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [modalError, setModalError] = useState<string | null>(null);
+
+  const cycleLabel =
+    config.adBillingCycle === 'monthly'
+      ? t('Month', 'माह')
+      : config.adBillingCycle === 'quarterly'
+        ? t('Quarter', 'तिमाही')
+        : t('Year', 'वर्ष');
 
   const [formState, setFormState] = useState({
     title: '',
@@ -31,7 +41,8 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({
     address: '',
     tagline: '',
     offer: 'Special Samaj Member Discount',
-    tier: 'free' as 'free' | 'featured'
+    tier: 'standard' as 'standard' | 'featured' | 'spotlight',
+    banner: ''
   });
 
   const [likedAds, setLikedAds] = useState<Set<string>>(() => {
@@ -125,6 +136,16 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({
       return;
     }
 
+    const isFeaturedAd =
+      (formState.tier === 'featured' && config.featuredAdsEnabled) || formState.tier === 'spotlight';
+    const adPricePaid = !config.adsMonetizationEnabled
+      ? 0
+      : formState.tier === 'spotlight'
+        ? config.spotlightAdPrice
+        : formState.tier === 'featured' && config.featuredAdsEnabled
+          ? config.featuredAdPrice
+          : config.standardAdPrice;
+
     onAddQuickAd({
       title: formState.title.trim(),
       owner: formState.owner.trim() || 'Samaj Business Owner',
@@ -135,10 +156,14 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({
       tagline: formState.tagline.trim() || 'Quality services & verified products for community members.',
       offer: formState.offer,
       rating: '5.0 ★',
-      isFeatured: formState.tier === 'featured',
-      banner: formState.tier === 'featured'
-        ? 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=600&q=80'
-        : 'https://images.unsplash.com/photo-1555421689-491a97ff2040?auto=format&fit=crop&w=600&q=80'
+      isFeatured: isFeaturedAd,
+      adTier: formState.tier,
+      adPricePaid,
+      banner: formState.banner.trim() !== ''
+        ? formState.banner.trim()
+        : isFeaturedAd
+          ? 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=600&q=80'
+          : 'https://images.unsplash.com/photo-1555421689-491a97ff2040?auto=format&fit=crop&w=600&q=80'
     });
 
     setShowQuickModal(false);
@@ -150,7 +175,8 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({
       address: '',
       tagline: '',
       offer: 'Special Samaj Member Discount',
-      tier: 'free'
+      tier: 'standard',
+      banner: ''
     });
   };
 
@@ -194,6 +220,39 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({
           )}
         </div>
       </div>
+
+      {/* LIVE SHOP ADVERTISEMENT PRICING STRIP (Shown when Paid Shop Ads enabled in Admin) */}
+      {config.adsMonetizationEnabled && (
+        <div className="bg-amber-50/80 border border-amber-300 rounded-2xl p-4 sm:p-5 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 shadow-xs">
+          <div className="space-y-1">
+            <h3 className="font-serif font-bold text-stone-900 text-sm flex items-center gap-2">
+              <Tag className="w-4 h-4 text-amber-700" />
+              <span>{t('Shop Advertisement Packages & Tariffs', 'दुकान विज्ञापन पैकेज व शुल्क दरें')}</span>
+            </h3>
+            <p className="text-xs text-stone-600">
+              {t(
+                `Promote your family business across Rathore Samaj. Active billing cycle: per ${cycleLabel}.`,
+                `राठौर समाज में अपने व्यापार का प्रचार करें। वर्तमान शुल्क अवधि: प्रति ${cycleLabel}।`
+              )}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2.5 text-xs">
+            <span className="bg-white border border-stone-200 px-3 py-1.5 rounded-xl font-bold text-stone-800">
+              {t('Standard:', 'सामान्य:')} ₹{config.standardAdPrice}/{cycleLabel}
+            </span>
+            {config.featuredAdsEnabled && (
+              <span className="bg-amber-100 border border-amber-300 px-3 py-1.5 rounded-xl font-bold text-amber-950 flex items-center gap-1">
+                <Star className="w-3.5 h-3.5 text-amber-600 fill-amber-500" />
+                {t('Featured Banner:', 'फीचर्ड बैनर:')} ₹{config.featuredAdPrice}/{cycleLabel}
+              </span>
+            )}
+            <span className="bg-[#380812] border border-amber-400/40 px-3 py-1.5 rounded-xl font-bold text-amber-200 flex items-center gap-1">
+              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+              {t('Patrika + Spotlight:', 'ई-पत्रिका + स्पॉटलाइट:')} ₹{config.spotlightAdPrice}/{cycleLabel}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* CATEGORY FILTER BAR */}
       <div className="flex flex-wrap items-center gap-2 bg-white p-3 rounded-2xl border border-stone-200/90 shadow-xs">
@@ -241,74 +300,82 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({
                     </div>
                   )}
 
-                  <button
-                    onClick={(e) => toggleLikeAd(ad.id, e)}
-                    className="absolute bottom-3 right-3 bg-white/95 hover:bg-white text-stone-800 p-1.5 rounded-full shadow-md backdrop-blur-xs transition-transform hover:scale-110 cursor-pointer flex items-center gap-1 text-[11px] font-bold px-2"
-                    title={likedAds.has(ad.id.toString()) ? t('Liked', 'पसंद किया') : t('Like business ad', 'पसंद करें')}
-                  >
-                    <Heart className={`w-3.5 h-3.5 ${likedAds.has(ad.id.toString()) ? 'fill-rose-500 text-rose-500' : 'text-stone-600'}`} />
-                    <span className={likedAds.has(ad.id.toString()) ? 'text-rose-600' : 'text-stone-700'}>{getAdLikes(ad.id)}</span>
-                  </button>
+                  {config.featureLikesEnabled && (
+                    <button
+                      onClick={(e) => toggleLikeAd(ad.id, e)}
+                      className="absolute bottom-3 right-3 bg-white/95 hover:bg-white text-stone-800 p-1.5 rounded-full shadow-md backdrop-blur-xs transition-transform hover:scale-110 cursor-pointer flex items-center gap-1 text-[11px] font-bold px-2"
+                      title={likedAds.has(ad.id.toString()) ? t('Liked', 'पसंद किया') : t('Like business ad', 'पसंद करें')}
+                    >
+                      <Heart className={`w-3.5 h-3.5 ${likedAds.has(ad.id.toString()) ? 'fill-rose-500 text-rose-500' : 'text-stone-600'}`} />
+                      <span className={likedAds.has(ad.id.toString()) ? 'text-rose-600' : 'text-stone-700'}>{getAdLikes(ad.id)}</span>
+                    </button>
+                  )}
                 </div>
 
-                <div className="p-5">
-                  <h3 className="font-bold text-lg text-stone-900 font-serif mb-1 leading-snug group-hover:text-[#380812] transition-colors">
+                <div className="p-4 sm:p-5 min-w-0">
+                  <h3 className="font-bold text-lg text-stone-900 font-serif mb-1 leading-snug group-hover:text-[#380812] transition-colors break-words">
                     {ad.title}
                   </h3>
 
-                  <p className="text-xs text-stone-600 font-medium mb-2.5">
+                  <p className="text-xs text-stone-600 font-medium mb-2.5 break-words">
                     {t('Owner:', 'संचालक:')} {ad.owner} {ad.city ? `· ${ad.city}` : ''}
                   </p>
 
-                  <p className="text-xs text-stone-600 mb-3 leading-relaxed">
+                  <p className="text-xs text-stone-600 mb-3 leading-relaxed break-words">
                     {ad.tagline || ad.description}
                   </p>
 
                   {ad.address && (
-                    <p className="text-[11px] text-stone-500 mb-3">
+                    <p className="text-[11px] text-stone-500 mb-3 break-words">
                       📍 {ad.address}
                     </p>
                   )}
 
                   {ad.offer && (
-                    <div className="bg-emerald-50 border border-emerald-200/80 text-emerald-800 text-xs p-2.5 rounded-xl font-semibold mb-3 flex items-center gap-1.5">
+                    <div className="bg-emerald-50 border border-emerald-200/80 text-emerald-800 text-xs p-2.5 rounded-xl font-semibold mb-3 flex items-center gap-1.5 min-w-0">
                       <Tag className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                      <span>{ad.offer}</span>
+                      <span className="break-words">{ad.offer}</span>
                     </div>
                   )}
                 </div>
               </div>
 
-              <div className="p-5 pt-0 space-y-2.5">
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={(e) => toggleLikeAd(ad.id, e)}
-                    title={likedAds.has(ad.id.toString()) ? t('Liked', 'पसंद किया') : t('Like this business ad', 'विज्ञापन पसंद करें')}
-                    className={`py-2 px-2.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-                      likedAds.has(ad.id.toString())
-                        ? 'bg-rose-50 border-rose-300 text-rose-700'
-                        : 'bg-stone-50 hover:bg-stone-100 border-stone-200 text-stone-700'
-                    }`}
-                  >
-                    <Heart className={`w-3.5 h-3.5 ${likedAds.has(ad.id.toString()) ? 'fill-rose-500 text-rose-500' : 'text-stone-500'}`} />
-                    <span>{getAdLikes(ad.id)}</span>
-                  </button>
+              <div className="p-4 sm:p-5 pt-0 space-y-2.5">
+                {(config.featureLikesEnabled || config.featureWhatsAppShareEnabled) && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {config.featureLikesEnabled && (
+                      <button
+                        onClick={(e) => toggleLikeAd(ad.id, e)}
+                        title={likedAds.has(ad.id.toString()) ? t('Liked', 'पसंद किया') : t('Like this business ad', 'विज्ञापन पसंद करें')}
+                        className={`py-2 px-2.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 whitespace-nowrap ${
+                          likedAds.has(ad.id.toString())
+                            ? 'bg-rose-50 border-rose-300 text-rose-700'
+                            : 'bg-stone-50 hover:bg-stone-100 border-stone-200 text-stone-700'
+                        }`}
+                      >
+                        <Heart className={`w-3.5 h-3.5 shrink-0 ${likedAds.has(ad.id.toString()) ? 'fill-rose-500 text-rose-500' : 'text-stone-500'}`} />
+                        <span>{getAdLikes(ad.id)}</span>
+                      </button>
+                    )}
 
-                  <button
-                    onClick={(e) => shareAdWhatsApp(ad, e)}
-                    title={t('Share business ad on WhatsApp', 'व्हाट्सऐप पर साझा करें')}
-                    className="flex-1 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 text-xs font-semibold py-2 px-3 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
-                  >
-                    <Share2 className="w-3.5 h-3.5 text-emerald-600" />
-                    <span>{t('Share on WhatsApp', 'व्हाट्सऐप शेयर')}</span>
-                  </button>
-                </div>
+                    {config.featureWhatsAppShareEnabled && (
+                      <button
+                        onClick={(e) => shareAdWhatsApp(ad, e)}
+                        title={t('Share business ad on WhatsApp', 'व्हाट्सऐप पर साझा करें')}
+                        className="flex-1 min-w-[140px] bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 text-xs font-semibold py-2 px-3 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap"
+                      >
+                        <Share2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>{t('Share on WhatsApp', 'व्हाट्सऐप शेयर')}</span>
+                      </button>
+                    )}
+                  </div>
+                )}
 
                 <a 
                   href={`tel:${ad.phone}`} 
-                  className="w-full bg-gradient-to-r from-[#380812] to-[#540e1b] hover:from-[#24050b] hover:to-[#380812] text-amber-200 font-semibold py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-xs border border-amber-500/20 cursor-pointer"
+                  className="w-full bg-gradient-to-r from-[#380812] to-[#540e1b] hover:from-[#24050b] hover:to-[#380812] text-amber-200 font-semibold py-2.5 px-3 rounded-xl text-xs flex flex-wrap items-center justify-center gap-1.5 text-center transition-all shadow-xs border border-amber-500/20 cursor-pointer"
                 >
-                  <Phone className="w-3.5 h-3.5 text-amber-300" /> {t('Call Owner', 'कॉल करें')} ({ad.phone})
+                  <Phone className="w-3.5 h-3.5 text-amber-300 shrink-0" /> <span className="whitespace-nowrap">{t('Call Owner', 'कॉल करें')} ({ad.phone})</span>
                 </a>
               </div>
             </div>
@@ -319,11 +386,11 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({
       {/* QUICK AD MODAL */}
       {showQuickModal && (
         <div 
-          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto"
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-start sm:items-center justify-center px-3 sm:px-4 pt-[calc(0.75rem+var(--sat))] pb-[calc(1rem+var(--sab))] overflow-y-auto"
           onClick={() => setShowQuickModal(false)}
         >
           <div 
-            className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-amber-300 relative my-8"
+            className="bg-white rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl border border-amber-300 relative my-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <button 
@@ -410,32 +477,66 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({
                 />
               </div>
 
+              <div>
+                <ImageUploadField
+                  label={t('Shop Photo / Banner (Optional)', 'दुकान की फ़ोटो / बैनर (वैकल्पिक)')}
+                  value={formState.banner}
+                  onChange={(url) => setFormState({ ...formState, banner: url })}
+                  variant="banner"
+                  maxDimension={960}
+                  urlPlaceholder={t('https://... (optional shop image link)', 'https://... (वैकल्पिक इमेज लिंक)')}
+                />
+              </div>
+
               <div className="bg-amber-50 p-3.5 rounded-xl border border-amber-300 space-y-2">
                 <label className="font-bold text-amber-900 block">{t('Select Ad Listing Type:', 'विज्ञापन प्रकार चुनें:')}</label>
                 <div className="flex items-center gap-2">
                   <input 
                     type="radio" 
                     name="ad_tier" 
-                    id="tier-free" 
-                    checked={formState.tier === 'free'}
-                    onChange={() => setFormState({ ...formState, tier: 'free' })}
-                    value="free" 
+                    id="tier-standard" 
+                    checked={formState.tier === 'standard'}
+                    onChange={() => setFormState({ ...formState, tier: 'standard' })}
+                    value="standard" 
                   />
-                  <label htmlFor="tier-free" className="text-slate-800 cursor-pointer">
-                    {t('Standard Listing (Free)', 'सामान्य विज्ञापन (निःशुल्क)')}
+                  <label htmlFor="tier-standard" className="text-slate-800 cursor-pointer">
+                    {config.adsMonetizationEnabled
+                      ? t(`Standard Listing (₹${config.standardAdPrice} / ${cycleLabel})`, `सामान्य विज्ञापन (₹${config.standardAdPrice} / ${cycleLabel})`)
+                      : t('Standard Listing (Free)', 'सामान्य विज्ञापन (निःशुल्क)')}
                   </label>
                 </div>
+                {config.featuredAdsEnabled && (
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="radio" 
+                      name="ad_tier" 
+                      id="tier-featured" 
+                      checked={formState.tier === 'featured'}
+                      onChange={() => setFormState({ ...formState, tier: 'featured' })}
+                      value="featured" 
+                    />
+                    <label htmlFor="tier-featured" className="font-bold text-red-900 flex items-center gap-1 cursor-pointer">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-600" />{' '}
+                      {config.adsMonetizationEnabled
+                        ? t(`Featured Top Banner Ad (₹${config.featuredAdPrice} / ${cycleLabel})`, `फीचर्ड टॉप बैनर विज्ञापन (₹${config.featuredAdPrice} / ${cycleLabel})`)
+                        : t('Featured Top Banner Ad (Free)', 'फीचर्ड टॉप बैनर विज्ञापन (निःशुल्क)')}
+                    </label>
+                  </div>
+                )}
                 <div className="flex items-center gap-2">
                   <input 
                     type="radio" 
                     name="ad_tier" 
-                    id="tier-featured" 
-                    checked={formState.tier === 'featured'}
-                    onChange={() => setFormState({ ...formState, tier: 'featured' })}
-                    value="featured" 
+                    id="tier-spotlight" 
+                    checked={formState.tier === 'spotlight'}
+                    onChange={() => setFormState({ ...formState, tier: 'spotlight' })}
+                    value="spotlight" 
                   />
-                  <label htmlFor="tier-featured" className="font-bold text-red-900 flex items-center gap-1 cursor-pointer">
-                    <Sparkles className="w-3.5 h-3.5 text-amber-600" /> {t('Featured Top Banner Ad (₹500 / Year)', 'फीचर्ड टॉप बैनर विज्ञापन (₹500 / वर्ष)')}
+                  <label htmlFor="tier-spotlight" className="font-bold text-[#380812] flex items-center gap-1 cursor-pointer">
+                    <Star className="w-3.5 h-3.5 text-amber-600" />{' '}
+                    {config.adsMonetizationEnabled
+                      ? t(`Patrika + Spotlight Ad (₹${config.spotlightAdPrice} / ${cycleLabel})`, `ई-पत्रिका + स्पॉटलाइट विज्ञापन (₹${config.spotlightAdPrice} / ${cycleLabel})`)
+                      : t('Patrika + Spotlight Ad (Free)', 'ई-पत्रिका + स्पॉटलाइट विज्ञापन (निःशुल्क)')}
                   </label>
                 </div>
               </div>

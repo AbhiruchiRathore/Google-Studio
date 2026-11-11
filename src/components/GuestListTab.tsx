@@ -7,6 +7,7 @@ import {
 import { GuestItem, GuestListOccasion, TabType, AuthSession } from '../types';
 import { sanitizePhoneInput, validatePhoneNumber } from '../utils/validation';
 import { useLanguage } from '../context/LanguageContext';
+import { useAdminConfig } from '../context/AdminConfigContext';
 import {
   shareViaWhatsApp,
   printHtmlDocument,
@@ -122,6 +123,7 @@ const DEFAULT_OCCASIONS: GuestListOccasion[] = [
 
 export const GuestListTab: React.FC<GuestListTabProps> = ({ authSession, onNavigateTab }) => {
   const { lang, t } = useLanguage();
+  const { config } = useAdminConfig();
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [confirmDeleteGuest, setConfirmDeleteGuest] = useState<{ id: string; name: string } | null>(null);
 
@@ -534,7 +536,7 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({ authSession, onNavig
   return (
     <div className="space-y-6 max-w-7xl mx-auto">
       {/* HEADER BANNER */}
-      <div className="bg-gradient-to-r from-[#24050b] via-[#380812] to-[#24050b] rounded-3xl p-6 sm:p-8 text-white shadow-xl border border-amber-500/30 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+      <div className="bg-gradient-to-r from-[#24050b] via-[#380812] to-[#24050b] rounded-3xl p-5 sm:p-8 text-white shadow-xl border border-amber-500/30 flex flex-col md:flex-row justify-between items-start md:items-center gap-5 sm:gap-6">
         <div className="space-y-2">
           <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-amber-400/10 border border-amber-400/30 text-amber-300 text-xs font-semibold">
             <Users className="w-3.5 h-3.5" />
@@ -686,13 +688,15 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({ authSession, onNavig
 
             <div className="h-5 w-px bg-stone-200 mx-1 hidden sm:block"></div>
 
-            <button
-              onClick={handleShareListWhatsApp}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-xs cursor-pointer transition-colors"
-            >
-              <Share2 className="w-3.5 h-3.5" />
-              <span>{t('Share List on WhatsApp', 'व्हाट्सऐप पर सूची साझा करें')}</span>
-            </button>
+            {config.featureWhatsAppShareEnabled && (
+              <button
+                onClick={handleShareListWhatsApp}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-xs cursor-pointer transition-colors"
+              >
+                <Share2 className="w-3.5 h-3.5" />
+                <span>{t('Share List on WhatsApp', 'व्हाट्सऐप पर सूची साझा करें')}</span>
+              </button>
+            )}
 
             <button
               onClick={handlePrint}
@@ -796,14 +800,16 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({ authSession, onNavig
 
                     <td className="py-3.5 px-4 text-right">
                       <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={() => handleSendPersonalInviteWhatsApp(guest)}
-                          title={t('Send Personalized Invite on WhatsApp', 'व्हाट्सऐप पर व्यक्तिगत निमंत्रण भेजें')}
-                          className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 p-1.5 rounded-lg text-xs flex items-center gap-1 font-semibold cursor-pointer transition-colors"
-                        >
-                          <Send className="w-3 h-3" />
-                          <span className="hidden xl:inline">{t('WhatsApp Card', 'निमंत्रण कार्ड')}</span>
-                        </button>
+                        {config.featureWhatsAppShareEnabled && (
+                          <button
+                            onClick={() => handleSendPersonalInviteWhatsApp(guest)}
+                            title={t('Send Personalized Invite on WhatsApp', 'व्हाट्सऐप पर व्यक्तिगत निमंत्रण भेजें')}
+                            className="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 p-1.5 rounded-lg text-xs flex items-center gap-1 font-semibold cursor-pointer transition-colors"
+                          >
+                            <Send className="w-3 h-3" />
+                            <span className="hidden xl:inline">{t('WhatsApp Card', 'निमंत्रण कार्ड')}</span>
+                          </button>
+                        )}
 
                         <button
                           onClick={() => handleEditClick(guest)}
@@ -833,11 +839,11 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({ authSession, onNavig
       {/* MODAL: ADD / EDIT GUEST */}
       {showAddGuestModal && (
         <div 
-          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in"
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-start sm:items-center justify-center px-3 sm:px-4 pt-[calc(0.75rem+var(--sat))] pb-[calc(1rem+var(--sab))] overflow-y-auto animate-in fade-in"
           onClick={() => setShowAddGuestModal(false)}
         >
           <div 
-            className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-amber-300 relative my-8"
+            className="bg-white rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl border border-amber-300 relative my-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <button
@@ -1020,11 +1026,11 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({ authSession, onNavig
       {/* MODAL: CREATE NEW OCCASION */}
       {showNewOccasionModal && (
         <div 
-          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in"
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-start sm:items-center justify-center px-3 sm:px-4 pt-[calc(0.75rem+var(--sat))] pb-[calc(1rem+var(--sab))] overflow-y-auto animate-in fade-in"
           onClick={() => setShowNewOccasionModal(false)}
         >
           <div 
-            className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-amber-300 relative my-8"
+            className="bg-white rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-amber-300 relative my-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <button
@@ -1108,11 +1114,11 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({ authSession, onNavig
       {/* MODAL: CONFIRM DELETE GUEST */}
       {confirmDeleteGuest && (
         <div
-          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4"
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-start sm:items-center justify-center px-3 sm:px-4 pt-[calc(0.75rem+var(--sat))] pb-[calc(1rem+var(--sab))] overflow-y-auto"
           onClick={() => setConfirmDeleteGuest(null)}
         >
           <div
-            className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-rose-200 space-y-4"
+            className="bg-white rounded-2xl max-w-sm w-full p-5 sm:p-6 shadow-2xl border border-rose-200 space-y-4 my-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <h4 className="font-serif font-bold text-stone-900 text-base">
@@ -1147,11 +1153,11 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({ authSession, onNavig
       {/* MODAL: PRINT PREVIEW & EXPORT GUEST LIST */}
       {showPrintModal && activeOccasion && (
         <div
-          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-start sm:items-center justify-center px-3 sm:px-4 pt-[calc(0.75rem+var(--sat))] pb-[calc(1rem+var(--sab))] overflow-y-auto"
           onClick={() => setShowPrintModal(false)}
         >
           <div
-            className="bg-white rounded-3xl max-w-3xl w-full p-6 shadow-2xl border border-amber-300 relative my-8 space-y-4"
+            className="bg-white rounded-3xl max-w-3xl w-full p-5 sm:p-6 shadow-2xl border border-amber-300 relative my-auto space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
             <button
@@ -1162,8 +1168,8 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({ authSession, onNavig
             </button>
 
             <div>
-              <h3 className="text-xl font-serif font-bold text-stone-900 flex items-center gap-2">
-                <Printer className="w-5 h-5 text-amber-800" />
+              <h3 className="text-xl font-serif font-bold text-stone-900 flex items-center gap-2 pr-8">
+                <Printer className="w-5 h-5 text-amber-800 shrink-0" />
                 <span>{t('Print & Export Guest List', 'अतिथि सूची प्रिंट व निर्यात करें')}</span>
               </h3>
               <p className="text-xs text-stone-500 mt-0.5">
@@ -1172,7 +1178,7 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({ authSession, onNavig
               </p>
             </div>
 
-            <div className="max-h-64 overflow-y-auto border border-stone-200 rounded-2xl">
+            <div className="max-h-[42dvh] sm:max-h-64 overflow-y-auto overflow-x-auto border border-stone-200 rounded-2xl">
               <table className="w-full text-left text-xs border-collapse">
                 <thead className="bg-stone-100 text-stone-700 sticky top-0">
                   <tr>
@@ -1225,14 +1231,16 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({ authSession, onNavig
                 <span>{t('Excel / CSV', 'एक्सेल / CSV')}</span>
               </button>
 
-              <button
-                type="button"
-                onClick={handleShareListWhatsApp}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <Share2 className="w-4 h-4" />
-                <span>{t('Share WhatsApp', 'व्हाट्सऐप शेयर')}</span>
-              </button>
+              {config.featureWhatsAppShareEnabled && (
+                <button
+                  type="button"
+                  onClick={handleShareListWhatsApp}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <Share2 className="w-4 h-4" />
+                  <span>{t('Share WhatsApp', 'व्हाट्सऐप शेयर')}</span>
+                </button>
+              )}
             </div>
           </div>
         </div>

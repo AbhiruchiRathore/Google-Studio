@@ -14,13 +14,14 @@ import { FamilyDetailsTab } from './components/FamilyDetailsTab';
 import { DashboardTab } from './components/DashboardTab';
 import { KundaliMilanTab } from './components/KundaliMilanTab';
 import { GuestListTab } from './components/GuestListTab';
-import { AdminDashboardTab, DEFAULT_ADMIN_CONFIG } from './components/AdminDashboardTab';
+import { AdminDashboardTab } from './components/AdminDashboardTab';
 import { WhatsAppShare } from './components/WhatsAppShare';
 import { Footer } from './components/Footer';
 import { auth } from './firebase';
 import { onAuthStateChanged, signOut, getRedirectResult } from 'firebase/auth';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Lock } from 'lucide-react';
 import { useLanguage } from './context/LanguageContext';
+import { useAdminConfig, DEFAULT_ADMIN_CONFIG } from './context/AdminConfigContext';
 import { sanitizePhoneInput } from './utils/validation';
 import { getSessionOwnerKey, isProfileOwnedBySession } from './utils/profileOwnership';
 
@@ -50,6 +51,7 @@ function getInitialTabFromUrl(): TabType {
 
 export const App: React.FC = () => {
   const { t } = useLanguage();
+  const { config } = useAdminConfig();
   const [currentTab, setCurrentTab] = useState<TabType>(() => getInitialTabFromUrl());
   const currentTabRef = useRef<TabType>(currentTab);
   currentTabRef.current = currentTab;
@@ -283,6 +285,12 @@ export const App: React.FC = () => {
 
   const hasRegisteredProfile = userOwnedProfiles.length > 0;
 
+  // Profiles visible in public Matrimony / Kundali (respecting requireAdminVerification)
+  const visiblePublicProfiles = useMemo(() => {
+    if (!config.requireAdminVerification) return profiles;
+    return profiles.filter((p) => p.verified !== false || isProfileOwnedBySession(p, authSession));
+  }, [profiles, config.requireAdminVerification, authSession]);
+
   const handleUnlockProfile = (id: number | string) => {
     setUnlockedProfiles(prev => {
       if (prev.includes(id)) return prev;
@@ -297,6 +305,10 @@ export const App: React.FC = () => {
   };
 
   const handleAddProfile = (newProfile: MatrimonyProfile): boolean => {
+    if (!config.featureProfileCreationEnabled) {
+      return false;
+    }
+
     const ownerKey = getSessionOwnerKey(authSession);
     if (!authSession || !ownerKey) {
       return false;
@@ -309,6 +321,7 @@ export const App: React.FC = () => {
 
     const ownedProfile: MatrimonyProfile = {
       ...newProfile,
+      verified: !config.requireAdminVerification,
       ownerId: ownerKey,
       ownerName: authSession.name || authSession.username || authSession.email || 'Member'
     };
@@ -348,6 +361,7 @@ export const App: React.FC = () => {
       photo: partial.photo || (partial.gender === 'Female' 
         ? "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80" 
         : "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80"),
+      gallery: partial.gallery && partial.gallery.length > 0 ? partial.gallery : undefined,
       verified: true,
       createdAt: new Date().toISOString()
     };
@@ -379,6 +393,8 @@ export const App: React.FC = () => {
       offer: partial.offer || '10% Discount for Samaj Members',
       rating: '5.0 ★',
       isFeatured: partial.isFeatured || false,
+      adTier: partial.adTier,
+      adPricePaid: partial.adPricePaid,
       banner: partial.banner || 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=600&q=80',
       createdAt: new Date().toISOString()
     };
@@ -488,24 +504,48 @@ export const App: React.FC = () => {
     navigateToTab('signup');
   };
 
-  // Optional broadcast banner from Admin config
-  const [broadcastMessage] = useState<string | null>(() => {
-    try {
-      const stored = localStorage.getItem('samaj_admin_config');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed.isBroadcastActive && parsed.bannerBroadcastMessage) {
-          return parsed.bannerBroadcastMessage;
-        }
-      }
-    } catch (e) {
-      console.error(e);
-    }
-    return null;
-  });
+  // Live broadcast banner from Admin config
+  const broadcastMessage = config.isBroadcastActive && config.bannerBroadcastMessage
+    ? config.bannerBroadcastMessage
+    : null;
+
+  const renderFeatureDisabledCard = (titleEn: string, titleHi: string) => (
+    <div className="max-w-lg mx-auto my-10 bg-white rounded-3xl border border-amber-300 shadow-lg p-8 text-center space-y-4">
+      <div className="w-14 h-14 bg-amber-100 text-amber-800 rounded-2xl mx-auto flex items-center justify-center border border-amber-300">
+        <Lock className="w-7 h-7" />
+      </div>
+      <h2 className="text-xl font-serif font-bold text-stone-900">
+        {t(`${titleEn} Temporarily Paused`, `${titleHi} अस्थायी रूप से बंद है`)}
+      </h2>
+      <p className="text-xs text-stone-600 leading-relaxed">
+        {t(
+          'This section has been temporarily turned off by Samaj Administration. Please check back shortly or explore other portal sections.',
+          'यह सुविधा वर्तमान में समाज एडमिन द्वारा अस्थायी रूप से बंद की गई है। कृपया अन्य उपलब्ध अनुभाग देखें।'
+        )}
+      </p>
+      <div className="flex flex-wrap justify-center gap-2 pt-2">
+        {config.featureMatrimonyEnabled && (
+          <button
+            onClick={() => navigateToTab('matrimony')}
+            className="bg-[#380812] text-amber-200 font-bold px-5 py-2.5 rounded-xl text-xs cursor-pointer"
+          >
+            {t('Return to Home', 'होम पर लौटें')}
+          </button>
+        )}
+        {authSession?.username === 'AdminAbhi' && (
+          <button
+            onClick={() => navigateToTab('admin')}
+            className="bg-amber-300 text-[#380812] font-bold px-5 py-2.5 rounded-xl text-xs cursor-pointer"
+          >
+            {t('Manage in Admin Console', 'एडमिन कंसोल में बदलें')}
+          </button>
+        )}
+      </div>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-[#FDFBF7] text-stone-800 font-sans flex flex-col selection:bg-rose-100 selection:text-rose-950">
+    <div className="min-h-screen min-h-dvh overflow-x-clip bg-[#FDFBF7] text-stone-800 font-sans flex flex-col selection:bg-rose-100 selection:text-rose-950">
       <Header 
         currentTab={currentTab} 
         onSelectTab={navigateToTab} 
@@ -514,15 +554,15 @@ export const App: React.FC = () => {
       />
 
       {backNotice && (
-        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 bg-stone-900/95 text-amber-100 px-4 py-2 rounded-xl text-xs font-semibold shadow-xl border border-amber-400/30">
+        <div className="fixed bottom-[calc(4.75rem+var(--sab))] left-1/2 -translate-x-1/2 z-50 max-w-[calc(100vw-2rem)] bg-stone-900/95 text-amber-100 px-4 py-2 rounded-xl text-xs font-semibold shadow-xl border border-amber-400/30 text-center">
           {t('You are on the Home screen.', 'आप मुख्य पृष्ठ (होम) पर हैं।')}
         </div>
       )}
 
       {broadcastMessage && (
-        <div className="bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 text-stone-950 px-4 py-2 text-xs sm:text-sm font-semibold text-center border-b border-amber-600/30 shadow-xs flex items-center justify-center gap-2">
+        <div className="bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 text-stone-950 px-3 sm:px-4 py-2 text-xs sm:text-sm font-semibold text-center border-b border-amber-600/30 shadow-xs flex items-center justify-center gap-2">
           <Sparkles className="w-4 h-4 text-[#4c0d1b] shrink-0" />
-          <span>
+          <span className="break-words">
             {broadcastMessage === DEFAULT_ADMIN_CONFIG.bannerBroadcastMessage
               ? t(
                   DEFAULT_ADMIN_CONFIG.bannerBroadcastMessage,
@@ -540,28 +580,36 @@ export const App: React.FC = () => {
         />
       )}
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="flex-1 max-w-7xl w-full min-w-0 mx-auto px-3 sm:px-6 lg:px-8 py-5 sm:py-8">
         {currentTab === 'matrimony' && (
-          <MatrimonyTab
-            authSession={authSession}
-            profiles={profiles}
-            unlockedProfiles={unlockedProfiles}
-            hasRegisteredProfile={hasRegisteredProfile}
-            onUnlockProfile={handleUnlockProfile}
-            onNavigateTab={navigateToTab}
-            onAddQuickProfile={handleAddQuickProfile}
-            onSelectKundaliProfile={handleSelectKundaliProfile}
-          />
+          config.featureMatrimonyEnabled ? (
+            <MatrimonyTab
+              authSession={authSession}
+              profiles={visiblePublicProfiles}
+              unlockedProfiles={unlockedProfiles}
+              hasRegisteredProfile={hasRegisteredProfile}
+              onUnlockProfile={handleUnlockProfile}
+              onNavigateTab={navigateToTab}
+              onAddQuickProfile={handleAddQuickProfile}
+              onSelectKundaliProfile={handleSelectKundaliProfile}
+            />
+          ) : (
+            renderFeatureDisabledCard('Matrimony Directory', 'वैवाहिक बायोडाटा निर्देशिका')
+          )
         )}
 
         {currentTab === 'kundali' && (
-          <KundaliMilanTab
-            authSession={authSession}
-            profiles={profiles}
-            onNavigateTab={navigateToTab}
-            preselectedBoyId={kundaliBoyId}
-            preselectedGirlId={kundaliGirlId}
-          />
+          config.featureKundaliEnabled ? (
+            <KundaliMilanTab
+              authSession={authSession}
+              profiles={visiblePublicProfiles}
+              onNavigateTab={navigateToTab}
+              preselectedBoyId={kundaliBoyId}
+              preselectedGirlId={kundaliGirlId}
+            />
+          ) : (
+            renderFeatureDisabledCard('Kundali Milan', 'कुंडली मिलान')
+          )
         )}
 
         {currentTab === 'dashboard' && (
@@ -582,23 +630,36 @@ export const App: React.FC = () => {
         )}
 
         {currentTab === 'directory' && (
-          <BusinessTab 
-            authSession={authSession}
-            ads={ads} 
-            onNavigateTab={navigateToTab} 
-            onAddQuickAd={handleAddQuickAd} 
-          />
+          config.featureBusinessDirectoryEnabled ? (
+            <BusinessTab 
+              authSession={authSession}
+              ads={ads} 
+              onNavigateTab={navigateToTab} 
+              onAddQuickAd={handleAddQuickAd} 
+            />
+          ) : (
+            renderFeatureDisabledCard('Business Directory', 'व्यापार निर्देशिका')
+          )
         )}
 
         {currentTab === 'booklet' && (
-          <BookletTab onNavigateTab={navigateToTab} />
+          config.featureBookletEnabled ? (
+            <BookletTab onNavigateTab={navigateToTab} />
+          ) : (
+            renderFeatureDisabledCard('Digital E-Booklet', 'डिजिटल ई-पत्रिका')
+          )
         )}
 
         {currentTab === 'events' && (
-          <EventsTab 
-            events={events} 
-            onAddEvent={handleAddEvent} 
-          />
+          config.featureEventsEnabled ? (
+            <EventsTab 
+              events={events} 
+              onAddEvent={handleAddEvent}
+              authSession={authSession}
+            />
+          ) : (
+            renderFeatureDisabledCard('Samaj Events & Sammelans', 'समाज कार्यक्रम एवं सम्मेलन')
+          )
         )}
 
         {currentTab === 'signup' && (
@@ -613,30 +674,42 @@ export const App: React.FC = () => {
         )}
 
         {currentTab === 'create-profile' && (
-          <CreateProfileTab 
-            authSession={authSession}
-            onLogin={handleLogin}
-            onAddProfile={handleAddProfile} 
-            onNavigateTab={navigateToTab}
-            hasRegisteredProfile={hasRegisteredProfile}
-            existingUserProfile={userOwnedProfiles[0] || null}
-          />
+          config.featureProfileCreationEnabled ? (
+            <CreateProfileTab 
+              authSession={authSession}
+              onLogin={handleLogin}
+              onAddProfile={handleAddProfile} 
+              onNavigateTab={navigateToTab}
+              hasRegisteredProfile={hasRegisteredProfile}
+              existingUserProfile={userOwnedProfiles[0] || null}
+            />
+          ) : (
+            renderFeatureDisabledCard('Profile Creation', 'बायोडाटा निर्माण')
+          )
         )}
 
         {currentTab === 'advertise-shop' && (
-          <AdvertiseShopTab 
-            authSession={authSession}
-            onLogin={handleLogin}
-            onAddAd={handleAddAd} 
-            onNavigateTab={navigateToTab} 
-          />
+          config.featureBusinessDirectoryEnabled ? (
+            <AdvertiseShopTab 
+              authSession={authSession}
+              onLogin={handleLogin}
+              onAddAd={handleAddAd} 
+              onNavigateTab={navigateToTab} 
+            />
+          ) : (
+            renderFeatureDisabledCard('Advertise Shop', 'दुकान विज्ञापन')
+          )
         )}
 
         {currentTab === 'guest-list' && (
-          <GuestListTab
-            authSession={authSession}
-            onNavigateTab={navigateToTab}
-          />
+          config.featureGuestListEnabled ? (
+            <GuestListTab
+              authSession={authSession}
+              onNavigateTab={navigateToTab}
+            />
+          ) : (
+            renderFeatureDisabledCard('Guest List Planner', 'अतिथि सूची प्लानर')
+          )
         )}
 
         {currentTab === 'admin' && (
@@ -652,13 +725,17 @@ export const App: React.FC = () => {
         )}
 
         {currentTab === 'family-details' && (
-          <FamilyDetailsTab
-            authSession={authSession}
-            onNavigateTab={navigateToTab}
-            onAddQuickProfile={handleAddQuickProfile}
-            hasRegisteredProfile={hasRegisteredProfile}
-            existingUserProfile={userOwnedProfiles[0] || null}
-          />
+          config.featureProfileCreationEnabled ? (
+            <FamilyDetailsTab
+              authSession={authSession}
+              onNavigateTab={navigateToTab}
+              onAddQuickProfile={handleAddQuickProfile}
+              hasRegisteredProfile={hasRegisteredProfile}
+              existingUserProfile={userOwnedProfiles[0] || null}
+            />
+          ) : (
+            renderFeatureDisabledCard('Family Details Registration', 'पारिवारिक विवरण पंजीकरण')
+          )
         )}
       </main>
 

@@ -11,6 +11,7 @@ import { auth } from '../firebase';
 import { GoogleAuthProvider, signInWithRedirect, signInWithPopup } from 'firebase/auth';
 import { sanitizePhoneInput, validatePhoneNumber, validateStrongPassword } from '../utils/validation';
 import { useLanguage } from '../context/LanguageContext';
+import { BrandLogo } from './BrandLogo';
 
 interface SignUpTabProps {
   authSession: AuthSession | null;
@@ -446,8 +447,8 @@ export default function SignUpTab({
 
   if (authSession) {
     return (
-      <div className="space-y-6 max-w-lg mx-auto py-6 px-4">
-        <div className="bg-white p-6 md:p-8 rounded-3xl border border-stone-200/90 shadow-sm space-y-6 text-center">
+      <div className="space-y-6 max-w-lg mx-auto py-3 sm:py-6 px-0 sm:px-4">
+        <div className="bg-white p-5 sm:p-8 rounded-3xl border border-stone-200/90 shadow-sm space-y-6 text-center">
           <div className="w-16 h-16 bg-emerald-50 rounded-2xl mx-auto flex items-center justify-center text-3xl border border-emerald-200 overflow-hidden shadow-xs">
             {authSession.photoUrl ? (
               <img src={authSession.photoUrl} alt={authSession.name} referrerPolicy="no-referrer" className="w-full h-full rounded-2xl object-cover" />
@@ -494,18 +495,18 @@ export default function SignUpTab({
   }
 
   return (
-    <div className="space-y-6 max-w-md mx-auto py-8 px-4">
+    <div className="space-y-6 max-w-md mx-auto py-3 sm:py-8 px-0 sm:px-4">
       <GoogleSignInModal isOpen={showGoogleModal} onClose={() => setShowGoogleModal(false)} onSuccess={handleModalSuccess} />
 
-      <div className="bg-white p-6 md:p-8 rounded-3xl border border-stone-200/90 shadow-sm space-y-6">
-        <div className="text-center">
-          <div className="w-12 h-12 bg-gradient-to-br from-amber-300 to-amber-500 rounded-2xl mx-auto flex items-center justify-center text-[#4c0d1b] font-serif font-bold text-lg border border-amber-200 shadow-xs mb-3">
-            RR
+      <div className="bg-white p-5 sm:p-8 rounded-3xl border border-stone-200/90 shadow-sm space-y-6">
+        <div className="text-center space-y-1">
+          <div className="flex justify-center">
+            <BrandLogo size="lg" showText={false} tone="crimson" />
           </div>
-          <h2 className="text-2xl font-serif font-bold text-stone-900">
-            {t('Welcome to Rathore Rishtey', 'राठौड़ रिश्ते में आपका स्वागत है')}
+          <h2 className="font-logo text-3xl sm:text-4xl font-bold text-[#6e1628] leading-tight">
+            {t('Rathore Rishtey', 'राठौड़ रिश्ते')}
           </h2>
-          <p className="text-xs text-stone-500 mt-1 font-light">
+          <p className="text-xs text-stone-500 font-light">
             {t('Rathore Rajput Community • Matrimonial & Business Directory', 'राठौड़ राजपूत समाज • वैवाहिक एवं व्यापार डायरेक्टरी')}
           </p>
         </div>

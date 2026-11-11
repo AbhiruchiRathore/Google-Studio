@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { BookOpen, FileText, Search, ChevronLeft, ChevronRight, CheckCircle2 } from 'lucide-react';
+import { BookOpen, FileText, Search, ChevronLeft, ChevronRight, CheckCircle2, Lock } from 'lucide-react';
 import { TabType } from '../types';
 import { BOOKLET_PAGES } from '../data/mockData';
 import { useLanguage } from '../context/LanguageContext';
+import { useAdminConfig } from '../context/AdminConfigContext';
 
 interface BookletTabProps {
   onNavigateTab: (tab: TabType) => void;
@@ -10,11 +11,13 @@ interface BookletTabProps {
 
 export const BookletTab: React.FC<BookletTabProps> = ({ onNavigateTab }) => {
   const { t } = useLanguage();
+  const { config } = useAdminConfig();
   const [currentPage, setCurrentPage] = useState(0);
   const [downloading, setDownloading] = useState(false);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
 
   const handleDownloadPDF = () => {
+    if (!config.allowGuestDownloads) return;
     setDownloading(true);
     setTimeout(() => {
       setDownloading(false);
@@ -62,28 +65,35 @@ export const BookletTab: React.FC<BookletTabProps> = ({ onNavigateTab }) => {
           </div>
 
           <div className="flex flex-wrap gap-3 justify-center pt-2">
-            <button 
-              onClick={handleDownloadPDF}
-              disabled={downloading}
-              className="bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500 hover:from-amber-300 hover:to-amber-400 disabled:opacity-60 text-stone-950 text-xs font-bold px-5 py-2.5 rounded-xl shadow transition-all flex items-center gap-2 cursor-pointer"
-            >
-              {downloading ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-stone-950 border-t-transparent rounded-full animate-spin" />
-                  {t('Generating PDF (45 MB)...', 'PDF तैयार हो रही है (45 MB)...')}
-                </>
-              ) : downloadSuccess ? (
-                <>
-                  <CheckCircle2 className="w-4 h-4 text-emerald-800" />
-                  {t('PDF Downloaded!', 'PDF डाउनलोड हो गई!')}
-                </>
-              ) : (
-                <>
-                  <FileText className="w-4 h-4" />
-                  {t('Download Printable PDF', 'प्रिंट करने योग्य PDF डाउनलोड करें')}
-                </>
-              )}
-            </button>
+            {config.allowGuestDownloads ? (
+              <button 
+                onClick={handleDownloadPDF}
+                disabled={downloading}
+                className="bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500 hover:from-amber-300 hover:to-amber-400 disabled:opacity-60 text-stone-950 text-xs font-bold px-5 py-2.5 rounded-xl shadow transition-all flex items-center gap-2 cursor-pointer"
+              >
+                {downloading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-stone-950 border-t-transparent rounded-full animate-spin" />
+                    {t('Generating PDF (45 MB)...', 'PDF तैयार हो रही है (45 MB)...')}
+                  </>
+                ) : downloadSuccess ? (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 text-emerald-800" />
+                    {t('PDF Downloaded!', 'PDF डाउनलोड हो गई!')}
+                  </>
+                ) : (
+                  <>
+                    <FileText className="w-4 h-4" />
+                    {t('Download Printable PDF', 'प्रिंट करने योग्य PDF डाउनलोड करें')}
+                  </>
+                )}
+              </button>
+            ) : (
+              <span className="bg-white/10 border border-white/20 text-stone-300 text-xs font-semibold px-4 py-2.5 rounded-xl flex items-center gap-2">
+                <Lock className="w-3.5 h-3.5 text-amber-300" />
+                {t('PDF Downloads Paused by Admin (Read Online Below)', 'PDF डाउनलोड एडमिन द्वारा रोका गया है (नीचे ऑनलाइन पढ़ें)')}
+              </span>
+            )}
 
             <button 
               onClick={() => onNavigateTab('matrimony')} 

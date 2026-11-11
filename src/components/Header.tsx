@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { 
-  ShieldCheck, Users, Store, BookOpen, Calendar, 
-  UserPlus, PlusCircle, Menu, X, UserCheck, LogOut, Crown, HeartHandshake,
+  Users, Store, BookOpen, Calendar, 
+  UserPlus, PlusCircle, Menu, X, UserCheck, LogOut, HeartHandshake,
   LayoutDashboard, Compass, ClipboardList, Languages, Lock
 } from 'lucide-react';
 import { TabType, AuthSession } from '../types';
 import { useLanguage } from '../context/LanguageContext';
+import { useAdminConfig } from '../context/AdminConfigContext';
+import { BrandLogo } from './BrandLogo';
 
 interface HeaderProps {
   currentTab: TabType;
@@ -17,6 +19,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSession, onLogout }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { lang, setLang, t } = useLanguage();
+  const { config } = useAdminConfig();
 
   const handleTabClick = (tab: TabType) => {
     onSelectTab(tab);
@@ -25,137 +28,134 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
   };
 
   return (
-    <header className="sticky top-0 z-40 bg-gradient-to-r from-[#6e1628] via-[#851834] to-[#6e1628] text-white shadow-lg border-b border-amber-400/30">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-20">
+    <header className="sticky top-0 z-40 bg-gradient-to-r from-[#6e1628] via-[#851834] to-[#6e1628] text-white shadow-lg border-b border-amber-400/30 pt-[var(--sat)]">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between gap-2 min-h-[4rem] sm:min-h-[4.75rem] py-2">
           
-          {/* Brand Logo & Auspicious Marriage Crest */}
+          {/* Brand Logo: Creative Font + Diamond Ring Vector */}
           <div 
-            className="flex items-center space-x-3 cursor-pointer group select-none" 
+            className="flex items-center cursor-pointer group select-none min-w-0 flex-1 xl:flex-initial" 
             onClick={() => handleTabClick('matrimony')}
           >
-            <div className="relative">
-              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-br from-amber-300 via-amber-400 to-amber-600 text-[#4c0d1b] font-bold flex items-center justify-center text-lg sm:text-xl shadow-md border-2 border-amber-200/90 group-hover:scale-105 transition-transform font-serif shrink-0">
-                RR
-              </div>
-              <div className="absolute -top-1 -right-1 w-5 h-5 bg-gradient-to-tr from-amber-400 to-amber-200 rounded-full border border-amber-100 flex items-center justify-center text-[#4c0d1b] shadow-xs">
-                <Crown className="w-3 h-3 fill-[#4c0d1b]" />
-              </div>
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <h1 className="text-lg sm:text-xl lg:text-2xl font-bold tracking-tight text-amber-50 font-serif flex items-center gap-1.5">
-                  {t('Rathore Rishtey', 'राठौड़ रिश्ते')}
-                </h1>
-                <ShieldCheck className="w-4 h-4 text-amber-300 fill-amber-300/20 shrink-0" />
-              </div>
-              <p className="text-[10px] sm:text-[11px] text-amber-200/85 font-medium tracking-wide flex items-center gap-1">
-                <span className="text-amber-300 font-serif font-semibold">
-                  {t('Shubh Vivah', 'शुभ विवाह')}
-                </span> • {t('Digital Matrimonial & Business Directory', 'डिजिटल वैवाहिक एवं व्यापार निर्देशिका')}
-              </p>
-            </div>
+            <BrandLogo
+              size="md"
+              tone="gold"
+              asHeading
+              className="group-hover:scale-[1.02] transition-transform"
+            />
           </div>
 
           {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center space-x-1 lg:space-x-1.5">
-            <button 
-              onClick={() => handleTabClick('matrimony')} 
-              className={`relative flex items-center gap-1.5 px-2.5 lg:px-3 py-2 rounded-xl text-xs lg:text-sm font-medium transition-all ${
-                currentTab === 'matrimony' 
-                  ? 'text-amber-200 font-semibold bg-white/12 shadow-xs' 
-                  : 'text-rose-100 hover:text-amber-200 hover:bg-white/5'
-              }`}
-            >
-              <HeartHandshake className="w-4 h-4 text-amber-300 shrink-0" />
-              <span>{t('Matrimony Bios', 'वैवाहिक बायोडाटा')}</span>
-              {currentTab === 'matrimony' && (
-                <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-gradient-to-r from-amber-300 via-amber-200 to-amber-300 rounded-full" />
-              )}
-            </button>
+          <nav className="hidden xl:flex items-center space-x-1 overflow-x-auto no-scrollbar">
+            {config.featureMatrimonyEnabled && (
+              <button 
+                onClick={() => handleTabClick('matrimony')} 
+                className={`relative flex items-center gap-1.5 px-2.5 lg:px-3 py-2 rounded-xl text-xs lg:text-sm font-medium transition-all ${
+                  currentTab === 'matrimony' 
+                    ? 'text-amber-200 font-semibold bg-white/12 shadow-xs' 
+                    : 'text-rose-100 hover:text-amber-200 hover:bg-white/5'
+                }`}
+              >
+                <HeartHandshake className="w-4 h-4 text-amber-300 shrink-0" />
+                <span>{t('Matrimony Bios', 'वैवाहिक बायोडाटा')}</span>
+                {currentTab === 'matrimony' && (
+                  <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-gradient-to-r from-amber-300 via-amber-200 to-amber-300 rounded-full" />
+                )}
+              </button>
+            )}
 
-            <button 
-              onClick={() => handleTabClick('kundali')} 
-              className={`relative flex items-center gap-1.5 px-2.5 lg:px-3 py-2 rounded-xl text-xs lg:text-sm font-medium transition-all ${
-                currentTab === 'kundali' 
-                  ? 'text-amber-200 font-semibold bg-white/12 shadow-xs' 
-                  : 'text-rose-100 hover:text-amber-200 hover:bg-white/5'
-              }`}
-            >
-              <Compass className="w-4 h-4 text-amber-300 shrink-0" />
-              <span>{t('Kundali Milan', 'कुंडली मिलान')}</span>
-              {!authSession && <Lock className="w-3 h-3 text-amber-300/80 shrink-0" />}
-              <span className="text-[10px] bg-amber-400 text-stone-950 font-extrabold px-1.5 py-0.2 rounded-md">
-                {t('36 Gunas', '३६ गुण')}
-              </span>
-              {currentTab === 'kundali' && (
-                <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-gradient-to-r from-amber-300 via-amber-200 to-amber-300 rounded-full" />
-              )}
-            </button>
+            {config.featureKundaliEnabled && (
+              <button 
+                onClick={() => handleTabClick('kundali')} 
+                className={`relative flex items-center gap-1.5 px-2.5 lg:px-3 py-2 rounded-xl text-xs lg:text-sm font-medium transition-all ${
+                  currentTab === 'kundali' 
+                    ? 'text-amber-200 font-semibold bg-white/12 shadow-xs' 
+                    : 'text-rose-100 hover:text-amber-200 hover:bg-white/5'
+                }`}
+              >
+                <Compass className="w-4 h-4 text-amber-300 shrink-0" />
+                <span>{t('Kundali Milan', 'कुंडली मिलान')}</span>
+                {!authSession && <Lock className="w-3 h-3 text-amber-300/80 shrink-0" />}
+                <span className="text-[10px] bg-amber-400 text-stone-950 font-extrabold px-1.5 py-0.2 rounded-md">
+                  {t('36 Gunas', '३६ गुण')}
+                </span>
+                {currentTab === 'kundali' && (
+                  <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-gradient-to-r from-amber-300 via-amber-200 to-amber-300 rounded-full" />
+                )}
+              </button>
+            )}
 
-            <button 
-              onClick={() => handleTabClick('guest-list')} 
-              className={`relative flex items-center gap-1.5 px-2.5 lg:px-3 py-2 rounded-xl text-xs lg:text-sm font-medium transition-all ${
-                currentTab === 'guest-list' 
-                  ? 'text-amber-200 font-semibold bg-white/12 shadow-xs' 
-                  : 'text-rose-100 hover:text-amber-200 hover:bg-white/5'
-              }`}
-            >
-              <ClipboardList className="w-4 h-4 text-amber-300 shrink-0" />
-              <span>{t('Guest List', 'अतिथि सूची')}</span>
-              {!authSession && <Lock className="w-3 h-3 text-amber-300/80 shrink-0" />}
-              <span className="text-[10px] bg-rose-500/80 text-white font-bold px-1.5 py-0.2 rounded-md">
-                {t('Planner', 'प्लानर')}
-              </span>
-              {currentTab === 'guest-list' && (
-                <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-gradient-to-r from-amber-300 via-amber-200 to-amber-300 rounded-full" />
-              )}
-            </button>
+            {config.featureGuestListEnabled && (
+              <button 
+                onClick={() => handleTabClick('guest-list')} 
+                className={`relative flex items-center gap-1.5 px-2.5 lg:px-3 py-2 rounded-xl text-xs lg:text-sm font-medium transition-all ${
+                  currentTab === 'guest-list' 
+                    ? 'text-amber-200 font-semibold bg-white/12 shadow-xs' 
+                    : 'text-rose-100 hover:text-amber-200 hover:bg-white/5'
+                }`}
+              >
+                <ClipboardList className="w-4 h-4 text-amber-300 shrink-0" />
+                <span>{t('Guest List', 'अतिथि सूची')}</span>
+                {!authSession && <Lock className="w-3 h-3 text-amber-300/80 shrink-0" />}
+                <span className="text-[10px] bg-rose-500/80 text-white font-bold px-1.5 py-0.2 rounded-md">
+                  {t('Planner', 'प्लानर')}
+                </span>
+                {currentTab === 'guest-list' && (
+                  <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-gradient-to-r from-amber-300 via-amber-200 to-amber-300 rounded-full" />
+                )}
+              </button>
+            )}
 
-            <button 
-              onClick={() => handleTabClick('directory')} 
-              className={`relative flex items-center gap-1.5 px-2.5 lg:px-3 py-2 rounded-xl text-xs lg:text-sm font-medium transition-all ${
-                currentTab === 'directory' 
-                  ? 'text-amber-200 font-semibold bg-white/12 shadow-xs' 
-                  : 'text-rose-100 hover:text-amber-200 hover:bg-white/5'
-              }`}
-            >
-              <Store className="w-4 h-4 text-amber-300 shrink-0" />
-              <span>{t('Business Ads', 'व्यापार निर्देशिका')}</span>
-              {currentTab === 'directory' && (
-                <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-gradient-to-r from-amber-300 via-amber-200 to-amber-300 rounded-full" />
-              )}
-            </button>
+            {config.featureBusinessDirectoryEnabled && (
+              <button 
+                onClick={() => handleTabClick('directory')} 
+                className={`relative flex items-center gap-1.5 px-2.5 lg:px-3 py-2 rounded-xl text-xs lg:text-sm font-medium transition-all ${
+                  currentTab === 'directory' 
+                    ? 'text-amber-200 font-semibold bg-white/12 shadow-xs' 
+                    : 'text-rose-100 hover:text-amber-200 hover:bg-white/5'
+                }`}
+              >
+                <Store className="w-4 h-4 text-amber-300 shrink-0" />
+                <span>{t('Business Ads', 'व्यापार निर्देशिका')}</span>
+                {currentTab === 'directory' && (
+                  <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-gradient-to-r from-amber-300 via-amber-200 to-amber-300 rounded-full" />
+                )}
+              </button>
+            )}
 
-            <button 
-              onClick={() => handleTabClick('booklet')} 
-              className={`relative flex items-center gap-1.5 px-2.5 lg:px-3 py-2 rounded-xl text-xs lg:text-sm font-medium transition-all ${
-                currentTab === 'booklet' 
-                  ? 'text-amber-200 font-semibold bg-white/12 shadow-xs' 
-                  : 'text-rose-100 hover:text-amber-200 hover:bg-white/5'
-              }`}
-            >
-              <BookOpen className="w-4 h-4 text-amber-300 shrink-0" />
-              <span>{t('E-Book', 'ई-पत्रिका')}</span>
-              {currentTab === 'booklet' && (
-                <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-gradient-to-r from-amber-300 via-amber-200 to-amber-300 rounded-full" />
-              )}
-            </button>
+            {config.featureBookletEnabled && (
+              <button 
+                onClick={() => handleTabClick('booklet')} 
+                className={`relative flex items-center gap-1.5 px-2.5 lg:px-3 py-2 rounded-xl text-xs lg:text-sm font-medium transition-all ${
+                  currentTab === 'booklet' 
+                    ? 'text-amber-200 font-semibold bg-white/12 shadow-xs' 
+                    : 'text-rose-100 hover:text-amber-200 hover:bg-white/5'
+                }`}
+              >
+                <BookOpen className="w-4 h-4 text-amber-300 shrink-0" />
+                <span>{t('E-Book', 'ई-पत्रिका')}</span>
+                {currentTab === 'booklet' && (
+                  <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-gradient-to-r from-amber-300 via-amber-200 to-amber-300 rounded-full" />
+                )}
+              </button>
+            )}
 
-            <button 
-              onClick={() => handleTabClick('events')} 
-              className={`relative flex items-center gap-1.5 px-2.5 lg:px-3 py-2 rounded-xl text-xs lg:text-sm font-medium transition-all ${
-                currentTab === 'events' 
-                  ? 'text-amber-200 font-semibold bg-white/12 shadow-xs' 
-                  : 'text-rose-100 hover:text-amber-200 hover:bg-white/5'
-              }`}
-            >
-              <Calendar className="w-4 h-4 text-amber-300 shrink-0" />
-              <span>{t('Events', 'कार्यक्रम')}</span>
-              {currentTab === 'events' && (
-                <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-gradient-to-r from-amber-300 via-amber-200 to-amber-300 rounded-full" />
-              )}
-            </button>
+            {config.featureEventsEnabled && (
+              <button 
+                onClick={() => handleTabClick('events')} 
+                className={`relative flex items-center gap-1.5 px-2.5 lg:px-3 py-2 rounded-xl text-xs lg:text-sm font-medium transition-all ${
+                  currentTab === 'events' 
+                    ? 'text-amber-200 font-semibold bg-white/12 shadow-xs' 
+                    : 'text-rose-100 hover:text-amber-200 hover:bg-white/5'
+                }`}
+              >
+                <Calendar className="w-4 h-4 text-amber-300 shrink-0" />
+                <span>{t('Events', 'कार्यक्रम')}</span>
+                {currentTab === 'events' && (
+                  <span className="absolute bottom-0 left-3 right-3 h-0.5 bg-gradient-to-r from-amber-300 via-amber-200 to-amber-300 rounded-full" />
+                )}
+              </button>
+            )}
 
             {/* ONLY WHEN SIGNED IN: SHOW DASHBOARD, CREATE PROFILE, FAMILY DETAILS AND ADVERTISE SHOP TABS */}
             {authSession && (
@@ -173,44 +173,50 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
                   <LayoutDashboard className="w-3.5 h-3.5" /> {t('Dashboard', 'डैशबोर्ड')}
                 </button>
 
-                <button 
-                  onClick={() => handleTabClick('create-profile')} 
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all border ${
-                    currentTab === 'create-profile' 
-                      ? 'bg-amber-300 text-[#4c0d1b] border-amber-200 shadow-sm font-bold' 
-                      : 'border-amber-300/40 text-amber-100 hover:bg-white/10'
-                  }`}
-                >
-                  <PlusCircle className="w-3.5 h-3.5" /> {t('Create Profile', 'बायोडाटा बनाएं')}
-                </button>
+                {config.featureProfileCreationEnabled && (
+                  <>
+                    <button 
+                      onClick={() => handleTabClick('create-profile')} 
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all border ${
+                        currentTab === 'create-profile' 
+                          ? 'bg-amber-300 text-[#4c0d1b] border-amber-200 shadow-sm font-bold' 
+                          : 'border-amber-300/40 text-amber-100 hover:bg-white/10'
+                      }`}
+                    >
+                      <PlusCircle className="w-3.5 h-3.5" /> {t('Create Profile', 'बायोडाटा बनाएं')}
+                    </button>
 
-                <button 
-                  onClick={() => handleTabClick('family-details')} 
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all border ${
-                    currentTab === 'family-details' 
-                      ? 'bg-amber-300 text-[#4c0d1b] border-amber-200 shadow-sm font-bold' 
-                      : 'border-amber-300/40 text-amber-100 hover:bg-white/10'
-                  }`}
-                >
-                  <Users className="w-3.5 h-3.5" /> {t('Family Details', 'पारिवारिक विवरण')}
-                </button>
+                    <button 
+                      onClick={() => handleTabClick('family-details')} 
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all border ${
+                        currentTab === 'family-details' 
+                          ? 'bg-amber-300 text-[#4c0d1b] border-amber-200 shadow-sm font-bold' 
+                          : 'border-amber-300/40 text-amber-100 hover:bg-white/10'
+                      }`}
+                    >
+                      <Users className="w-3.5 h-3.5" /> {t('Family Details', 'पारिवारिक विवरण')}
+                    </button>
+                  </>
+                )}
 
-                <button 
-                  onClick={() => handleTabClick('advertise-shop')} 
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all border ${
-                    currentTab === 'advertise-shop' 
-                      ? 'bg-amber-300 text-[#4c0d1b] border-amber-200 shadow-sm font-bold' 
-                      : 'border-amber-300/40 text-amber-100 hover:bg-white/10'
-                  }`}
-                >
-                  <Store className="w-3.5 h-3.5" /> {t('Advertise Shop', 'दुकान विज्ञापन')}
-                </button>
+                {config.featureBusinessDirectoryEnabled && (
+                  <button 
+                    onClick={() => handleTabClick('advertise-shop')} 
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all border ${
+                      currentTab === 'advertise-shop' 
+                        ? 'bg-amber-300 text-[#4c0d1b] border-amber-200 shadow-sm font-bold' 
+                        : 'border-amber-300/40 text-amber-100 hover:bg-white/10'
+                    }`}
+                  >
+                    <Store className="w-3.5 h-3.5" /> {t('Advertise Shop', 'दुकान विज्ञापन')}
+                  </button>
+                )}
               </>
             )}
           </nav>
 
           {/* Language Switcher & Account Actions (Desktop) */}
-          <div className="hidden md:flex items-center space-x-2">
+          <div className="hidden xl:flex items-center space-x-2 shrink-0">
             {/* Hindi / English Language Switcher */}
             <div 
               className="flex items-center bg-black/25 border border-amber-400/40 rounded-xl p-0.5 text-[11px] font-bold shadow-inner"
@@ -291,8 +297,8 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
             )}
           </div>
 
-          {/* Mobile: Quick Language Switcher + Hamburger */}
-          <div className="md:hidden flex items-center gap-2">
+          {/* Mobile & Tablet: Quick Language Switcher + Hamburger */}
+          <div className="xl:hidden flex items-center gap-1.5 sm:gap-2 shrink-0">
             <div 
               className="flex items-center bg-black/25 border border-amber-400/40 rounded-xl p-0.5 text-[11px] font-bold"
               role="group"
@@ -335,7 +341,7 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
 
       {/* Mobile Navigation Dropdown */}
       {mobileMenuOpen && (
-        <div className="md:hidden bg-[#591220] border-t border-amber-400/30 px-4 pt-3 pb-5 space-y-2 shadow-2xl">
+        <div className="xl:hidden bg-[#591220] border-t border-amber-400/30 px-3 sm:px-4 pt-3 pb-[calc(1.5rem+var(--sab))] max-h-[calc(100dvh-4.25rem-var(--sat))] overflow-y-auto space-y-2 shadow-2xl">
           <div className="flex items-center justify-between bg-black/20 px-3 py-2 rounded-xl border border-amber-400/20 mb-2">
             <span className="text-xs text-amber-200 flex items-center gap-1.5 font-semibold">
               <Languages className="w-4 h-4 text-amber-300" />
@@ -363,66 +369,78 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
             </div>
           </div>
 
-          <button 
-            onClick={() => handleTabClick('matrimony')} 
-            className={`w-full text-left px-3.5 py-2.5 rounded-xl font-medium text-sm flex items-center gap-2.5 ${
-              currentTab === 'matrimony' ? 'bg-amber-300 text-[#4c0d1b] font-bold' : 'text-rose-100'
-            }`}
-          >
-            <HeartHandshake className="w-4 h-4 text-amber-300" /> {t('Matrimony Bios', 'वैवाहिक बायोडाटा')}
-          </button>
-          <button 
-            onClick={() => handleTabClick('kundali')} 
-            className={`w-full text-left px-3.5 py-2.5 rounded-xl font-medium text-sm flex items-center justify-between ${
-              currentTab === 'kundali' ? 'bg-amber-300 text-[#4c0d1b] font-bold' : 'text-rose-100'
-            }`}
-          >
-            <span className="flex items-center gap-2.5">
-              <Compass className="w-4 h-4 text-amber-300" /> {t('Kundali Milan', 'कुंडली मिलान')}
-              {!authSession && <Lock className="w-3.5 h-3.5 text-amber-300/80" />}
-            </span>
-            <span className="text-[10px] bg-amber-400 text-stone-950 font-extrabold px-1.5 py-0.2 rounded-md">
-              {t('36 Gunas', '३६ गुण')}
-            </span>
-          </button>
-          <button 
-            onClick={() => handleTabClick('guest-list')} 
-            className={`w-full text-left px-3.5 py-2.5 rounded-xl font-medium text-sm flex items-center justify-between ${
-              currentTab === 'guest-list' ? 'bg-amber-300 text-[#4c0d1b] font-bold' : 'text-rose-100'
-            }`}
-          >
-            <span className="flex items-center gap-2.5">
-              <ClipboardList className="w-4 h-4 text-amber-300" /> {t('Guest List Planner', 'अतिथि सूची प्लानर')}
-              {!authSession && <Lock className="w-3.5 h-3.5 text-amber-300/80" />}
-            </span>
-            <span className="text-[10px] bg-rose-500/80 text-white font-bold px-1.5 py-0.2 rounded-md">
-              {t('Planner', 'प्लानर')}
-            </span>
-          </button>
-          <button 
-            onClick={() => handleTabClick('directory')} 
-            className={`w-full text-left px-3.5 py-2.5 rounded-xl font-medium text-sm flex items-center gap-2.5 ${
-              currentTab === 'directory' ? 'bg-amber-300 text-[#4c0d1b] font-bold' : 'text-rose-100'
-            }`}
-          >
-            <Store className="w-4 h-4 text-amber-300" /> {t('Business Directory & Ads', 'व्यापार निर्देशिका एवं विज्ञापन')}
-          </button>
-          <button 
-            onClick={() => handleTabClick('booklet')} 
-            className={`w-full text-left px-3.5 py-2.5 rounded-xl font-medium text-sm flex items-center gap-2.5 ${
-              currentTab === 'booklet' ? 'bg-amber-300 text-[#4c0d1b] font-bold' : 'text-rose-100'
-            }`}
-          >
-            <BookOpen className="w-4 h-4 text-amber-300" /> {t('Digital E-Book Directory', 'डिजिटल ई-पत्रिका निर्देशिका')}
-          </button>
-          <button 
-            onClick={() => handleTabClick('events')} 
-            className={`w-full text-left px-3.5 py-2.5 rounded-xl font-medium text-sm flex items-center gap-2.5 ${
-              currentTab === 'events' ? 'bg-amber-300 text-[#4c0d1b] font-bold' : 'text-rose-100'
-            }`}
-          >
-            <Calendar className="w-4 h-4 text-amber-300" /> {t('Samaj Events & News', 'समाज कार्यक्रम एवं समाचार')}
-          </button>
+          {config.featureMatrimonyEnabled && (
+            <button 
+              onClick={() => handleTabClick('matrimony')} 
+              className={`w-full text-left px-3.5 py-2.5 rounded-xl font-medium text-sm flex items-center gap-2.5 ${
+                currentTab === 'matrimony' ? 'bg-amber-300 text-[#4c0d1b] font-bold' : 'text-rose-100'
+              }`}
+            >
+              <HeartHandshake className="w-4 h-4 text-amber-300" /> {t('Matrimony Bios', 'वैवाहिक बायोडाटा')}
+            </button>
+          )}
+          {config.featureKundaliEnabled && (
+            <button 
+              onClick={() => handleTabClick('kundali')} 
+              className={`w-full text-left px-3.5 py-2.5 rounded-xl font-medium text-sm flex items-center justify-between ${
+                currentTab === 'kundali' ? 'bg-amber-300 text-[#4c0d1b] font-bold' : 'text-rose-100'
+              }`}
+            >
+              <span className="flex items-center gap-2.5">
+                <Compass className="w-4 h-4 text-amber-300" /> {t('Kundali Milan', 'कुंडली मिलान')}
+                {!authSession && <Lock className="w-3.5 h-3.5 text-amber-300/80" />}
+              </span>
+              <span className="text-[10px] bg-amber-400 text-stone-950 font-extrabold px-1.5 py-0.2 rounded-md">
+                {t('36 Gunas', '३६ गुण')}
+              </span>
+            </button>
+          )}
+          {config.featureGuestListEnabled && (
+            <button 
+              onClick={() => handleTabClick('guest-list')} 
+              className={`w-full text-left px-3.5 py-2.5 rounded-xl font-medium text-sm flex items-center justify-between ${
+                currentTab === 'guest-list' ? 'bg-amber-300 text-[#4c0d1b] font-bold' : 'text-rose-100'
+              }`}
+            >
+              <span className="flex items-center gap-2.5">
+                <ClipboardList className="w-4 h-4 text-amber-300" /> {t('Guest List Planner', 'अतिथि सूची प्लानर')}
+                {!authSession && <Lock className="w-3.5 h-3.5 text-amber-300/80" />}
+              </span>
+              <span className="text-[10px] bg-rose-500/80 text-white font-bold px-1.5 py-0.2 rounded-md">
+                {t('Planner', 'प्लानर')}
+              </span>
+            </button>
+          )}
+          {config.featureBusinessDirectoryEnabled && (
+            <button 
+              onClick={() => handleTabClick('directory')} 
+              className={`w-full text-left px-3.5 py-2.5 rounded-xl font-medium text-sm flex items-center gap-2.5 ${
+                currentTab === 'directory' ? 'bg-amber-300 text-[#4c0d1b] font-bold' : 'text-rose-100'
+              }`}
+            >
+              <Store className="w-4 h-4 text-amber-300" /> {t('Business Directory & Ads', 'व्यापार निर्देशिका एवं विज्ञापन')}
+            </button>
+          )}
+          {config.featureBookletEnabled && (
+            <button 
+              onClick={() => handleTabClick('booklet')} 
+              className={`w-full text-left px-3.5 py-2.5 rounded-xl font-medium text-sm flex items-center gap-2.5 ${
+                currentTab === 'booklet' ? 'bg-amber-300 text-[#4c0d1b] font-bold' : 'text-rose-100'
+              }`}
+            >
+              <BookOpen className="w-4 h-4 text-amber-300" /> {t('Digital E-Book Directory', 'डिजिटल ई-पत्रिका निर्देशिका')}
+            </button>
+          )}
+          {config.featureEventsEnabled && (
+            <button 
+              onClick={() => handleTabClick('events')} 
+              className={`w-full text-left px-3.5 py-2.5 rounded-xl font-medium text-sm flex items-center gap-2.5 ${
+                currentTab === 'events' ? 'bg-amber-300 text-[#4c0d1b] font-bold' : 'text-rose-100'
+              }`}
+            >
+              <Calendar className="w-4 h-4 text-amber-300" /> {t('Samaj Events & News', 'समाज कार्यक्रम एवं समाचार')}
+            </button>
+          )}
 
           {/* Member actions in mobile menu if logged in */}
           {authSession ? (
@@ -447,24 +465,30 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
                   <span>{t('Open Admin Dashboard (AdminAbhi)', 'एडमिन डैशबोर्ड खोलें (AdminAbhi)')}</span>
                 </button>
               )}
-              <button 
-                onClick={() => handleTabClick('create-profile')} 
-                className="w-full bg-rose-900/70 border border-amber-300/30 text-amber-100 font-bold py-2.5 rounded-xl text-xs text-center flex items-center justify-center gap-1.5"
-              >
-                <PlusCircle className="w-4 h-4" /> {t('Create Matrimonial Profile', 'वैवाहिक प्रोफ़ाइल बनाएं')}
-              </button>
-              <button 
-                onClick={() => handleTabClick('family-details')} 
-                className="w-full bg-rose-900/70 border border-amber-300/30 text-amber-100 font-bold py-2.5 rounded-xl text-xs text-center flex items-center justify-center gap-1.5"
-              >
-                <Users className="w-4 h-4 text-amber-300" /> {t('Add Family Details', 'पारिवारिक विवरण जोड़ें')}
-              </button>
-              <button 
-                onClick={() => handleTabClick('advertise-shop')} 
-                className="w-full bg-rose-900/70 border border-amber-300/30 text-amber-100 font-bold py-2.5 rounded-xl text-xs text-center flex items-center justify-center gap-1.5"
-              >
-                <Store className="w-4 h-4 text-amber-300" /> {t('Advertise Shop', 'दुकान का विज्ञापन करें')}
-              </button>
+              {config.featureProfileCreationEnabled && (
+                <>
+                  <button 
+                    onClick={() => handleTabClick('create-profile')} 
+                    className="w-full bg-rose-900/70 border border-amber-300/30 text-amber-100 font-bold py-2.5 rounded-xl text-xs text-center flex items-center justify-center gap-1.5"
+                  >
+                    <PlusCircle className="w-4 h-4" /> {t('Create Matrimonial Profile', 'वैवाहिक प्रोफ़ाइल बनाएं')}
+                  </button>
+                  <button 
+                    onClick={() => handleTabClick('family-details')} 
+                    className="w-full bg-rose-900/70 border border-amber-300/30 text-amber-100 font-bold py-2.5 rounded-xl text-xs text-center flex items-center justify-center gap-1.5"
+                  >
+                    <Users className="w-4 h-4 text-amber-300" /> {t('Add Family Details', 'पारिवारिक विवरण जोड़ें')}
+                  </button>
+                </>
+              )}
+              {config.featureBusinessDirectoryEnabled && (
+                <button 
+                  onClick={() => handleTabClick('advertise-shop')} 
+                  className="w-full bg-rose-900/70 border border-amber-300/30 text-amber-100 font-bold py-2.5 rounded-xl text-xs text-center flex items-center justify-center gap-1.5"
+                >
+                  <Store className="w-4 h-4 text-amber-300" /> {t('Advertise Shop', 'दुकान का विज्ञापन करें')}
+                </button>
+              )}
               {onLogout && (
                 <button 
                   onClick={() => { onLogout(); setMobileMenuOpen(false); }} 

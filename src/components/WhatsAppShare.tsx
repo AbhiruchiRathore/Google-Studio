@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Share2, ExternalLink, Copy, Check, X, MessageCircle } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import { useAdminConfig } from '../context/AdminConfigContext';
 import {
   shareViaWhatsApp,
   WHATSAPP_SHARE_EVENT,
@@ -10,6 +11,7 @@ import {
 
 export const WhatsAppShare: React.FC = () => {
   const { t } = useLanguage();
+  const { config } = useAdminConfig();
   const [activeShare, setActiveShare] = useState<WhatsAppSharePayload | null>(null);
   const [copiedNow, setCopiedNow] = useState(false);
 
@@ -53,12 +55,16 @@ export const WhatsAppShare: React.FC = () => {
 
   const canUseWebShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
 
+  if (!config.featureWhatsAppShareEnabled) {
+    return null;
+  }
+
   return (
     <>
       {/* Global Non-blocking WhatsApp Share Assistant (guarantees sharing works in iframes, desktop, and Android WebView) */}
       {activeShare && (
         <div
-          className="fixed bottom-4 left-4 right-4 sm:left-6 sm:right-auto sm:max-w-md z-50 bg-white border-2 border-emerald-500/70 rounded-2xl shadow-2xl p-4 space-y-3 animate-in fade-in"
+          className="fixed bottom-[calc(0.75rem+var(--sab))] left-3 right-3 sm:left-6 sm:right-auto sm:max-w-md z-50 max-h-[calc(100dvh-1.5rem-var(--sat)-var(--sab))] overflow-y-auto bg-white border-2 border-emerald-500/70 rounded-2xl shadow-2xl p-4 space-y-3 animate-in fade-in"
           role="dialog"
           aria-label={t('Share on WhatsApp', 'व्हाट्सऐप पर साझा करें')}
         >
@@ -138,12 +144,12 @@ export const WhatsAppShare: React.FC = () => {
       )}
 
       {/* Floating Share App on WhatsApp Button */}
-      <div className="fixed bottom-6 right-6 z-40">
+      <div className="fixed bottom-[calc(1rem+var(--sab))] right-[calc(0.875rem+var(--sar))] sm:bottom-[calc(1.5rem+var(--sab))] sm:right-[calc(1.5rem+var(--sar))] z-40">
         <button
           type="button"
           onClick={() => shareViaWhatsApp(shareText)}
           aria-label={t('Share App on WhatsApp', 'व्हाट्सएप पर ऐप शेयर करें')}
-          className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold p-4 rounded-full shadow-2xl flex items-center justify-center transition-transform hover:scale-110 border-2 border-white group relative cursor-pointer"
+          className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold p-3.5 sm:p-4 rounded-full shadow-2xl flex items-center justify-center transition-transform hover:scale-110 border-2 border-white group relative cursor-pointer"
         >
           <Share2 className="w-6 h-6" />
 

@@ -140,32 +140,32 @@ export const ChatModal: React.FC<ChatModalProps> = ({
 
   return (
     <div 
-      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center px-2.5 sm:px-4 pt-[calc(0.75rem+var(--sat))] pb-[calc(0.75rem+var(--sab))] animate-in fade-in duration-200"
       onClick={onClose}
     >
       <div 
-        className="bg-white w-full max-w-xl rounded-3xl shadow-2xl border border-amber-300 flex flex-col h-[85vh] max-h-[640px] overflow-hidden relative"
+        className="bg-white w-full max-w-xl rounded-2xl sm:rounded-3xl shadow-2xl border border-amber-300 flex flex-col h-[min(86dvh,640px)] max-h-[calc(100dvh-1.5rem-var(--sat)-var(--sab))] overflow-hidden relative"
         onClick={(e) => e.stopPropagation()}
       >
         {/* CHAT HEADER */}
-        <div className="bg-gradient-to-r from-[#380812] via-[#540e1b] to-[#380812] text-white p-4 flex items-center justify-between border-b border-amber-500/30 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="relative">
+        <div className="bg-gradient-to-r from-[#380812] via-[#540e1b] to-[#380812] text-white p-3.5 sm:p-4 flex items-center justify-between gap-2 border-b border-amber-500/30 shrink-0">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+            <div className="relative shrink-0">
               <img 
                 src={photoUrl} 
                 alt={profile.name} 
-                className="w-11 h-11 rounded-full object-cover object-top border-2 border-amber-300 shadow-sm"
+                className="w-10 h-10 sm:w-11 sm:h-11 rounded-full object-cover object-top border-2 border-amber-300 shadow-sm"
               />
               <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-[#380812] rounded-full" title={t('Online / Active Today', 'ऑनलाइन / आज सक्रिय')}></span>
             </div>
-            <div>
-              <div className="flex items-center gap-1.5">
-                <h3 className="font-serif font-bold text-sm sm:text-base text-amber-50 leading-tight">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <h3 className="font-serif font-bold text-sm sm:text-base text-amber-50 leading-tight truncate">
                   {profile.name}
                 </h3>
-                <ShieldCheck className="w-4 h-4 text-amber-400 fill-amber-400/20" />
+                <ShieldCheck className="w-4 h-4 text-amber-400 fill-amber-400/20 shrink-0" />
               </div>
-              <p className="text-[11px] text-amber-200/80 font-medium">
+              <p className="text-[11px] text-amber-200/80 font-medium truncate">
                 {t('Gotra:', 'गोत्र:')} {profile.gotra} · {profile.city} · {profile.age} {t('Yrs', 'वर्ष')}
               </p>
             </div>

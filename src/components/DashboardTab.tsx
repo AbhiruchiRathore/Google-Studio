@@ -5,7 +5,7 @@ import {
   Eye, Trash2, Globe, Sparkles, Upload, ArrowRight, 
   X, AlertCircle, Phone, FileText, Camera,
   Linkedin, Instagram, Link2, Sliders, Store,
-  Tag, Star, MapPin, Heart, MessageCircle, Compass
+  Tag, Star, MapPin, Heart, MessageCircle, Compass, Crown
 } from 'lucide-react';
 import { 
   MatrimonyProfile, BusinessAd, TabType, AuthSession, 
@@ -13,6 +13,10 @@ import {
 } from '../types';
 import { ChatModal } from './ChatModal';
 import { useLanguage } from '../context/LanguageContext';
+import { useAdminConfig } from '../context/AdminConfigContext';
+import { BrandLogo } from './BrandLogo';
+import { ImageUploadField } from './ImageUploadField';
+import { compressAndReadImageFile } from '../utils/imageUpload';
 import { sanitizePhoneInput, validatePhoneNumber } from '../utils/validation';
 import { isProfileOwnedBySession } from '../utils/profileOwnership';
 
@@ -48,6 +52,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   onSelectKundaliProfile
 }) => {
   const { lang, t } = useLanguage();
+  const { config, userSubscription } = useAdminConfig();
   // Current active sidebar section
   const [activeSection, setActiveSection] = useState<DashboardNavSection>('profiles');
 
@@ -263,10 +268,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
         status: p.status || 'active',
         visibility: p.visibility || 'public',
         coverPhoto: p.coverPhoto || 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1200&q=80',
-        gallery: p.gallery || [
-          p.photo || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=600&q=80',
-          'https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&w=600&q=80'
-        ],
+        gallery: p.gallery && p.gallery.length > 0 ? p.gallery : (p.photo ? [p.photo] : []),
         socialLinks: p.socialLinks || {
           linkedin: 'https://linkedin.com/in/rathore',
           instagram: '@rathore_rishtey'
@@ -370,7 +372,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
       socialLinks: { linkedin: '', instagram: '', website: '' },
       visibility: 'public',
       status: 'active',
-      verified: true,
+      verified: !config.requireAdminVerification,
       createdAt: new Date().toISOString()
     };
     setEditingProfile(blank);
@@ -571,9 +573,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             onClick={() => onNavigateTab('matrimony')} 
             className="flex items-center gap-2.5 cursor-pointer group"
           >
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#851834] to-[#6e1628] text-amber-200 font-bold flex items-center justify-center text-sm font-serif shadow-xs border border-amber-300/40 group-hover:scale-105 transition-transform">
-              RR
-            </div>
+            <BrandLogo size="md" showText={false} tone="crimson" className="group-hover:scale-105 transition-transform" />
             <div>
               <div className="flex items-center gap-1.5">
                 <span className="font-serif font-bold text-stone-900 text-sm sm:text-base leading-none">
@@ -642,7 +642,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             {/* Notifications Dropdown Modal */}
             {showNotifications && (
               <div 
-                className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-3xl shadow-2xl border border-rose-100 z-50 p-4 space-y-3 animate-in fade-in"
+                className="fixed sm:absolute right-3 left-3 sm:left-auto sm:right-0 mt-2 sm:w-96 max-w-md bg-white rounded-3xl shadow-2xl border border-rose-100 z-50 p-4 space-y-3 animate-in fade-in"
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="flex items-center justify-between border-b border-stone-100 pb-2">
@@ -893,82 +893,88 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               </button>
 
               {/* 4. Profiles I Liked (Saved Biodatas) */}
-              <button
-                onClick={() => { 
-                  setActiveSection('liked_by_me'); 
-                  setIsEditingProfile(false); 
-                  setIsEditingAd(false); 
-                }}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
-                  activeSection === 'liked_by_me'
-                    ? 'bg-gradient-to-r from-[#6e1628] to-[#851834] text-amber-100 shadow-sm'
-                    : 'text-stone-700 hover:bg-rose-50 hover:text-[#851834]'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Heart className="w-4 h-4 text-rose-500 fill-rose-500/20" />
-                  <span>{t('Profiles I Liked', 'मेरी पसंद')}</span>
-                </div>
-                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                  activeSection === 'liked_by_me'
-                    ? 'bg-amber-300 text-[#4c0d1b]'
-                    : 'bg-rose-100 text-[#851834]'
-                }`}>
-                  {likedProfileList.length}
-                </span>
-              </button>
+              {config.featureLikesEnabled && (
+                <button
+                  onClick={() => { 
+                    setActiveSection('liked_by_me'); 
+                    setIsEditingProfile(false); 
+                    setIsEditingAd(false); 
+                  }}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
+                    activeSection === 'liked_by_me'
+                      ? 'bg-gradient-to-r from-[#6e1628] to-[#851834] text-amber-100 shadow-sm'
+                      : 'text-stone-700 hover:bg-rose-50 hover:text-[#851834]'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Heart className="w-4 h-4 text-rose-500 fill-rose-500/20" />
+                    <span>{t('Profiles I Liked', 'मेरी पसंद')}</span>
+                  </div>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                    activeSection === 'liked_by_me'
+                      ? 'bg-amber-300 text-[#4c0d1b]'
+                      : 'bg-rose-100 text-[#851834]'
+                  }`}>
+                    {likedProfileList.length}
+                  </span>
+                </button>
+              )}
 
               {/* 5. Who Liked My Profile */}
-              <button
-                onClick={() => { 
-                  setActiveSection('who_liked_me'); 
-                  setIsEditingProfile(false); 
-                  setIsEditingAd(false); 
-                }}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
-                  activeSection === 'who_liked_me'
-                    ? 'bg-gradient-to-r from-[#6e1628] to-[#851834] text-amber-100 shadow-sm'
-                    : 'text-stone-700 hover:bg-rose-50 hover:text-[#851834]'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Sparkles className="w-4 h-4 text-amber-500" />
-                  <span>{t('Who Liked Me', 'प्रशंसक')}</span>
-                </div>
-                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                  activeSection === 'who_liked_me'
-                    ? 'bg-amber-300 text-[#4c0d1b]'
-                    : 'bg-amber-100 text-amber-900'
-                }`}>
-                  {admirers.length}
-                </span>
-              </button>
+              {config.featureLikesEnabled && (
+                <button
+                  onClick={() => { 
+                    setActiveSection('who_liked_me'); 
+                    setIsEditingProfile(false); 
+                    setIsEditingAd(false); 
+                  }}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
+                    activeSection === 'who_liked_me'
+                      ? 'bg-gradient-to-r from-[#6e1628] to-[#851834] text-amber-100 shadow-sm'
+                      : 'text-stone-700 hover:bg-rose-50 hover:text-[#851834]'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Sparkles className="w-4 h-4 text-amber-500" />
+                    <span>{t('Who Liked Me', 'प्रशंसक')}</span>
+                  </div>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                    activeSection === 'who_liked_me'
+                      ? 'bg-amber-300 text-[#4c0d1b]'
+                      : 'bg-amber-100 text-amber-900'
+                  }`}>
+                    {admirers.length}
+                  </span>
+                </button>
+              )}
 
               {/* 6. Chat Messages */}
-              <button
-                onClick={() => { 
-                  setActiveSection('chats'); 
-                  setIsEditingProfile(false); 
-                  setIsEditingAd(false); 
-                }}
-                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
-                  activeSection === 'chats'
-                    ? 'bg-gradient-to-r from-[#6e1628] to-[#851834] text-amber-100 shadow-sm'
-                    : 'text-stone-700 hover:bg-rose-50 hover:text-[#851834]'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <MessageCircle className="w-4 h-4 text-emerald-600" />
-                  <span>{t('Chat Messages', 'चैट संदेश')}</span>
-                </div>
-                <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
-                  activeSection === 'chats'
-                    ? 'bg-amber-300 text-[#4c0d1b]'
-                    : 'bg-emerald-100 text-emerald-900'
-                }`}>
-                  {Object.keys(chatThreads).length || t('Live', 'लाइव')}
-                </span>
-              </button>
+              {config.featureChatEnabled && (
+                <button
+                  onClick={() => { 
+                    setActiveSection('chats'); 
+                    setIsEditingProfile(false); 
+                    setIsEditingAd(false); 
+                  }}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-2xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
+                    activeSection === 'chats'
+                      ? 'bg-gradient-to-r from-[#6e1628] to-[#851834] text-amber-100 shadow-sm'
+                      : 'text-stone-700 hover:bg-rose-50 hover:text-[#851834]'
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <MessageCircle className="w-4 h-4 text-emerald-600" />
+                    <span>{t('Chat Messages', 'चैट संदेश')}</span>
+                  </div>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                    activeSection === 'chats'
+                      ? 'bg-amber-300 text-[#4c0d1b]'
+                      : 'bg-emerald-100 text-emerald-900'
+                  }`}>
+                    {Object.keys(chatThreads).length || t('Live', 'लाइव')}
+                  </span>
+                </button>
+              )}
 
               {/* 7. Media Assets */}
               <button
@@ -1028,23 +1034,64 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 <span>{t('Edit My Profile (1/1)', 'प्रोफ़ाइल संपादित करें (1/1)')}</span>
               </button>
             ) : (
-              <button
-                onClick={handleStartCreateNewProfile}
-                className="w-full bg-gradient-to-r from-amber-300 via-amber-400 to-amber-500 hover:from-amber-200 hover:to-amber-400 text-[#4c0d1b] font-bold py-2.5 px-4 rounded-2xl text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer hover:scale-101 font-serif"
-              >
-                <Plus className="w-4 h-4" />
-                <span>{t('+ Create Profile', '+ नया बायोडाटा जोड़ें')}</span>
-              </button>
+              config.featureProfileCreationEnabled && (
+                <button
+                  onClick={handleStartCreateNewProfile}
+                  className="w-full bg-gradient-to-r from-amber-300 via-amber-400 to-amber-500 hover:from-amber-200 hover:to-amber-400 text-[#4c0d1b] font-bold py-2.5 px-4 rounded-2xl text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer hover:scale-101 font-serif"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>{t('+ Create Profile', '+ नया बायोडाटा जोड़ें')}</span>
+                </button>
+              )
             )}
 
-            <button
-              onClick={handleStartCreateNewAd}
-              className="w-full bg-rose-50 hover:bg-rose-100 text-[#851834] border border-rose-200 font-bold py-2.5 px-4 rounded-2xl text-xs transition-all flex items-center justify-center gap-2 cursor-pointer font-serif"
-            >
-              <Store className="w-4 h-4" />
-              <span>{t('+ Post Business Ad', '+ व्यापार विज्ञापन जोड़ें')}</span>
-            </button>
+            {config.featureBusinessDirectoryEnabled && (
+              <button
+                onClick={handleStartCreateNewAd}
+                className="w-full bg-rose-50 hover:bg-rose-100 text-[#851834] border border-rose-200 font-bold py-2.5 px-4 rounded-2xl text-xs transition-all flex items-center justify-center gap-2 cursor-pointer font-serif"
+              >
+                <Store className="w-4 h-4" />
+                <span>{t('+ Post Business Ad', '+ व्यापार विज्ञापन जोड़ें')}</span>
+              </button>
+            )}
           </div>
+
+          {/* Membership Subscription Status Card in Sidebar (Shown when Subscription Enabled) */}
+          {config.subscriptionEnabled && (
+            <div className={`rounded-2xl p-3.5 border text-xs space-y-1.5 ${
+              userSubscription?.active
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                : 'bg-amber-50 border-amber-300 text-amber-950'
+            }`}>
+              <div className="flex items-center gap-1.5 font-bold font-serif">
+                <Crown className={`w-4 h-4 ${userSubscription?.active ? 'text-emerald-600' : 'text-amber-600'}`} />
+                <span>
+                  {userSubscription?.active
+                    ? t('Premium Samaj Pass Active', 'प्रीमियम समाज पास सक्रिय')
+                    : t('Membership Plan Available', 'सदस्यता प्लान उपलब्ध')}
+                </span>
+              </div>
+              <p className="text-[11px] opacity-85 leading-relaxed">
+                {userSubscription?.active
+                  ? t(
+                      `${userSubscription.plan === 'lifetime' ? 'Lifetime VIP' : 'Annual Gold'} Plan (₹${userSubscription.pricePaid})`,
+                      `${userSubscription.plan === 'lifetime' ? 'आजीवन VIP' : 'वार्षिक गोल्ड'} प्लान (₹${userSubscription.pricePaid})`
+                    )
+                  : t(
+                      `Unlock unlimited contacts starting ₹${config.annualPlanPrice}/yr`,
+                      `₹${config.annualPlanPrice}/वर्ष से असीमित संपर्क अनलॉक करें`
+                    )}
+              </p>
+              {!userSubscription?.active && (
+                <button
+                  onClick={() => onNavigateTab('matrimony')}
+                  className="text-[11px] font-bold text-[#851834] hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  {t('View Plans', 'प्लान देखें')} <ArrowRight className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          )}
 
           {/* Trust Banner Card in Sidebar */}
           <div className="bg-rose-50/50 rounded-2xl p-4 border border-rose-100 text-xs space-y-2">
@@ -1243,46 +1290,23 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                   </h4>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                    <div>
-                      <label className="block font-bold text-stone-700 mb-1">Avatar Profile Photo URL</label>
-                      <input
-                        type="url"
-                        value={editingProfile.photo || ''}
-                        onChange={(e) => setEditingProfile({ ...editingProfile, photo: e.target.value })}
-                        placeholder="https://images.unsplash.com/photo-..."
-                        className="w-full p-2.5 rounded-xl border border-stone-200 bg-stone-50/40"
-                      />
-                      {editingProfile.photo && (
-                        <div className="mt-2 flex items-center gap-3">
-                          <img 
-                            src={editingProfile.photo} 
-                            alt="Avatar Preview" 
-                            className="w-14 h-14 rounded-2xl object-cover border-2 border-amber-300 shadow-xs" 
-                          />
-                          <span className="text-[11px] text-stone-500">Avatar Live Preview</span>
-                        </div>
-                      )}
-                    </div>
+                    <ImageUploadField
+                      label={t('Avatar Profile Photo', 'प्रोफ़ाइल फ़ोटो')}
+                      value={editingProfile.photo || ''}
+                      onChange={(url) => setEditingProfile({ ...editingProfile, photo: url })}
+                      variant="avatar"
+                      maxDimension={720}
+                      urlPlaceholder="https://images.unsplash.com/photo-..."
+                    />
 
-                    <div>
-                      <label className="block font-bold text-stone-700 mb-1">Background Cover Photo URL</label>
-                      <input
-                        type="url"
-                        value={editingProfile.coverPhoto || ''}
-                        onChange={(e) => setEditingProfile({ ...editingProfile, coverPhoto: e.target.value })}
-                        placeholder="https://images.unsplash.com/photo-..."
-                        className="w-full p-2.5 rounded-xl border border-stone-200 bg-stone-50/40"
-                      />
-                      {editingProfile.coverPhoto && (
-                        <div className="mt-2">
-                          <img 
-                            src={editingProfile.coverPhoto} 
-                            alt="Cover Preview" 
-                            className="w-full h-14 rounded-xl object-cover border border-stone-200 shadow-xs" 
-                          />
-                        </div>
-                      )}
-                    </div>
+                    <ImageUploadField
+                      label={t('Background Cover Photo', 'बैकग्राउंड कवर फ़ोटो')}
+                      value={editingProfile.coverPhoto || ''}
+                      onChange={(url) => setEditingProfile({ ...editingProfile, coverPhoto: url })}
+                      variant="banner"
+                      maxDimension={960}
+                      urlPlaceholder="https://images.unsplash.com/photo-..."
+                    />
                   </div>
                 </div>
 
@@ -1302,13 +1326,46 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                   </div>
 
                   {showGalleryAddInput && (
-                    <div className="flex gap-2 items-center bg-rose-50/40 p-2.5 rounded-xl border border-rose-100 text-xs">
+                    <div className="flex flex-wrap gap-2 items-center bg-rose-50/40 p-2.5 rounded-xl border border-rose-100 text-xs">
+                      <label className="bg-white hover:bg-amber-50 text-[#380812] border border-amber-300 px-3 py-2 rounded-lg font-bold cursor-pointer flex items-center gap-1.5 shrink-0">
+                        <Upload className="w-3.5 h-3.5 text-amber-700" />
+                        <span>{t('Upload Photos (Multiple)', 'एक या अधिक फ़ोटो अपलोड करें')}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          className="sr-only"
+                          onChange={async (e) => {
+                            const files: File[] = Array.from(e.target.files || []);
+                            e.target.value = '';
+                            if (files.length === 0) return;
+                            const uploaded: string[] = [];
+                            for (const file of files.slice(0, 6)) {
+                              try {
+                                const dataUrl = await compressAndReadImageFile(file, { maxDimension: 840, quality: 0.82 });
+                                uploaded.push(dataUrl);
+                              } catch {
+                                // Skip unreadable files
+                              }
+                            }
+                            if (uploaded.length > 0) {
+                              const currentGallery = editingProfile.gallery || [];
+                              setEditingProfile({
+                                ...editingProfile,
+                                photo: editingProfile.photo || uploaded[0],
+                                gallery: Array.from(new Set([...currentGallery, ...uploaded]))
+                              });
+                              setShowGalleryAddInput(false);
+                            }
+                          }}
+                        />
+                      </label>
                       <input
                         type="url"
                         value={newGalleryUrlInput}
                         onChange={(e) => setNewGalleryUrlInput(e.target.value)}
-                        placeholder={t('Paste photo or Kundali URL (https://...)', 'फोटो या कुंडली का URL डालें (https://...)')}
-                        className="flex-1 p-2 rounded-lg border border-stone-200 bg-white"
+                        placeholder={t('Or paste photo / Kundali URL (https://...)', 'या फ़ोटो / कुंडली URL डालें (https://...)')}
+                        className="flex-1 min-w-[160px] p-2 rounded-lg border border-stone-200 bg-white"
                       />
                       <button
                         type="button"
@@ -1317,36 +1374,53 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                             const currentGallery = editingProfile.gallery || [];
                             setEditingProfile({
                               ...editingProfile,
-                              gallery: [...currentGallery, newGalleryUrlInput.trim()]
+                              gallery: Array.from(new Set([...currentGallery, newGalleryUrlInput.trim()]))
                             });
                             setNewGalleryUrlInput('');
                             setShowGalleryAddInput(false);
                           }
                         }}
-                        className="bg-[#851834] text-amber-100 px-3 py-2 rounded-lg font-bold cursor-pointer"
+                        className="bg-[#851834] text-amber-100 px-3 py-2 rounded-lg font-bold cursor-pointer shrink-0"
                       >
-                        {t('Add', 'जोड़ें')}
+                        {t('Add URL', 'लिंक जोड़ें')}
                       </button>
                     </div>
                   )}
 
                   {editingProfile.gallery && editingProfile.gallery.length > 0 ? (
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      {editingProfile.gallery.map((imgUrl, i) => (
-                        <div key={i} className="relative rounded-2xl overflow-hidden group h-24 border border-stone-200">
-                          <img src={imgUrl} alt={`Gallery ${i}`} className="w-full h-full object-cover" />
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const updated = editingProfile.gallery?.filter((_, idx) => idx !== i) || [];
-                              setEditingProfile({ ...editingProfile, gallery: updated });
-                            }}
-                            className="absolute top-1.5 right-1.5 bg-black/70 hover:bg-red-700 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ))}
+                      {editingProfile.gallery.map((imgUrl, i) => {
+                        const isMain = imgUrl === editingProfile.photo;
+                        return (
+                          <div key={i} className={`relative rounded-2xl overflow-hidden group border ${isMain ? 'border-amber-500 ring-2 ring-amber-400/40' : 'border-stone-200'}`}>
+                            <div className="h-24 w-full bg-stone-100">
+                              <img src={imgUrl} alt={`Gallery ${i + 1}`} className="w-full h-full object-cover object-top" />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = editingProfile.gallery?.filter((_, idx) => idx !== i) || [];
+                                setEditingProfile({ ...editingProfile, gallery: updated });
+                              }}
+                              title={t('Remove photo', 'फ़ोटो हटाएं')}
+                              className="absolute top-1.5 right-1.5 bg-black/75 hover:bg-red-700 text-white p-1 rounded-full cursor-pointer transition-colors"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingProfile({ ...editingProfile, photo: imgUrl })}
+                              className={`w-full py-1 px-2 text-[10px] font-bold border-t cursor-pointer transition-colors ${
+                                isMain
+                                  ? 'bg-[#380812] text-amber-200 border-amber-400/30'
+                                  : 'bg-white hover:bg-amber-50 text-stone-700 border-stone-200'
+                              }`}
+                            >
+                              {isMain ? t('★ Primary Photo', '★ मुख्य फ़ोटो') : t('Set Primary', 'मुख्य बनाएं')}
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
                   ) : (
                     <p className="text-[11px] text-stone-400 font-light italic">
@@ -1667,25 +1741,14 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                   </div>
                 </div>
 
-                <div className="text-xs">
-                  <label className="block font-bold text-stone-700 mb-1">Storefront Banner Photo URL</label>
-                  <input
-                    type="url"
-                    value={editingAd.banner || ''}
-                    onChange={(e) => setEditingAd({ ...editingAd, banner: e.target.value })}
-                    placeholder="https://images.unsplash.com/photo-..."
-                    className="w-full p-2.5 rounded-xl border border-stone-200 bg-stone-50/40"
-                  />
-                  {editingAd.banner && (
-                    <div className="mt-2">
-                      <img 
-                        src={editingAd.banner} 
-                        alt="Banner Preview" 
-                        className="w-full h-24 rounded-xl object-cover border border-stone-200 shadow-2xs" 
-                      />
-                    </div>
-                  )}
-                </div>
+                <ImageUploadField
+                  label={t('Shop Photo / Storefront Banner', 'दुकान की फ़ोटो / बैनर')}
+                  value={editingAd.banner || ''}
+                  onChange={(url) => setEditingAd({ ...editingAd, banner: url })}
+                  variant="banner"
+                  maxDimension={960}
+                  urlPlaceholder="https://images.unsplash.com/photo-..."
+                />
 
                 <div className="text-xs">
                   <label className="block font-bold text-stone-700 mb-1">Shop Description & Specialities</label>
@@ -1761,19 +1824,23 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                         {t('Edit My Profile (1/1 Limit)', 'मेरा बायोडाटा संपादित करें (1/1)')}
                       </button>
                     ) : (
+                      config.featureProfileCreationEnabled && (
+                        <button
+                          onClick={handleStartCreateNewProfile}
+                          className="bg-gradient-to-r from-amber-300 to-amber-400 text-[#4c0d1b] font-bold px-4 py-2 rounded-xl text-xs shadow cursor-pointer font-serif"
+                        >
+                          {t('+ Create Matrimony Profile', '+ नया बायोडाटा जोड़ें')}
+                        </button>
+                      )
+                    )}
+                    {config.featureBusinessDirectoryEnabled && (
                       <button
-                        onClick={handleStartCreateNewProfile}
-                        className="bg-gradient-to-r from-amber-300 to-amber-400 text-[#4c0d1b] font-bold px-4 py-2 rounded-xl text-xs shadow cursor-pointer font-serif"
+                        onClick={handleStartCreateNewAd}
+                        className="bg-white/15 hover:bg-white/25 text-amber-100 border border-amber-300/30 font-semibold px-4 py-2 rounded-xl text-xs transition-colors cursor-pointer"
                       >
-                        {t('+ Create Matrimony Profile', '+ नया बायोडाटा जोड़ें')}
+                        {t('+ Post Business Ad', '+ व्यापार विज्ञापन जोड़ें')}
                       </button>
                     )}
-                    <button
-                      onClick={handleStartCreateNewAd}
-                      className="bg-white/15 hover:bg-white/25 text-amber-100 border border-amber-300/30 font-semibold px-4 py-2 rounded-xl text-xs transition-colors cursor-pointer"
-                    >
-                      {t('+ Post Business Ad', '+ व्यापार विज्ञापन जोड़ें')}
-                    </button>
                   </div>
                 </div>
               </div>
@@ -1879,11 +1946,11 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <div className="flex bg-stone-100 p-1 rounded-xl border border-stone-200">
+                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                  <div className="flex flex-wrap bg-stone-100 p-1 rounded-xl border border-stone-200">
                     <button
                       onClick={() => setProfileStatusFilter('all')}
-                      className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                      className={`px-2.5 sm:px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
                         profileStatusFilter === 'all'
                           ? 'bg-[#851834] text-amber-100 shadow-xs'
                           : 'text-stone-600 hover:text-stone-900'
@@ -1893,7 +1960,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                     </button>
                     <button
                       onClick={() => setProfileStatusFilter('active')}
-                      className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                      className={`px-2.5 sm:px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
                         profileStatusFilter === 'active'
                           ? 'bg-[#851834] text-amber-100 shadow-xs'
                           : 'text-stone-600 hover:text-stone-900'
@@ -1903,7 +1970,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                     </button>
                     <button
                       onClick={() => setProfileStatusFilter('draft')}
-                      className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                      className={`px-2.5 sm:px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
                         profileStatusFilter === 'draft'
                           ? 'bg-[#851834] text-amber-100 shadow-xs'
                           : 'text-stone-600 hover:text-stone-900'
@@ -1914,18 +1981,20 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                   </div>
 
                   {hasOwnProfile ? (
-                    <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 whitespace-nowrap">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                       <span>{t('1 / 1 Profile Used', '1 / 1 प्रोफ़ाइल सक्रिय')}</span>
                     </span>
                   ) : (
-                    <button
-                      onClick={handleStartCreateNewProfile}
-                      className="bg-gradient-to-r from-[#6e1628] via-[#851834] to-[#6e1628] text-amber-100 font-bold px-3.5 py-1.5 rounded-xl text-xs shadow-sm flex items-center gap-1.5 cursor-pointer border border-amber-300/30"
-                    >
-                      <Plus className="w-3.5 h-3.5 text-amber-300" />
-                      <span>{t('New Profile', 'नया बायोडाटा')}</span>
-                    </button>
+                    config.featureProfileCreationEnabled && (
+                      <button
+                        onClick={handleStartCreateNewProfile}
+                        className="bg-gradient-to-r from-[#6e1628] via-[#851834] to-[#6e1628] text-amber-100 font-bold px-3.5 py-1.5 rounded-xl text-xs shadow-sm flex items-center gap-1.5 cursor-pointer border border-amber-300/30 whitespace-nowrap"
+                      >
+                        <Plus className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+                        <span>{t('New Profile', 'नया बायोडाटा')}</span>
+                      </button>
+                    )
                   )}
                 </div>
               </div>
@@ -2017,47 +2086,47 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                         </div>
 
                         {/* Candidate Info with Avatar */}
-                        <div className="px-5 pt-0 pb-4 relative">
-                          <div className="flex justify-between items-end -mt-9 mb-3">
+                        <div className="px-4 sm:px-5 pt-0 pb-4 relative min-w-0">
+                          <div className="flex justify-between items-end gap-2 -mt-9 mb-3">
                             <img 
                               src={p.photo || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80"} 
                               alt={p.name} 
-                              className="w-18 h-18 rounded-2xl object-cover object-top border-4 border-white shadow-md bg-white" 
+                              className="w-18 h-18 rounded-2xl object-cover object-top border-4 border-white shadow-md bg-white shrink-0" 
                             />
-                            <div className="text-right">
-                              <span className="text-[10px] bg-rose-50 text-[#851834] font-serif font-bold px-2 py-0.5 rounded-md border border-rose-200">
+                            <div className="text-right min-w-0">
+                              <span className="inline-block max-w-full truncate text-[10px] bg-rose-50 text-[#851834] font-serif font-bold px-2 py-0.5 rounded-md border border-rose-200">
                                 {t('Gotra:', 'गोत्र:')} {p.gotra}
                               </span>
                             </div>
                           </div>
 
-                          <h4 className="font-serif font-bold text-lg text-stone-900 group-hover:text-[#851834] transition-colors leading-tight">
+                          <h4 className="font-serif font-bold text-lg text-stone-900 group-hover:text-[#851834] transition-colors leading-tight break-words">
                             {p.name}
                           </h4>
-                          <p className="text-xs text-stone-500 font-medium mt-0.5">
+                          <p className="text-xs text-stone-500 font-medium mt-0.5 break-words">
                             {p.age} {t('Yrs', 'वर्ष')} · {p.height || "5' 8\""} · {p.profession}
                           </p>
-                          <p className="text-xs text-stone-400 mt-0.5 font-light">
+                          <p className="text-xs text-stone-400 mt-0.5 font-light break-words">
                             📍 {p.city}, {p.state || 'MP'}
                           </p>
                         </div>
                       </div>
 
                       {/* QUICK ACTION BUTTONS: Edit Profile, View Live, Settings */}
-                      <div className="p-4 pt-3 border-t border-rose-100/80 bg-rose-50/20 grid grid-cols-3 gap-2">
+                      <div className="p-3.5 sm:p-4 pt-3 border-t border-rose-100/80 bg-rose-50/20 flex flex-wrap items-center gap-2">
                         <button
                           onClick={() => handleStartEditProfile(p)}
-                          className="flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-semibold bg-white border border-stone-200 hover:border-rose-300 hover:bg-rose-50 text-stone-700 transition-colors cursor-pointer shadow-2xs"
+                          className="flex-1 min-w-[92px] flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl text-xs font-semibold bg-white border border-stone-200 hover:border-rose-300 hover:bg-rose-50 text-stone-700 transition-colors cursor-pointer shadow-2xs whitespace-nowrap"
                         >
-                          <Edit3 className="w-3.5 h-3.5 text-[#851834]" />
+                          <Edit3 className="w-3.5 h-3.5 text-[#851834] shrink-0" />
                           <span>{t('Edit', 'संपादित करें')}</span>
                         </button>
 
                         <button
                           onClick={() => setPreviewProfile(p)}
-                          className="flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-semibold bg-white border border-stone-200 hover:border-rose-300 hover:bg-rose-50 text-stone-700 transition-colors cursor-pointer shadow-2xs"
+                          className="flex-1 min-w-[92px] flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl text-xs font-semibold bg-white border border-stone-200 hover:border-rose-300 hover:bg-rose-50 text-stone-700 transition-colors cursor-pointer shadow-2xs whitespace-nowrap"
                         >
-                          <Eye className="w-3.5 h-3.5 text-[#851834]" />
+                          <Eye className="w-3.5 h-3.5 text-[#851834] shrink-0" />
                           <span>{t('View Live', 'प्रीव्यू')}</span>
                         </button>
 
@@ -2066,9 +2135,9 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                             setConfirmDeleteProfileId(null);
                             setSettingsModalProfile(p);
                           }}
-                          className="flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-semibold bg-white border border-stone-200 hover:border-rose-300 hover:bg-rose-50 text-stone-700 transition-colors cursor-pointer shadow-2xs"
+                          className="flex-1 min-w-[92px] flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl text-xs font-semibold bg-white border border-stone-200 hover:border-rose-300 hover:bg-rose-50 text-stone-700 transition-colors cursor-pointer shadow-2xs whitespace-nowrap"
                         >
-                          <Sliders className="w-3.5 h-3.5 text-[#851834]" />
+                          <Sliders className="w-3.5 h-3.5 text-[#851834] shrink-0" />
                           <span>{t('Settings', 'सेटिंग्स')}</span>
                         </button>
                       </div>
@@ -2097,11 +2166,11 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <div className="flex bg-stone-100 p-1 rounded-xl border border-stone-200">
+                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                  <div className="flex flex-wrap bg-stone-100 p-1 rounded-xl border border-stone-200">
                     <button
                       onClick={() => setAdStatusFilter('all')}
-                      className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                      className={`px-2.5 sm:px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
                         adStatusFilter === 'all'
                           ? 'bg-[#851834] text-amber-100 shadow-xs'
                           : 'text-stone-600 hover:text-stone-900'
@@ -2111,7 +2180,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                     </button>
                     <button
                       onClick={() => setAdStatusFilter('active')}
-                      className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                      className={`px-2.5 sm:px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
                         adStatusFilter === 'active'
                           ? 'bg-[#851834] text-amber-100 shadow-xs'
                           : 'text-stone-600 hover:text-stone-900'
@@ -2121,7 +2190,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                     </button>
                     <button
                       onClick={() => setAdStatusFilter('featured')}
-                      className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                      className={`px-2.5 sm:px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer whitespace-nowrap ${
                         adStatusFilter === 'featured'
                           ? 'bg-[#851834] text-amber-100 shadow-xs'
                           : 'text-stone-600 hover:text-stone-900'
@@ -2133,9 +2202,9 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
 
                   <button
                     onClick={handleStartCreateNewAd}
-                    className="bg-gradient-to-r from-[#6e1628] via-[#851834] to-[#6e1628] text-amber-100 font-bold px-3.5 py-1.5 rounded-xl text-xs shadow-sm flex items-center gap-1.5 cursor-pointer border border-amber-300/30"
+                    className="bg-gradient-to-r from-[#6e1628] via-[#851834] to-[#6e1628] text-amber-100 font-bold px-3.5 py-1.5 rounded-xl text-xs shadow-sm flex items-center gap-1.5 cursor-pointer border border-amber-300/30 whitespace-nowrap"
                   >
-                    <Plus className="w-3.5 h-3.5 text-amber-300" />
+                    <Plus className="w-3.5 h-3.5 text-amber-300 shrink-0" />
                     <span>{t('Post New Ad', 'नया विज्ञापन जोड़ें')}</span>
                   </button>
                 </div>
@@ -2214,12 +2283,12 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                         </div>
 
                         {/* Content Info */}
-                        <div className="p-5 space-y-2.5">
+                        <div className="p-4 sm:p-5 space-y-2.5 min-w-0">
                           <div>
-                            <h4 className="font-serif font-bold text-base text-stone-900 group-hover:text-[#851834] transition-colors leading-tight">
+                            <h4 className="font-serif font-bold text-base text-stone-900 group-hover:text-[#851834] transition-colors leading-tight break-words">
                               {ad.title}
                             </h4>
-                            <p className="text-xs text-stone-500 font-medium mt-0.5">
+                            <p className="text-xs text-stone-500 font-medium mt-0.5 break-words">
                               {t('Owner:', 'संचालक:')} {ad.owner} · {ad.city || 'Indore'}
                             </p>
                           </div>
@@ -2229,25 +2298,25 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                           </p>
 
                           {ad.address && (
-                            <p className="text-[11px] text-stone-400 flex items-center gap-1">
+                            <p className="text-[11px] text-stone-400 flex items-center gap-1 min-w-0">
                               <MapPin className="w-3 h-3 text-stone-400 shrink-0" />
                               <span className="truncate">{ad.address}</span>
                             </p>
                           )}
 
                           {ad.offer && (
-                            <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] p-2 rounded-xl font-semibold flex items-center gap-1.5">
+                            <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] p-2 rounded-xl font-semibold flex items-center gap-1.5 min-w-0">
                               <Tag className="w-3 h-3 text-emerald-600 shrink-0" />
                               <span className="truncate">{ad.offer}</span>
                             </div>
                           )}
 
                           {/* Engagement Metrics Pill */}
-                          <div className="flex items-center gap-3 text-[11px] text-stone-500 pt-1">
-                            <span className="bg-stone-50 px-2 py-0.5 rounded-md border border-stone-200">
+                          <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-[11px] text-stone-500 pt-1">
+                            <span className="bg-stone-50 px-2 py-0.5 rounded-md border border-stone-200 whitespace-nowrap">
                               👁️ {ad.viewsCount || 124} {t('Views', 'व्यूज')}
                             </span>
-                            <span className="bg-stone-50 px-2 py-0.5 rounded-md border border-stone-200">
+                            <span className="bg-stone-50 px-2 py-0.5 rounded-md border border-stone-200 whitespace-nowrap">
                               📞 {ad.inquiriesCount || 18} {t('Calls', 'कॉल')}
                             </span>
                           </div>
@@ -2255,20 +2324,20 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                       </div>
 
                       {/* QUICK ACTION BUTTONS: Edit Ad, View Live, Settings */}
-                      <div className="p-4 pt-3 border-t border-rose-100/80 bg-rose-50/20 grid grid-cols-3 gap-2">
+                      <div className="p-3.5 sm:p-4 pt-3 border-t border-rose-100/80 bg-rose-50/20 flex flex-wrap items-center gap-2">
                         <button
                           onClick={() => handleStartEditAd(ad)}
-                          className="flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-semibold bg-white border border-stone-200 hover:border-rose-300 hover:bg-rose-50 text-stone-700 transition-colors cursor-pointer shadow-2xs"
+                          className="flex-1 min-w-[92px] flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl text-xs font-semibold bg-white border border-stone-200 hover:border-rose-300 hover:bg-rose-50 text-stone-700 transition-colors cursor-pointer shadow-2xs whitespace-nowrap"
                         >
-                          <Edit3 className="w-3.5 h-3.5 text-[#851834]" />
+                          <Edit3 className="w-3.5 h-3.5 text-[#851834] shrink-0" />
                           <span>{t('Edit Ad', 'संपादित')}</span>
                         </button>
 
                         <button
                           onClick={() => setPreviewAd(ad)}
-                          className="flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-semibold bg-white border border-stone-200 hover:border-rose-300 hover:bg-rose-50 text-stone-700 transition-colors cursor-pointer shadow-2xs"
+                          className="flex-1 min-w-[92px] flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl text-xs font-semibold bg-white border border-stone-200 hover:border-rose-300 hover:bg-rose-50 text-stone-700 transition-colors cursor-pointer shadow-2xs whitespace-nowrap"
                         >
-                          <Eye className="w-3.5 h-3.5 text-[#851834]" />
+                          <Eye className="w-3.5 h-3.5 text-[#851834] shrink-0" />
                           <span>{t('View Live', 'प्रीव्यू')}</span>
                         </button>
 
@@ -2277,9 +2346,9 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                             setConfirmDeleteAdId(null);
                             setSettingsModalAd(ad);
                           }}
-                          className="flex items-center justify-center gap-1.5 py-2 px-2 rounded-xl text-xs font-semibold bg-white border border-stone-200 hover:border-rose-300 hover:bg-rose-50 text-stone-700 transition-colors cursor-pointer shadow-2xs"
+                          className="flex-1 min-w-[92px] flex items-center justify-center gap-1.5 py-2 px-2.5 rounded-xl text-xs font-semibold bg-white border border-stone-200 hover:border-rose-300 hover:bg-rose-50 text-stone-700 transition-colors cursor-pointer shadow-2xs whitespace-nowrap"
                         >
-                          <Sliders className="w-3.5 h-3.5 text-[#851834]" />
+                          <Sliders className="w-3.5 h-3.5 text-[#851834] shrink-0" />
                           <span>{t('Settings', 'सेटिंग्स')}</span>
                         </button>
                       </div>
@@ -2317,21 +2386,21 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                     <span>{t('Upload or Add Media Link', 'नई फोटो या मीडिया लिंक जोड़ें')}</span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                     <div>
                       <input
                         type="text"
                         placeholder={t('Asset Title (e.g. Portrait Photo)', 'फ़ाइल का शीर्षक (जैसे: मुख्य फोटो)')}
                         value={newMediaTitle}
                         onChange={(e) => setNewMediaTitle(e.target.value)}
-                        className="w-full p-2 rounded-xl border border-stone-200 bg-white"
+                        className="w-full p-2.5 rounded-xl border border-stone-200 bg-white"
                       />
                     </div>
                     <div>
                       <select
                         value={newMediaType}
                         onChange={(e) => setNewMediaType(e.target.value as 'avatar' | 'cover' | 'gallery' | 'document')}
-                        className="w-full p-2 rounded-xl border border-stone-200 bg-white"
+                        className="w-full p-2.5 rounded-xl border border-stone-200 bg-white"
                       >
                         <option value="avatar">{t('Avatar Portrait', 'प्रोफ़ाइल फोटो')}</option>
                         <option value="cover">{t('Background Cover', 'बैकग्राउंड कवर')}</option>
@@ -2339,22 +2408,22 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                         <option value="document">{t('Kundali / Document', 'कुंडली / दस्तावेज़')}</option>
                       </select>
                     </div>
-                    <div>
-                      <input
-                        type="url"
-                        required
-                        placeholder={t('Image URL (https://...)', 'फोटो URL (https://...)')}
-                        value={newMediaUrl}
-                        onChange={(e) => setNewMediaUrl(e.target.value)}
-                        className="w-full p-2 rounded-xl border border-stone-200 bg-white"
-                      />
-                    </div>
                   </div>
+
+                  <ImageUploadField
+                    label={t('Select Photo from Device or Paste URL *', 'डिवाइस से फ़ोटो चुनें या लिंक डालें *')}
+                    value={newMediaUrl}
+                    onChange={(url) => setNewMediaUrl(url)}
+                    variant="banner"
+                    maxDimension={900}
+                    urlPlaceholder={t('Image URL (https://...)', 'फोटो URL (https://...)')}
+                  />
 
                   <div className="flex justify-end pt-1">
                     <button
                       type="submit"
-                      className="bg-gradient-to-r from-[#6e1628] to-[#851834] text-amber-100 text-xs font-bold px-4 py-2 rounded-xl shadow-xs cursor-pointer border border-amber-300/30"
+                      disabled={!newMediaUrl.trim()}
+                      className="bg-gradient-to-r from-[#6e1628] to-[#851834] disabled:opacity-50 text-amber-100 text-xs font-bold px-4 py-2 rounded-xl shadow-xs cursor-pointer border border-amber-300/30"
                     >
                       {t('+ Save to Media Assets', '+ मीडिया में सहेजें')}
                     </button>
@@ -2595,14 +2664,16 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                               <Eye className="w-3 h-3" /> {t('View Bio', 'बायो देखें')}
                             </button>
 
-                            <button
-                              onClick={() => setActiveChatProfile(p)}
-                              className="bg-gradient-to-r from-[#6e1628] to-[#851834] text-amber-200 text-[11px] font-semibold py-2 px-3 rounded-lg flex items-center justify-center gap-1 cursor-pointer shadow-xs"
-                            >
-                              <MessageCircle className="w-3 h-3 text-amber-300" /> {t('Chat', 'चैट')}
-                            </button>
+                            {config.featureChatEnabled && (
+                              <button
+                                onClick={() => setActiveChatProfile(p)}
+                                className="bg-gradient-to-r from-[#6e1628] to-[#851834] text-amber-200 text-[11px] font-semibold py-2 px-3 rounded-lg flex items-center justify-center gap-1 cursor-pointer shadow-xs"
+                              >
+                                <MessageCircle className="w-3 h-3 text-amber-300" /> {t('Chat', 'चैट')}
+                              </button>
+                            )}
 
-                            {onSelectKundaliProfile && (
+                            {config.featureKundaliEnabled && onSelectKundaliProfile && (
                               <button
                                 onClick={() => onSelectKundaliProfile(p.id, p.gender)}
                                 title={t('Check Kundali Milan', 'कुंडली मिलान जांचें')}
@@ -2699,14 +2770,16 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                         </div>
 
                         <div className="pt-2 border-t border-stone-100 flex items-center gap-1.5">
-                          <button
-                            onClick={() => setActiveChatProfile(candidateProfile)}
-                            className="flex-1 bg-gradient-to-r from-[#6e1628] to-[#851834] text-amber-200 text-xs font-semibold py-2 px-2.5 rounded-lg flex items-center justify-center gap-1 cursor-pointer shadow-xs"
-                          >
-                            <MessageCircle className="w-3 h-3 text-amber-300" /> {t('Chat', 'चैट')}
-                          </button>
+                          {config.featureChatEnabled && (
+                            <button
+                              onClick={() => setActiveChatProfile(candidateProfile)}
+                              className="flex-1 bg-gradient-to-r from-[#6e1628] to-[#851834] text-amber-200 text-xs font-semibold py-2 px-2.5 rounded-lg flex items-center justify-center gap-1 cursor-pointer shadow-xs"
+                            >
+                              <MessageCircle className="w-3 h-3 text-amber-300" /> {t('Chat', 'चैट')}
+                            </button>
+                          )}
 
-                          {onSelectKundaliProfile && (
+                          {config.featureKundaliEnabled && onSelectKundaliProfile && (
                             <button
                               onClick={() => onSelectKundaliProfile(candidateProfile.id, candidateProfile.gender)}
                               title={t('Milan', 'मिलान')}
@@ -2813,11 +2886,11 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
       {/* ======================================================== */}
       {previewProfile && (
         <div 
-          className="fixed inset-0 z-50 bg-stone-950/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in"
+          className="fixed inset-0 z-50 bg-stone-950/70 backdrop-blur-xs flex items-start sm:items-center justify-center px-3 sm:px-4 pt-[calc(0.75rem+var(--sat))] pb-[calc(1rem+var(--sab))] overflow-y-auto animate-in fade-in"
           onClick={() => setPreviewProfile(null)}
         >
           <div 
-            className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-7 shadow-2xl border border-rose-200 relative my-8"
+            className="bg-white rounded-3xl max-w-lg w-full p-5 sm:p-7 shadow-2xl border border-rose-200 relative my-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <button
@@ -2856,6 +2929,24 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 </div>
               </div>
 
+              {previewProfile.gallery && previewProfile.gallery.length > 1 && (
+                <div className="space-y-1.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-stone-500">
+                    {t('Candidate Photos Gallery', 'प्रत्याशी फ़ोटो गैलरी')} ({previewProfile.gallery.length})
+                  </span>
+                  <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                    {Array.from(new Set([previewProfile.photo, ...previewProfile.gallery].filter(Boolean))).map((gUrl, idx) => (
+                      <img
+                        key={idx}
+                        src={gUrl}
+                        alt={`${previewProfile.name} ${idx + 1}`}
+                        className="w-14 h-14 rounded-xl object-cover object-top border border-amber-300 shrink-0"
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="bg-stone-50 p-4 rounded-2xl border border-stone-200 text-xs space-y-2">
                 <div className="grid grid-cols-2 gap-2">
                   <p><span className="text-stone-500 font-medium">{t('Age:', 'आयु:')}</span> <strong className="text-stone-800">{previewProfile.age} {t('Yrs', 'वर्ष')}</strong></p>
@@ -2889,11 +2980,11 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
       {/* ======================================================== */}
       {previewAd && (
         <div 
-          className="fixed inset-0 z-50 bg-stone-950/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in"
+          className="fixed inset-0 z-50 bg-stone-950/70 backdrop-blur-xs flex items-start sm:items-center justify-center px-3 sm:px-4 pt-[calc(0.75rem+var(--sat))] pb-[calc(1rem+var(--sab))] overflow-y-auto animate-in fade-in"
           onClick={() => setPreviewAd(null)}
         >
           <div 
-            className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-rose-200 relative my-8 space-y-4"
+            className="bg-white rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl border border-rose-200 relative my-auto space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
             <button
@@ -2963,11 +3054,11 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
       {/* ======================================================== */}
       {settingsModalProfile && (
         <div 
-          className="fixed inset-0 z-50 bg-stone-950/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in"
+          className="fixed inset-0 z-50 bg-stone-950/70 backdrop-blur-xs flex items-start sm:items-center justify-center px-3 sm:px-4 pt-[calc(0.75rem+var(--sat))] pb-[calc(1rem+var(--sab))] overflow-y-auto animate-in fade-in"
           onClick={() => setSettingsModalProfile(null)}
         >
           <div 
-            className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-rose-200 relative space-y-4"
+            className="bg-white rounded-3xl max-w-sm w-full p-5 sm:p-6 shadow-2xl border border-rose-200 relative space-y-4 my-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-rose-100 pb-2">
@@ -3071,11 +3162,11 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
       {/* ======================================================== */}
       {settingsModalAd && (
         <div 
-          className="fixed inset-0 z-50 bg-stone-950/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in"
+          className="fixed inset-0 z-50 bg-stone-950/70 backdrop-blur-xs flex items-start sm:items-center justify-center px-3 sm:px-4 pt-[calc(0.75rem+var(--sat))] pb-[calc(1rem+var(--sab))] overflow-y-auto animate-in fade-in"
           onClick={() => setSettingsModalAd(null)}
         >
           <div 
-            className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-rose-200 relative space-y-4"
+            className="bg-white rounded-3xl max-w-sm w-full p-5 sm:p-6 shadow-2xl border border-rose-200 relative space-y-4 my-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-rose-100 pb-2">

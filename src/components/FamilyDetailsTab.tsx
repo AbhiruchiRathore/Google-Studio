@@ -6,6 +6,7 @@ import {
 import { TabType, AuthSession, MatrimonyProfile } from '../types';
 import { sanitizePhoneInput, validatePhoneNumber } from '../utils/validation';
 import { useLanguage } from '../context/LanguageContext';
+import { MultiPhotoUploadField } from './MultiPhotoUploadField';
 
 interface FamilyDetailsTabProps {
   authSession: AuthSession | null;
@@ -47,7 +48,8 @@ export const FamilyDetailsTab: React.FC<FamilyDetailsTabProps> = ({
     currentState: 'Madhya Pradesh',
     familyContact: sanitizePhoneInput(authSession?.phone || ''),
     secondaryContact: '',
-    familyBackground: ''
+    familyBackground: '',
+    photos: authSession?.photoUrl ? [authSession.photoUrl] : ([] as string[])
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -106,6 +108,8 @@ export const FamilyDetailsTab: React.FC<FamilyDetailsTabProps> = ({
       income: 'Competitive',
       familyDetails: familyDetailsSummary,
       about: aboutFamily,
+      photo: form.photos[0] || undefined,
+      gallery: form.photos.length > 0 ? form.photos : undefined,
       verified: true
     });
 
@@ -377,6 +381,16 @@ export const FamilyDetailsTab: React.FC<FamilyDetailsTabProps> = ({
                 placeholder="26"
                 min="18"
                 max="65"
+              />
+            </div>
+
+            <div className="sm:col-span-3 pt-1">
+              <MultiPhotoUploadField
+                label={t('Candidate & Family Photos (Upload 1 to 6)', 'प्रत्याशी एवं परिवार की फ़ोटो (1 से 6 तक)')}
+                photos={form.photos}
+                onChange={(nextPhotos) => setForm({ ...form, photos: nextPhotos })}
+                maxPhotos={6}
+                maxDimension={720}
               />
             </div>
           </div>

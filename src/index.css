@@ -1,10 +1,30 @@
 @import "tailwindcss";
 
+:root {
+  --sat: env(safe-area-inset-top, 0px);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sal: env(safe-area-inset-left, 0px);
+  --sar: env(safe-area-inset-right, 0px);
+}
+
+/* Fallback safe-area insets for Android WebView APKs running edge-to-edge without forwarding WindowInsets */
+html[data-android-edge="true"] {
+  --sat: max(env(safe-area-inset-top, 0px), 32px);
+  --sab: max(env(safe-area-inset-bottom, 0px), 24px);
+}
+
 @layer base {
+  html, body {
+    max-width: 100%;
+    overflow-x: clip;
+  }
+
   body {
     font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
     background-color: #FAF8F5;
     color: #1c1917;
+    padding-left: var(--sal);
+    padding-right: var(--sar);
   }
   
   h1, h2, h3, h4, .font-serif {
@@ -14,6 +34,19 @@
   .font-royal {
     font-family: 'Cinzel', 'Playfair Display', Georgia, serif;
   }
+
+  .font-logo {
+    font-family: 'Dancing Script', 'Yatra One', 'Playfair Display', cursive, serif;
+  }
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 /* Custom subtle patterns and royal styling */

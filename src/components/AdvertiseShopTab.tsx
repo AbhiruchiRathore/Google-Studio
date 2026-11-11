@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Lock, ShieldCheck, AlertCircle } from 'lucide-react';
+import { Lock, ShieldCheck, AlertCircle, Star, Sparkles, Tag } from 'lucide-react';
 import { BusinessAd, TabType, AuthSession } from '../types';
 import { GoogleSignInModal } from './GoogleSignInModal';
 import {
@@ -10,6 +10,8 @@ import {
 } from './SignUpTab';
 import { sanitizePhoneInput, validatePhoneNumber } from '../utils/validation';
 import { useLanguage } from '../context/LanguageContext';
+import { useAdminConfig } from '../context/AdminConfigContext';
+import { ImageUploadField } from './ImageUploadField';
 
 interface AdvertiseShopTabProps {
   authSession: AuthSession | null;
@@ -25,6 +27,7 @@ export const AdvertiseShopTab: React.FC<AdvertiseShopTabProps> = ({
   onNavigateTab
 }) => {
   const { lang, t } = useLanguage();
+  const { config } = useAdminConfig();
   const [showGoogleModal, setShowGoogleModal] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
@@ -38,9 +41,24 @@ export const AdvertiseShopTab: React.FC<AdvertiseShopTabProps> = ({
     city: 'Indore',
     description: '',
     offer: 'Special Discount for Rathore Samaj Members',
-    isFeatured: false,
+    adTier: 'standard' as 'standard' | 'featured' | 'spotlight',
     bannerUrl: ''
   });
+
+  const cycleLabel =
+    config.adBillingCycle === 'monthly'
+      ? t('Month', 'माह')
+      : config.adBillingCycle === 'quarterly'
+        ? t('Quarter', 'तिमाही')
+        : t('Year', 'वर्ष');
+
+  const selectedTierPrice = !config.adsMonetizationEnabled
+    ? 0
+    : formData.adTier === 'spotlight'
+      ? config.spotlightAdPrice
+      : formData.adTier === 'featured' && config.featuredAdsEnabled
+        ? config.featuredAdPrice
+        : config.standardAdPrice;
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const target = e.target;
@@ -101,6 +119,9 @@ export const AdvertiseShopTab: React.FC<AdvertiseShopTabProps> = ({
       return;
     }
 
+    const isFeaturedPlacement =
+      (formData.adTier === 'featured' && config.featuredAdsEnabled) || formData.adTier === 'spotlight';
+
     const newAd: BusinessAd = {
       id: Date.now(),
       title: formData.name.trim(),
@@ -113,10 +134,12 @@ export const AdvertiseShopTab: React.FC<AdvertiseShopTabProps> = ({
       description: formData.description.trim(),
       offer: formData.offer.trim(),
       rating: '5.0 ★',
-      isFeatured: formData.isFeatured,
+      isFeatured: isFeaturedPlacement,
+      adTier: formData.adTier,
+      adPricePaid: selectedTierPrice,
       banner: formData.bannerUrl.trim() !== '' 
         ? formData.bannerUrl.trim() 
-        : formData.isFeatured 
+        : isFeaturedPlacement
           ? 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=600&q=80'
           : 'https://images.unsplash.com/photo-1555421689-491a97ff2040?auto=format&fit=crop&w=600&q=80',
       createdAt: new Date().toISOString()
@@ -341,19 +364,18 @@ export const AdvertiseShopTab: React.FC<AdvertiseShopTabProps> = ({
             />
           </div>
 
-          <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">
-              {t('Shop Banner Image URL (Optional)', 'दुकान बैनर इमेज लिंक (वैकल्पिक)')}
-            </label>
-            <input 
-              type="url" 
-              name="bannerUrl"
-              value={formData.bannerUrl}
-              onChange={handleChange}
-              className="w-full border border-amber-300 rounded-lg p-2.5 text-xs focus:ring-2 focus:ring-amber-500" 
-              placeholder={t('https://... (or leave empty for default banner)', 'https://... (डिफ़ॉल्ट बैनर हेतु खाली छोड़ें)')} 
-            />
-          </div>
+          <ImageUploadField
+            label={t('Shop Photo / Banner Image (Optional)', 'दुकान की फ़ोटो / बैनर इमेज (वैकल्पिक)')}
+            value={formData.bannerUrl}
+            onChange={(url) => setFormData((prev) => ({ ...prev, bannerUrl: url }))}
+            variant="banner"
+            maxDimension={960}
+            helperText={t(
+              'Upload a photo of your shopfront, signboard, or products from your gallery/camera',
+              'अपनी दुकान, बोर्ड या उत्पादों की फ़ोटो गैलरी/कैमरे से अपलोड करें'
+            )}
+            urlPlaceholder={t('https://... (optional shop image link)', 'https://... (वैकल्पिक इमेज लिंक)')}
+          />
 
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -370,25 +392,96 @@ export const AdvertiseShopTab: React.FC<AdvertiseShopTabProps> = ({
             />
           </div>
 
-          <div className="bg-amber-50 p-3.5 rounded-xl border border-amber-300 flex items-center gap-3">
-            <input 
-              type="checkbox" 
-              id="isFeatured"
-              name="isFeatured"
-              checked={formData.isFeatured}
-              onChange={handleChange}
-              className="w-4 h-4 rounded text-red-950 border-amber-400 focus:ring-amber-500" 
-            />
-            <label htmlFor="isFeatured" className="text-xs font-bold text-red-950 cursor-pointer">
-              {t('⭐ Highlight as Featured Top Banner Shop (Special Placement)', '⭐ फीचर्ड टॉप बैनर के रूप में हाइलाइट करें')}
-            </label>
+          {/* SHOP ADVERTISEMENT PRICING PACKAGES */}
+          <div className="bg-amber-50/70 p-4 rounded-2xl border border-amber-300 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs font-bold text-red-950 flex items-center gap-1.5 font-serif">
+                <Tag className="w-4 h-4 text-amber-700" />
+                {t('Select Shop Advertisement Package', 'दुकान विज्ञापन पैकेज चुनें')}
+              </span>
+              <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+                config.adsMonetizationEnabled
+                  ? 'bg-[#380812] text-amber-200'
+                  : 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+              }`}>
+                {config.adsMonetizationEnabled
+                  ? t(`Selected: ₹${selectedTierPrice} / ${cycleLabel}`, `चयनित शुल्क: ₹${selectedTierPrice} / ${cycleLabel}`)
+                  : t('Free Samaj Listing Mode', 'निःशुल्क समाज विज्ञापन सेवा')}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-xs">
+              <button
+                type="button"
+                onClick={() => setFormData(prev => ({ ...prev, adTier: 'standard' }))}
+                className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                  formData.adTier === 'standard'
+                    ? 'bg-white border-[#380812] ring-2 ring-[#380812]/20 shadow-xs'
+                    : 'bg-white/70 border-amber-200 hover:border-amber-400'
+                }`}
+              >
+                <p className="font-bold text-stone-900">{t('Standard Listing', 'सामान्य विज्ञापन')}</p>
+                <p className="text-sm font-extrabold font-serif text-[#380812] mt-0.5">
+                  {config.adsMonetizationEnabled ? `₹${config.standardAdPrice} / ${cycleLabel}` : t('Free', 'निःशुल्क')}
+                </p>
+                <p className="text-[11px] text-stone-500 mt-1">
+                  {t('Directory card with call & WhatsApp share', 'कॉल व व्हाट्सएप शेयर सहित')}
+                </p>
+              </button>
+
+              {config.featuredAdsEnabled && (
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, adTier: 'featured' }))}
+                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                    formData.adTier === 'featured'
+                      ? 'bg-white border-amber-600 ring-2 ring-amber-400/40 shadow-xs'
+                      : 'bg-white/70 border-amber-200 hover:border-amber-400'
+                  }`}
+                >
+                  <p className="font-bold text-red-950 flex items-center gap-1">
+                    <Star className="w-3.5 h-3.5 text-amber-600 fill-amber-500" />
+                    {t('Featured Banner', 'फीचर्ड बैनर')}
+                  </p>
+                  <p className="text-sm font-extrabold font-serif text-amber-900 mt-0.5">
+                    {config.adsMonetizationEnabled ? `₹${config.featuredAdPrice} / ${cycleLabel}` : t('Free Highlight', 'निःशुल्क प्रमुख')}
+                  </p>
+                  <p className="text-[11px] text-stone-500 mt-1">
+                    {t('Golden Featured badge & priority top row', 'गोल्डन फीचर्ड बैज व टॉप स्थान')}
+                  </p>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={() => setFormData(prev => ({ ...prev, adTier: 'spotlight' }))}
+                className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                  formData.adTier === 'spotlight'
+                    ? 'bg-gradient-to-br from-[#380812] to-[#540e1b] text-amber-100 border-amber-400 shadow-sm'
+                    : 'bg-white/70 border-amber-200 hover:border-amber-400'
+                }`}
+              >
+                <p className={`font-bold flex items-center gap-1 ${formData.adTier === 'spotlight' ? 'text-amber-300' : 'text-stone-900'}`}>
+                  <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                  {t('Patrika + Spotlight', 'ई-पत्रिका + स्पॉटलाइट')}
+                </p>
+                <p className={`text-sm font-extrabold font-serif mt-0.5 ${formData.adTier === 'spotlight' ? 'text-white' : 'text-[#380812]'}`}>
+                  {config.adsMonetizationEnabled ? `₹${config.spotlightAdPrice} / ${cycleLabel}` : t('Free Premium', 'निःशुल्क विशेष')}
+                </p>
+                <p className={`text-[11px] mt-1 ${formData.adTier === 'spotlight' ? 'text-amber-100/80' : 'text-stone-500'}`}>
+                  {t('Featured banner + Samaj E-Booklet page slot', 'ई-पुस्तिका व टॉप बैनर में स्थान')}
+                </p>
+              </button>
+            </div>
           </div>
 
           <button 
             type="submit" 
             className="w-full bg-gradient-to-r from-[#380812] to-[#540e1b] hover:from-[#24050b] hover:to-[#380812] text-amber-200 font-bold py-3.5 rounded-xl text-xs sm:text-sm shadow-md transition-all cursor-pointer border border-amber-400/30 hover:scale-[1.01]"
           >
-            {t('Publish Business Ad to Directory', 'व्यापार विज्ञापन प्रकाशित करें')}
+            {config.adsMonetizationEnabled && selectedTierPrice > 0
+              ? t(`Publish Shop Ad (₹${selectedTierPrice} / ${cycleLabel})`, `विज्ञापन प्रकाशित करें (₹${selectedTierPrice} / ${cycleLabel})`)
+              : t('Publish Business Ad to Directory', 'व्यापार विज्ञापन प्रकाशित करें')}
           </button>
         </form>
       </div>
