@@ -30,7 +30,7 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
   return (
     <header className="sticky top-0 z-40 bg-gradient-to-r from-[#6e1628] via-[#851834] to-[#6e1628] text-white shadow-lg border-b border-amber-400/30 pt-[var(--sat)]">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between gap-2 min-h-[4rem] sm:min-h-[4.75rem] py-2">
+        <div className="flex items-center justify-between gap-2 min-h-[3.75rem] sm:min-h-[4.75rem] py-1.5 sm:py-2">
           
           {/* Brand Logo: Creative Font + Diamond Ring Vector */}
           <div 
@@ -376,7 +376,7 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
                 currentTab === 'matrimony' ? 'bg-amber-300 text-[#4c0d1b] font-bold' : 'text-rose-100'
               }`}
             >
-              <HeartHandshake className="w-4 h-4 text-amber-300" /> {t('Matrimony Bios', 'वैवाहिक बायोडाटा')}
+              <HeartHandshake className={`w-4 h-4 shrink-0 ${currentTab === 'matrimony' ? 'text-[#4c0d1b]' : 'text-amber-300'}`} /> {t('Matrimony Bios', 'वैवाहिक बायोडाटा')}
             </button>
           )}
           {config.featureKundaliEnabled && (
@@ -387,8 +387,8 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
               }`}
             >
               <span className="flex items-center gap-2.5">
-                <Compass className="w-4 h-4 text-amber-300" /> {t('Kundali Milan', 'कुंडली मिलान')}
-                {!authSession && <Lock className="w-3.5 h-3.5 text-amber-300/80" />}
+                <Compass className={`w-4 h-4 shrink-0 ${currentTab === 'kundali' ? 'text-[#4c0d1b]' : 'text-amber-300'}`} /> {t('Kundali Milan', 'कुंडली मिलान')}
+                {!authSession && <Lock className={`w-3.5 h-3.5 shrink-0 ${currentTab === 'kundali' ? 'text-[#4c0d1b]/75' : 'text-amber-300/80'}`} />}
               </span>
               <span className="text-[10px] bg-amber-400 text-stone-950 font-extrabold px-1.5 py-0.2 rounded-md">
                 {t('36 Gunas', '३६ गुण')}
@@ -403,8 +403,8 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
               }`}
             >
               <span className="flex items-center gap-2.5">
-                <ClipboardList className="w-4 h-4 text-amber-300" /> {t('Guest List Planner', 'अतिथि सूची प्लानर')}
-                {!authSession && <Lock className="w-3.5 h-3.5 text-amber-300/80" />}
+                <ClipboardList className={`w-4 h-4 shrink-0 ${currentTab === 'guest-list' ? 'text-[#4c0d1b]' : 'text-amber-300'}`} /> {t('Guest List Planner', 'अतिथि सूची प्लानर')}
+                {!authSession && <Lock className={`w-3.5 h-3.5 shrink-0 ${currentTab === 'guest-list' ? 'text-[#4c0d1b]/75' : 'text-amber-300/80'}`} />}
               </span>
               <span className="text-[10px] bg-rose-500/80 text-white font-bold px-1.5 py-0.2 rounded-md">
                 {t('Planner', 'प्लानर')}
@@ -418,7 +418,7 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
                 currentTab === 'directory' ? 'bg-amber-300 text-[#4c0d1b] font-bold' : 'text-rose-100'
               }`}
             >
-              <Store className="w-4 h-4 text-amber-300" /> {t('Business Directory & Ads', 'व्यापार निर्देशिका एवं विज्ञापन')}
+              <Store className={`w-4 h-4 shrink-0 ${currentTab === 'directory' ? 'text-[#4c0d1b]' : 'text-amber-300'}`} /> {t('Business Directory & Ads', 'व्यापार निर्देशिका एवं विज्ञापन')}
             </button>
           )}
           {config.featureBookletEnabled && (
@@ -428,7 +428,7 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
                 currentTab === 'booklet' ? 'bg-amber-300 text-[#4c0d1b] font-bold' : 'text-rose-100'
               }`}
             >
-              <BookOpen className="w-4 h-4 text-amber-300" /> {t('Digital E-Book Directory', 'डिजिटल ई-पत्रिका निर्देशिका')}
+              <BookOpen className={`w-4 h-4 shrink-0 ${currentTab === 'booklet' ? 'text-[#4c0d1b]' : 'text-amber-300'}`} /> {t('Digital E-Book Directory', 'डिजिटल ई-पत्रिका निर्देशिका')}
             </button>
           )}
           {config.featureEventsEnabled && (
@@ -438,7 +438,7 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
                 currentTab === 'events' ? 'bg-amber-300 text-[#4c0d1b] font-bold' : 'text-rose-100'
               }`}
             >
-              <Calendar className="w-4 h-4 text-amber-300" /> {t('Samaj Events & News', 'समाज कार्यक्रम एवं समाचार')}
+              <Calendar className={`w-4 h-4 shrink-0 ${currentTab === 'events' ? 'text-[#4c0d1b]' : 'text-amber-300'}`} /> {t('Samaj Events & News', 'समाज कार्यक्रम एवं समाचार')}
             </button>
           )}
 

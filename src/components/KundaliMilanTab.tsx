@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Sparkles, Heart, ShieldCheck, Share2, Printer, 
   ArrowRight, Users, CheckCircle2, AlertTriangle, Info,
-  Flame, RefreshCw, Star, Compass, Award, Lock, UserPlus, Download, X
+  Flame, RefreshCw, Star, Compass, Award, Lock, UserPlus, Download, X, Search
 } from 'lucide-react';
 import { MatrimonyProfile, TabType, AuthSession } from '../types';
 import { 
@@ -36,6 +36,34 @@ export const KundaliMilanTab: React.FC<KundaliMilanTabProps> = ({
   // Grooms & Brides from Samaj Profiles
   const grooms = useMemo(() => profiles.filter(p => p.gender === 'Male'), [profiles]);
   const brides = useMemo(() => profiles.filter(p => p.gender === 'Female'), [profiles]);
+
+  // Search filters alongside Select dropdowns
+  const [boySearch, setBoySearch] = useState('');
+  const [girlSearch, setGirlSearch] = useState('');
+
+  const filteredGrooms = useMemo(() => {
+    const q = boySearch.toLowerCase().trim();
+    if (!q) return grooms;
+    return grooms.filter(g =>
+      g.name.toLowerCase().includes(q) ||
+      g.gotra.toLowerCase().includes(q) ||
+      g.city.toLowerCase().includes(q) ||
+      (g.education && g.education.toLowerCase().includes(q)) ||
+      (g.profession && g.profession.toLowerCase().includes(q))
+    );
+  }, [grooms, boySearch]);
+
+  const filteredBrides = useMemo(() => {
+    const q = girlSearch.toLowerCase().trim();
+    if (!q) return brides;
+    return brides.filter(b =>
+      b.name.toLowerCase().includes(q) ||
+      b.gotra.toLowerCase().includes(q) ||
+      b.city.toLowerCase().includes(q) ||
+      (b.education && b.education.toLowerCase().includes(q)) ||
+      (b.profession && b.profession.toLowerCase().includes(q))
+    );
+  }, [brides, girlSearch]);
 
   // Selected profile IDs
   const [selectedBoyId, setSelectedBoyId] = useState<number | string>(() => {
@@ -380,17 +408,57 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
 
       {/* SELECTION PANELS */}
       {matchMode === 'samaj' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white p-6 sm:p-7 rounded-3xl border border-stone-200 shadow-sm">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white p-5 sm:p-7 rounded-3xl border border-stone-200 shadow-sm">
           {/* GROOM SELECTION */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-stone-100">
+          <div className="space-y-3.5 min-w-0">
+            <div className="flex items-center justify-between pb-2 border-b border-stone-100 gap-2">
               <h3 className="font-serif font-bold text-stone-900 text-sm flex items-center gap-2">
-                <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-800 text-xs font-bold flex items-center justify-center">1</span>
-                <span>{t('Select Groom', 'वर चुनें')}</span>
+                <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-800 text-xs font-bold flex items-center justify-center shrink-0">1</span>
+                <span>{t('Search & Select Groom', 'वर खोजें एवं चुनें')}</span>
               </h3>
-              <span className="text-[11px] font-semibold text-stone-500">
-                {grooms.length} {t('Verified Grooms', 'सत्यापित वर')}
+              <span className="text-[11px] font-semibold text-stone-500 shrink-0">
+                {boySearch.trim()
+                  ? t(`${filteredGrooms.length} of ${grooms.length}`, `${filteredGrooms.length} / ${grooms.length}`)
+                  : `${grooms.length} ${t('Verified Grooms', 'सत्यापित वर')}`}
               </span>
+            </div>
+
+            {/* Search Groom Input */}
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={boySearch}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setBoySearch(val);
+                  const q = val.toLowerCase().trim();
+                  if (q) {
+                    const matches = grooms.filter(g =>
+                      g.name.toLowerCase().includes(q) ||
+                      g.gotra.toLowerCase().includes(q) ||
+                      g.city.toLowerCase().includes(q) ||
+                      (g.education && g.education.toLowerCase().includes(q)) ||
+                      (g.profession && g.profession.toLowerCase().includes(q))
+                    );
+                    if (matches.length > 0 && !matches.some(m => m.id.toString() === selectedBoyId.toString())) {
+                      setSelectedBoyId(matches[0].id);
+                    }
+                  }
+                }}
+                placeholder={t('Search groom by name, gotra, city...', 'नाम, गोत्र या शहर से वर खोजें...')}
+                className="w-full pl-8 pr-8 py-2.5 rounded-xl border border-stone-200 text-xs text-stone-800 focus:ring-2 focus:ring-amber-500/60 focus:border-amber-500 outline-none bg-white"
+              />
+              {boySearch && (
+                <button
+                  type="button"
+                  onClick={() => setBoySearch('')}
+                  aria-label={t('Clear groom search', 'खोज साफ़ करें')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 p-0.5 cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
 
             <select
@@ -398,12 +466,53 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
               onChange={(e) => setSelectedBoyId(e.target.value)}
               className="w-full p-3 rounded-xl border border-stone-300 text-xs font-semibold text-stone-800 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none bg-stone-50"
             >
-              {grooms.map(g => (
-                <option key={g.id} value={g.id}>
-                  {g.name} ({g.age} {t('Yrs', 'वर्ष')} · {g.city} · {t('Gotra', 'गोत्र')}: {g.gotra})
+              {filteredGrooms.length === 0 ? (
+                <option value="" disabled>
+                  {t('No matching grooms found', 'कोई वर नहीं मिला')}
                 </option>
-              ))}
+              ) : (
+                filteredGrooms.map(g => (
+                  <option key={g.id} value={g.id}>
+                    {g.name} ({g.age} {t('Yrs', 'वर्ष')} · {g.city} · {t('Gotra', 'गोत्र')}: {g.gotra})
+                  </option>
+                ))
+              )}
             </select>
+
+            {boySearch.trim() && filteredGrooms.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {filteredGrooms.slice(0, 4).map((g) => {
+                  const isSelected = g.id.toString() === selectedBoyId.toString();
+                  return (
+                    <button
+                      key={g.id}
+                      type="button"
+                      onClick={() => setSelectedBoyId(g.id)}
+                      className={`text-[11px] px-2.5 py-1 rounded-lg border font-medium transition-all cursor-pointer truncate max-w-full ${
+                        isSelected
+                          ? 'bg-[#380812] text-amber-200 border-[#380812]'
+                          : 'bg-amber-50/70 hover:bg-amber-100 text-stone-800 border-amber-200'
+                      }`}
+                    >
+                      {g.name} · {g.city}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {boySearch.trim() && filteredGrooms.length === 0 && (
+              <div className="text-[11px] text-rose-700 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
+                <span>{t('No groom matched your search.', 'खोज से कोई वर नहीं मिला।')}</span>
+                <button
+                  type="button"
+                  onClick={() => setBoySearch('')}
+                  className="font-bold underline cursor-pointer shrink-0"
+                >
+                  {t('Reset', 'रीसेट')}
+                </button>
+              </div>
+            )}
 
             {activeGroom && (
               <div className="bg-stone-50 rounded-2xl p-4 border border-stone-200/80 flex items-center gap-4">
@@ -425,15 +534,55 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
           </div>
 
           {/* BRIDE SELECTION */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-stone-100">
+          <div className="space-y-3.5 min-w-0">
+            <div className="flex items-center justify-between pb-2 border-b border-stone-100 gap-2">
               <h3 className="font-serif font-bold text-stone-900 text-sm flex items-center gap-2">
-                <span className="w-6 h-6 rounded-full bg-rose-100 text-rose-800 text-xs font-bold flex items-center justify-center">2</span>
-                <span>{t('Select Bride', 'वधू चुनें')}</span>
+                <span className="w-6 h-6 rounded-full bg-rose-100 text-rose-800 text-xs font-bold flex items-center justify-center shrink-0">2</span>
+                <span>{t('Search & Select Bride', 'वधू खोजें एवं चुनें')}</span>
               </h3>
-              <span className="text-[11px] font-semibold text-stone-500">
-                {brides.length} {t('Verified Brides', 'सत्यापित वधुएं')}
+              <span className="text-[11px] font-semibold text-stone-500 shrink-0">
+                {girlSearch.trim()
+                  ? t(`${filteredBrides.length} of ${brides.length}`, `${filteredBrides.length} / ${brides.length}`)
+                  : `${brides.length} ${t('Verified Brides', 'सत्यापित वधुएं')}`}
               </span>
+            </div>
+
+            {/* Search Bride Input */}
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={girlSearch}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setGirlSearch(val);
+                  const q = val.toLowerCase().trim();
+                  if (q) {
+                    const matches = brides.filter(b =>
+                      b.name.toLowerCase().includes(q) ||
+                      b.gotra.toLowerCase().includes(q) ||
+                      b.city.toLowerCase().includes(q) ||
+                      (b.education && b.education.toLowerCase().includes(q)) ||
+                      (b.profession && b.profession.toLowerCase().includes(q))
+                    );
+                    if (matches.length > 0 && !matches.some(m => m.id.toString() === selectedGirlId.toString())) {
+                      setSelectedGirlId(matches[0].id);
+                    }
+                  }
+                }}
+                placeholder={t('Search bride by name, gotra, city...', 'नाम, गोत्र या शहर से वधू खोजें...')}
+                className="w-full pl-8 pr-8 py-2.5 rounded-xl border border-stone-200 text-xs text-stone-800 focus:ring-2 focus:ring-amber-500/60 focus:border-amber-500 outline-none bg-white"
+              />
+              {girlSearch && (
+                <button
+                  type="button"
+                  onClick={() => setGirlSearch('')}
+                  aria-label={t('Clear bride search', 'खोज साफ़ करें')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 p-0.5 cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
 
             <select
@@ -441,12 +590,53 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
               onChange={(e) => setSelectedGirlId(e.target.value)}
               className="w-full p-3 rounded-xl border border-stone-300 text-xs font-semibold text-stone-800 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none bg-stone-50"
             >
-              {brides.map(b => (
-                <option key={b.id} value={b.id}>
-                  {b.name} ({b.age} {t('Yrs', 'वर्ष')} · {b.city} · {t('Gotra', 'गोत्र')}: {b.gotra})
+              {filteredBrides.length === 0 ? (
+                <option value="" disabled>
+                  {t('No matching brides found', 'कोई वधू नहीं मिली')}
                 </option>
-              ))}
+              ) : (
+                filteredBrides.map(b => (
+                  <option key={b.id} value={b.id}>
+                    {b.name} ({b.age} {t('Yrs', 'वर्ष')} · {b.city} · {t('Gotra', 'गोत्र')}: {b.gotra})
+                  </option>
+                ))
+              )}
             </select>
+
+            {girlSearch.trim() && filteredBrides.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {filteredBrides.slice(0, 4).map((b) => {
+                  const isSelected = b.id.toString() === selectedGirlId.toString();
+                  return (
+                    <button
+                      key={b.id}
+                      type="button"
+                      onClick={() => setSelectedGirlId(b.id)}
+                      className={`text-[11px] px-2.5 py-1 rounded-lg border font-medium transition-all cursor-pointer truncate max-w-full ${
+                        isSelected
+                          ? 'bg-[#380812] text-amber-200 border-[#380812]'
+                          : 'bg-rose-50/70 hover:bg-rose-100 text-stone-800 border-rose-200'
+                      }`}
+                    >
+                      {b.name} · {b.city}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {girlSearch.trim() && filteredBrides.length === 0 && (
+              <div className="text-[11px] text-rose-700 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
+                <span>{t('No bride matched your search.', 'खोज से कोई वधू नहीं मिली।')}</span>
+                <button
+                  type="button"
+                  onClick={() => setGirlSearch('')}
+                  className="font-bold underline cursor-pointer shrink-0"
+                >
+                  {t('Reset', 'रीसेट')}
+                </button>
+              </div>
+            )}
 
             {activeBride && (
               <div className="bg-stone-50 rounded-2xl p-4 border border-stone-200/80 flex items-center gap-4">

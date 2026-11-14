@@ -1,21 +1,32 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   LogOut, CheckCircle2, Copy, Check, ExternalLink, 
   AlertTriangle, RefreshCw, HelpCircle,
   User, Lock, Eye, EyeOff, Phone, UserPlus, LogIn,
-  AlertCircle, ShieldCheck
+  AlertCircle, ShieldCheck, KeyRound, ArrowLeft, Mail, Send
 } from 'lucide-react';
 import { AuthSession, TabType, UserAccount } from '../types';
 import { GoogleSignInModal } from './GoogleSignInModal';
-import { auth } from '../firebase';
-import { GoogleAuthProvider, signInWithRedirect, signInWithPopup } from 'firebase/auth';
+import { auth, secondaryAuth } from '../firebase';
+import {
+  GoogleAuthProvider,
+  signInWithRedirect,
+  signInWithPopup,
+  sendPasswordResetEmail,
+  verifyPasswordResetCode,
+  confirmPasswordReset,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut,
+  updateProfile
+} from 'firebase/auth';
 import { sanitizePhoneInput, validatePhoneNumber, validateStrongPassword } from '../utils/validation';
 import { useLanguage } from '../context/LanguageContext';
 import { BrandLogo } from './BrandLogo';
 
 interface SignUpTabProps {
   authSession: AuthSession | null;
-  onLogin: (session: AuthSession) => void;
+  onLogin: (session: AuthSession, redirectTab?: TabType) => void;
   onLogout: () => void;
   onNavigateTab: (tab: TabType) => void;
   hasRegisteredProfile?: boolean;
@@ -40,10 +51,48 @@ const INITIAL_ACCOUNTS: UserAccount[] = [
     fullName: 'Rathore Samaj Member',
     password: 'Member@123',
     phone: '9820011223',
+    email: 'member@rathorerishtey.in',
     gotra: 'Pindoria',
     createdAt: '2026-01-01T00:00:00.000Z'
   }
 ];
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function maskEmailAddress(email: string): string {
+  const [local, domain] = email.split('@');
+  if (!local || !domain) return email;
+  if (local.length <= 2) return `${local[0] || '*'}***@${domain}`;
+  return `${local.slice(0, 2)}${'*'.repeat(Math.min(5, Math.max(2, local.length - 2)))}@${domain}`;
+}
+
+// Deduplicate verifyPasswordResetCode across React.StrictMode double-mounts
+const oobVerificationCache = new Map<string, Promise<string>>();
+
+function verifyOobCodeOnce(code: string): Promise<string> {
+  const existing = oobVerificationCache.get(code);
+  if (existing) return existing;
+
+  const pending = verifyPasswordResetCode(auth, code).catch((err) => {
+    // Allow retries on transient network errors
+    if (err?.code === 'auth/network-request-failed') {
+      oobVerificationCache.delete(code);
+    }
+    throw err;
+  });
+  oobVerificationCache.set(code, pending);
+  return pending;
+}
+
+function isKnownAuthorizedHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  return (
+    host === 'localhost' ||
+    host === '127.0.0.1' ||
+    host.endsWith('.firebaseapp.com') ||
+    host.endsWith('.web.app')
+  );
+}
 
 /**
  * Helper to check if a Google account is already logged in on the phone/device
@@ -182,12 +231,13 @@ export default function SignUpTab({
   const [copiedDomain, setCopiedDomain] = useState(false);
   const [isSigningIn, setIsSigningIn] = useState(false);
 
-  // Authentication Mode: 'login' or 'signup'
-  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
+  // Authentication Mode: 'login', 'signup', or 'forgot'
+  const [authMode, setAuthMode] = useState<'login' | 'signup' | 'forgot'>('login');
 
   // Sign Up Form State
   const [signupFullName, setSignupFullName] = useState('');
   const [signupUsername, setSignupUsername] = useState('');
+  const [signupEmail, setSignupEmail] = useState('');
   const [signupPhone, setSignupPhone] = useState('');
   const [signupPhoneError, setSignupPhoneError] = useState<string | null>(null);
   const [signupPassword, setSignupPassword] = useState('');
@@ -203,6 +253,28 @@ export default function SignUpTab({
   const [loginPassword, setLoginPassword] = useState('');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
+
+  // Forgot Password (Email Password Reset Link — sent to email only)
+  const [forgotStep, setForgotStep] = useState<'identify' | 'link_sent' | 'reset'>('identify');
+  const [forgotIdentifier, setForgotIdentifier] = useState('');
+  const [forgotAccount, setForgotAccount] = useState<UserAccount | null>(null);
+  const [forgotTargetEmail, setForgotTargetEmail] = useState('');
+  const [forgotDisplayEmail, setForgotDisplayEmail] = useState('');
+  const [firebaseOobCode, setFirebaseOobCode] = useState<string | null>(null);
+  const [forgotSending, setForgotSending] = useState(false);
+  const [forgotResetting, setForgotResetting] = useState(false);
+  const [isVerifyingResetLink, setIsVerifyingResetLink] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [forgotNewPassword, setForgotNewPassword] = useState('');
+  const [forgotConfirmPassword, setForgotConfirmPassword] = useState('');
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotError, setForgotError] = useState<string | null>(null);
+  const [passwordResetSuccessUser, setPasswordResetSuccessUser] = useState<string | null>(null);
+
+  const forgotSendLockRef = useRef(false);
+  const forgotResetLockRef = useRef(false);
+
+  const forgotPasswordValidation = validateStrongPassword(forgotNewPassword, forgotAccount?.username);
 
   const deviceGoogleSession = getExistingDeviceGoogleSession();
 
@@ -228,8 +300,7 @@ export default function SignUpTab({
   const handleGoogleSignIn = async () => {
     const existing = getExistingDeviceGoogleSession();
     if (existing) {
-      onLogin(existing);
-      onNavigateTab('dashboard');
+      onLogin(existing, 'dashboard');
       return;
     }
 
@@ -237,8 +308,7 @@ export default function SignUpTab({
       setIsSigningIn(true);
       try {
         await signInWithAndroidWebView((session) => {
-          onLogin(session);
-          onNavigateTab('dashboard');
+          onLogin(session, 'dashboard');
         });
       } catch {
         setShowGoogleModal(true);
@@ -249,8 +319,7 @@ export default function SignUpTab({
       setIsSigningIn(true);
       try {
         await signInWithDesktopBrowser((session) => {
-          onLogin(session);
-          onNavigateTab('dashboard');
+          onLogin(session, 'dashboard');
         });
       } catch (error: any) {
         console.warn("Desktop Google Sign-In caught error:", error?.code, error?.message);
@@ -278,21 +347,376 @@ export default function SignUpTab({
 
   const handleModalSuccess = (session: AuthSession) => {
     setShowGoogleModal(false);
-    onLogin(session);
-    onNavigateTab('dashboard');
+    onLogin(session, 'dashboard');
   };
 
-  // Sign Up Handler with strict 10-digit & anti-fake phone validation
-  const handleSignupSubmit = (e: React.FormEvent) => {
+  const clearResetQueryParamsFromUrl = () => {
+    if (typeof window === 'undefined') return;
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('resetToken');
+      url.searchParams.delete('mode');
+      url.searchParams.delete('oobCode');
+      url.searchParams.delete('apiKey');
+      url.searchParams.delete('lang');
+      const cleaned = `${url.pathname}${url.search}${url.hash || '#signup'}`;
+      window.history.replaceState(window.history.state, '', cleaned);
+    } catch {
+      // ignore history errors
+    }
+  };
+
+  // Cooldown timer for Resend Reset Link (prevents accidental invalidation of the active email link)
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = window.setTimeout(() => {
+      setResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => window.clearTimeout(timer);
+  }, [resendCooldown]);
+
+  // Detect Firebase email password reset callback (?mode=resetPassword&oobCode=...)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const modeParam = params.get('mode');
+    const oobCodeParam = params.get('oobCode');
+
+    if (modeParam !== 'resetPassword' || !oobCodeParam) return;
+
+    let cancelled = false;
+    setAuthMode('forgot');
+    setForgotError(null);
+    setIsVerifyingResetLink(true);
+
+    verifyOobCodeOnce(oobCodeParam)
+      .then((verifiedEmail) => {
+        if (cancelled) return;
+        const accounts = getStoredAccounts();
+        const matched = accounts.find(
+          (acc) => acc.email && acc.email.toLowerCase() === verifiedEmail.toLowerCase()
+        ) || null;
+        setForgotAccount(matched);
+        setForgotTargetEmail(verifiedEmail);
+        setForgotDisplayEmail(verifiedEmail);
+        setFirebaseOobCode(oobCodeParam);
+        setForgotNewPassword('');
+        setForgotConfirmPassword('');
+        setForgotStep('reset');
+        setIsVerifyingResetLink(false);
+      })
+      .catch((err: any) => {
+        if (cancelled) return;
+        setIsVerifyingResetLink(false);
+        setForgotStep('identify');
+        if (err?.code === 'auth/network-request-failed') {
+          setForgotError(
+            t(
+              'Network error while verifying your reset link. Please check your internet connection and reload.',
+              'रीसेट लिंक सत्यापित करते समय नेटवर्क त्रुटि। कृपया अपना इंटरनेट जांचें और पृष्ठ पुनः लोड करें।'
+            )
+          );
+          return;
+        }
+        if (err?.code === 'auth/expired-action-code') {
+          setForgotError(
+            t(
+              'This password reset link has expired. Please request a new reset link below.',
+              'यह पासवर्ड रीसेट लिंक समाप्त हो चुका है। कृपया नीचे से नया रीसेट लिंक मंगाएं।'
+            )
+          );
+        } else {
+          setForgotError(
+            t(
+              'This reset link has already been used or replaced by a newer email. If you sent multiple requests, please open the LATEST email in your inbox or request a fresh link.',
+              'यह रीसेट लिंक पहले ही उपयोग हो चुका है या नए ईमेल द्वारा बदल दिया गया है। कृपया अपने इनबॉक्स का सबसे नया (Latest) ईमेल खोलें या नया लिंक मंगाएं।'
+            )
+          );
+        }
+        clearResetQueryParamsFromUrl();
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const openForgotPasswordFlow = () => {
+    setAuthMode('forgot');
+    setForgotStep('identify');
+    setForgotIdentifier(loginIdentifier.trim());
+    setForgotAccount(null);
+    setForgotTargetEmail('');
+    setForgotDisplayEmail('');
+    setFirebaseOobCode(null);
+    setResendCooldown(0);
+    setForgotNewPassword('');
+    setForgotConfirmPassword('');
+    setForgotError(null);
+    setLoginError(null);
+  };
+
+  const dispatchEmailResetLink = async (rawInput: string) => {
+    if (forgotSendLockRef.current || forgotSending) return;
+    setForgotError(null);
+    const trimmed = rawInput.trim();
+    const lower = trimmed.toLowerCase();
+
+    if (!lower) {
+      setForgotError(
+        t(
+          'Please enter your registered email address (or username linked with an email).',
+          'कृपया अपना पंजीकृत ईमेल पता (या ईमेल से जुड़ा यूज़रनेम) दर्ज करें।'
+        )
+      );
+      return;
+    }
+
+    if (lower === 'adminabhi') {
+      setForgotError(
+        t(
+          'Admin portal credentials are managed by Samaj Technical Committee.',
+          'एडमिन पासवर्ड तकनीकी समिति द्वारा प्रबंधित किया जाता है।'
+        )
+      );
+      return;
+    }
+
+    const accounts = getStoredAccounts();
+    const cleanedPhone = sanitizePhoneInput(trimmed);
+    const matched = accounts.find(
+      (acc) =>
+        (acc.email && acc.email.toLowerCase() === lower) ||
+        acc.username.toLowerCase() === lower ||
+        (acc.phone && (acc.phone === lower || (cleanedPhone.length === 10 && acc.phone === cleanedPhone)))
+    ) || null;
+
+    const isDirectEmail = EMAIL_REGEX.test(lower);
+    let resolvedEmail = '';
+
+    if (matched?.email) {
+      resolvedEmail = matched.email.trim().toLowerCase();
+    } else if (isDirectEmail) {
+      resolvedEmail = lower;
+    } else if (matched && !matched.email) {
+      setForgotError(
+        t(
+          'No email address is saved on this username yet. Please enter your email address directly to receive the reset link.',
+          'इस यूज़रनेम में ईमेल पता सहेजा नहीं गया है। रीसेट लिंक पाने के लिए कृपया अपना ईमेल पता दर्ज करें।'
+        )
+      );
+      return;
+    } else {
+      setForgotError(
+        t(
+          'Please enter a valid registered email address (e.g. name@gmail.com).',
+          'कृपया एक मान्य पंजीकृत ईमेल पता दर्ज करें (जैसे name@gmail.com)।'
+        )
+      );
+      return;
+    }
+
+    forgotSendLockRef.current = true;
+    setForgotSending(true);
+    try {
+      if (typeof window !== 'undefined' && isKnownAuthorizedHost(window.location.hostname)) {
+        try {
+          await sendPasswordResetEmail(auth, resolvedEmail, {
+            url: `${window.location.origin}${window.location.pathname}#signup`,
+            handleCodeInApp: false
+          });
+        } catch (continueErr: any) {
+          if (
+            continueErr?.code === 'auth/unauthorized-continue-uri' ||
+            continueErr?.code === 'auth/invalid-continue-uri'
+          ) {
+            await sendPasswordResetEmail(auth, resolvedEmail);
+          } else {
+            throw continueErr;
+          }
+        }
+      } else {
+        await sendPasswordResetEmail(auth, resolvedEmail);
+      }
+    } catch (err: any) {
+      forgotSendLockRef.current = false;
+      setForgotSending(false);
+      if (err?.code === 'auth/invalid-email') {
+        setForgotError(t('Please enter a valid email address.', 'कृपया एक मान्य ईमेल पता दर्ज करें।'));
+        return;
+      }
+      if (err?.code === 'auth/user-not-found') {
+        setForgotError(
+          t(
+            'No email account found with this address. Please check your email or sign up first.',
+            'इस ईमेल पते से कोई खाता नहीं मिला। कृपया जांचें या नया खाता बनाएं।'
+          )
+        );
+        return;
+      }
+      if (err?.code === 'auth/too-many-requests') {
+        setForgotError(
+          t(
+            'Too many reset requests sent. Please wait a few minutes and check your email inbox.',
+            'बहुत अधिक अनुरोध भेजे गए हैं। कृपया कुछ मिनट प्रतीक्षा करें और अपना ईमेल जांचें।'
+          )
+        );
+        return;
+      }
+      if (err?.code === 'auth/network-request-failed') {
+        setForgotError(
+          t(
+            'Network error while sending the reset email. Please check your internet connection.',
+            'रीसेट ईमेल भेजने में नेटवर्क त्रुटि। कृपया अपना इंटरनेट कनेक्शन जांचें।'
+          )
+        );
+        return;
+      }
+      setForgotError(
+        err?.message ||
+          t(
+            'Could not send password reset email right now. Please try again shortly.',
+            'अभी पासवर्ड रीसेट ईमेल नहीं भेजा जा सका। कृपया थोड़ी देर बाद पुनः प्रयास करें।'
+          )
+      );
+      return;
+    }
+
+    forgotSendLockRef.current = false;
+    setForgotSending(false);
+    setForgotAccount(matched);
+    setForgotTargetEmail(resolvedEmail);
+    setForgotDisplayEmail(isDirectEmail ? resolvedEmail : maskEmailAddress(resolvedEmail));
+    setFirebaseOobCode(null);
+    setResendCooldown(60);
+    setForgotStep('link_sent');
+  };
+
+  const handleForgotSendResetLink = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await dispatchEmailResetLink(forgotIdentifier);
+  };
+
+  const handleForgotResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (forgotResetLockRef.current || forgotResetting) return;
+    setForgotError(null);
+
+    if (!forgotTargetEmail && !forgotAccount) {
+      setForgotStep('identify');
+      return;
+    }
+
+    const check = validateStrongPassword(forgotNewPassword, forgotAccount?.username);
+    if (!check.valid) {
+      setForgotError(lang === 'hi' ? (check.errorHi || '') : (check.errorEn || ''));
+      return;
+    }
+
+    if (forgotNewPassword !== forgotConfirmPassword) {
+      setForgotError(t('Passwords do not match.', 'दोनों पासवर्ड मेल नहीं खाते हैं।'));
+      return;
+    }
+
+    if (firebaseOobCode) {
+      forgotResetLockRef.current = true;
+      setForgotResetting(true);
+      try {
+        await confirmPasswordReset(auth, firebaseOobCode, forgotNewPassword);
+        oobVerificationCache.delete(firebaseOobCode);
+      } catch (err: any) {
+        forgotResetLockRef.current = false;
+        setForgotResetting(false);
+        if (err?.code === 'auth/expired-action-code') {
+          setForgotError(
+            t(
+              'Your reset link has expired. Please request a fresh password reset email.',
+              'आपका रीसेट लिंक समाप्त हो चुका है। कृपया नया पासवर्ड रीसेट ईमेल मंगाएं।'
+            )
+          );
+        } else if (err?.code === 'auth/invalid-action-code') {
+          setForgotError(
+            t(
+              'This reset link has already been used or was superseded by a newer link. Please check your latest email or request a new link.',
+              'यह रीसेट लिंक पहले ही उपयोग हो चुका है या नया लिंक आ चुका है। कृपया सबसे नया ईमेल जांचें या नया लिंक मंगाएं।'
+            )
+          );
+        } else if (err?.code === 'auth/network-request-failed') {
+          setForgotError(
+            t(
+              'Network error while updating password. Please check your connection and try again.',
+              'पासवर्ड अपडेट करते समय नेटवर्क त्रुटि। कृपया कनेक्शन जांच कर पुनः प्रयास करें।'
+            )
+          );
+        } else {
+          setForgotError(
+            err?.message ||
+              t('Reset link expired or invalid. Please request a new reset link.', 'रीसेट लिंक समाप्त हो गया है। कृपया नया लिंक प्राप्त करें।')
+          );
+        }
+        return;
+      } finally {
+        forgotResetLockRef.current = false;
+        setForgotResetting(false);
+      }
+    }
+
+    // Update local Samaj account password if account exists
+    const accounts = getStoredAccounts();
+    const hasLocalMatch = accounts.some(
+      (acc) =>
+        (forgotAccount && (acc.id === forgotAccount.id || acc.username.toLowerCase() === forgotAccount.username.toLowerCase())) ||
+        (acc.email && forgotTargetEmail && acc.email.toLowerCase() === forgotTargetEmail.toLowerCase())
+    );
+
+    if (hasLocalMatch) {
+      const updatedAccounts = accounts.map((acc) => {
+        const isMatch =
+          (forgotAccount && (acc.id === forgotAccount.id || acc.username.toLowerCase() === forgotAccount.username.toLowerCase())) ||
+          (acc.email && forgotTargetEmail && acc.email.toLowerCase() === forgotTargetEmail.toLowerCase());
+        return isMatch ? { ...acc, password: forgotNewPassword } : acc;
+      });
+      try {
+        localStorage.setItem('samaj_user_accounts', JSON.stringify(updatedAccounts));
+      } catch (err) {
+        console.error('Error saving reset password:', err);
+      }
+    }
+
+    clearResetQueryParamsFromUrl();
+
+    const identifierForLogin = forgotAccount?.username || forgotTargetEmail;
+    setLoginIdentifier(identifierForLogin);
+    setLoginPassword('');
+    setSignupSuccessInfo(null);
+    setPasswordResetSuccessUser(identifierForLogin);
+    setFirebaseOobCode(null);
+    setAuthMode('login');
+    setLoginError(null);
+  };
+
+  // Sign Up Handler with strict email, 10-digit phone & Firebase email registration sync
+  const handleSignupSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSignupError(null);
     setSignupPhoneError(null);
 
     const cleanUsername = signupUsername.trim().toLowerCase();
     const cleanFullName = signupFullName.trim();
+    const cleanEmail = signupEmail.trim().toLowerCase();
 
     if (!cleanFullName) {
       setSignupError(t('Please enter your full name.', 'कृपया अपना पूरा नाम दर्ज करें।'));
+      return;
+    }
+
+    if (!cleanEmail || !EMAIL_REGEX.test(cleanEmail)) {
+      setSignupError(
+        t(
+          'Please enter a valid email address (used for password reset links).',
+          'कृपया एक मान्य ईमेल पता दर्ज करें (पासवर्ड रीसेट लिंक के लिए आवश्यक)।'
+        )
+      );
       return;
     }
 
@@ -329,17 +753,32 @@ export default function SignUpTab({
 
     const accounts = getStoredAccounts();
     const existing = accounts.find(
-      acc => acc.username.toLowerCase() === cleanUsername || (phoneCheck.cleaned && acc.phone && acc.phone === phoneCheck.cleaned)
+      acc =>
+        acc.username.toLowerCase() === cleanUsername ||
+        (cleanEmail && acc.email && acc.email.toLowerCase() === cleanEmail) ||
+        (phoneCheck.cleaned && acc.phone && acc.phone === phoneCheck.cleaned)
     );
 
     if (existing) {
       setSignupError(
         t(
-          `Username "${cleanUsername}" or mobile number is already registered. Please choose another or log in.`,
-          `यूज़रनेम "${cleanUsername}" या मोबाइल नंबर पहले से पंजीकृत है। कृपया दूसरा चुनें या लॉग इन करें।`
+          `Username "${cleanUsername}", email, or mobile number is already registered. Please choose another or log in.`,
+          `यूज़रनेम "${cleanUsername}", ईमेल या मोबाइल नंबर पहले से पंजीकृत है। कृपया दूसरा चुनें या लॉग इन करें।`
         )
       );
       return;
+    }
+
+    // Sync Email/Password credentials to Firebase Auth (via isolated secondaryAuth)
+    // so sendPasswordResetEmail can deliver real password reset emails to their inbox.
+    try {
+      const cred = await createUserWithEmailAndPassword(secondaryAuth, cleanEmail, signupPassword);
+      if (cred.user) {
+        await updateProfile(cred.user, { displayName: cleanFullName }).catch(() => {});
+        await signOut(secondaryAuth).catch(() => {});
+      }
+    } catch {
+      // Proceed cleanly if Firebase Email/Password sign-in is disabled or already registered
     }
 
     // Create and save account
@@ -348,6 +787,7 @@ export default function SignUpTab({
       username: cleanUsername,
       fullName: cleanFullName,
       password: signupPassword,
+      email: cleanEmail,
       phone: phoneCheck.cleaned || undefined,
       createdAt: new Date().toISOString()
     };
@@ -374,8 +814,8 @@ export default function SignUpTab({
     setAuthMode('login');
   };
 
-  // Log In Handler
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  // Log In Handler (supports local accounts and passwords updated via Firebase email reset link)
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError(null);
 
@@ -384,7 +824,7 @@ export default function SignUpTab({
     const password = loginPassword.trim();
 
     if (!identifier) {
-      setLoginError(t('Please enter your username or mobile number.', 'कृपया अपना यूज़रनेम या मोबाइल नंबर दर्ज करें।'));
+      setLoginError(t('Please enter your username, email, or mobile number.', 'कृपया अपना यूज़रनेम, ईमेल या मोबाइल नंबर दर्ज करें।'));
       return;
     }
 
@@ -407,8 +847,7 @@ export default function SignUpTab({
         verified: true
       };
 
-      onLogin(adminSession);
-      onNavigateTab('admin');
+      onLogin(adminSession, 'admin');
       return;
     }
 
@@ -420,32 +859,71 @@ export default function SignUpTab({
       (acc.email && acc.email.toLowerCase() === identifier)
     );
 
+    const emailCandidate = matched?.email || (EMAIL_REGEX.test(identifier) ? identifier : '');
+
+    if (matched && matched.password === password) {
+      const session: AuthSession = {
+        method: 'UsernamePassword',
+        name: matched.fullName || matched.username,
+        username: matched.username,
+        phone: matched.phone || '',
+        email: matched.email || '',
+        loggedInAt: new Date().toISOString(),
+        verified: true
+      };
+      onLogin(session, 'dashboard');
+      return;
+    }
+
+    // Fallback check against Firebase Auth (e.g. if password was updated via emailed reset link)
+    if (emailCandidate) {
+      try {
+        const cred = await signInWithEmailAndPassword(secondaryAuth, emailCandidate, password);
+        if (cred.user) {
+          const displayName = cred.user.displayName || matched?.fullName || emailCandidate.split('@')[0];
+          await signOut(secondaryAuth).catch(() => {});
+
+          if (matched) {
+            const synced = accounts.map((acc) =>
+              acc.id === matched.id ? { ...acc, password } : acc
+            );
+            try {
+              localStorage.setItem('samaj_user_accounts', JSON.stringify(synced));
+            } catch {
+              // ignore
+            }
+          }
+
+          const session: AuthSession = {
+            method: 'UsernamePassword',
+            name: displayName,
+            username: matched?.username || emailCandidate.split('@')[0],
+            phone: matched?.phone || '',
+            email: emailCandidate,
+            loggedInAt: new Date().toISOString(),
+            verified: true
+          };
+          onLogin(session, 'dashboard');
+          return;
+        }
+      } catch {
+        // Invalid Firebase password or not a Firebase Email/Password account
+      }
+    }
+
     if (!matched) {
-      setLoginError(t('This username or mobile number is not registered. Please sign up first.', 'यह यूज़रनेम या मोबाइल नंबर पंजीकृत नहीं है। कृपया पहले साइन अप करें।'));
+      setLoginError(t('This username, email, or mobile number is not registered. Please sign up first.', 'यह यूज़रनेम, ईमेल या मोबाइल नंबर पंजीकृत नहीं है। कृपया पहले साइन अप करें।'));
       return;
     }
 
-    if (matched.password !== password) {
-      setLoginError(t('Incorrect password. Please verify and try again.', 'गलत पासवर्ड। कृपया जांचें और पुनः प्रयास करें।'));
-      return;
-    }
-
-    // Successful login
-    const session: AuthSession = {
-      method: 'UsernamePassword',
-      name: matched.fullName || matched.username,
-      username: matched.username,
-      phone: matched.phone || '',
-      email: matched.email || '',
-      loggedInAt: new Date().toISOString(),
-      verified: true
-    };
-
-    onLogin(session);
-    onNavigateTab('dashboard');
+    setLoginError(t('Incorrect password. Please verify and try again.', 'गलत पासवर्ड। कृपया जांचें और पुनः प्रयास करें।'));
   };
 
-  if (authSession) {
+  const isProcessingEmailResetCallback =
+    authMode === 'forgot' &&
+    (forgotStep === 'reset' || Boolean(firebaseOobCode) || isVerifyingResetLink || Boolean(forgotError));
+
+  if (authSession && !isProcessingEmailResetCallback) {
     return (
       <div className="space-y-6 max-w-lg mx-auto py-3 sm:py-6 px-0 sm:px-4">
         <div className="bg-white p-5 sm:p-8 rounded-3xl border border-stone-200/90 shadow-sm space-y-6 text-center">
@@ -654,7 +1132,7 @@ export default function SignUpTab({
               setLoginError(null);
             }}
             className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-              authMode === 'login'
+              authMode === 'login' || authMode === 'forgot'
                 ? 'bg-white text-[#4c0d1b] shadow-xs border border-stone-200/80 font-bold'
                 : 'text-stone-500 hover:text-stone-800'
             }`}
@@ -668,6 +1146,7 @@ export default function SignUpTab({
             onClick={() => {
               setAuthMode('signup');
               setSignupError(null);
+              setPasswordResetSuccessUser(null);
             }}
             className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               authMode === 'signup'
@@ -679,6 +1158,28 @@ export default function SignUpTab({
             <span>{t('Sign Up', 'साइन अप')}</span>
           </button>
         </div>
+
+        {/* ========================================================= */}
+        {/* SUCCESS NOTIFICATION AFTER PASSWORD RESET                 */}
+        {/* ========================================================= */}
+        {passwordResetSuccessUser && authMode === 'login' && (
+          <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-left space-y-1 animate-in fade-in">
+            <div className="flex items-start gap-2.5">
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+              <div>
+                <h4 className="font-bold text-emerald-950 text-xs">
+                  {t('Password Updated Successfully!', 'पासवर्ड सफलतापूर्वक बदल गया!')}
+                </h4>
+                <p className="text-[11px] text-emerald-800 mt-0.5">
+                  {t(
+                    `New password saved for @${passwordResetSuccessUser}. Please sign in below.`,
+                    `@${passwordResetSuccessUser} के लिए नया पासवर्ड सहेजा गया है। नीचे साइन इन करें।`
+                  )}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ========================================================= */}
         {/* SUCCESS NOTIFICATION AFTER SIGN UP                        */}
@@ -718,13 +1219,13 @@ export default function SignUpTab({
             <div>
               <label className="block text-xs font-bold text-stone-700 mb-1 flex items-center gap-1.5">
                 <User className="w-3.5 h-3.5 text-stone-400" />
-                <span>{t('Username or Mobile Number', 'यूज़रनेम या मोबाइल नंबर')}</span>
+                <span>{t('Username, Email, or Mobile Number', 'यूज़रनेम, ईमेल या मोबाइल नंबर')}</span>
               </label>
               <input
                 type="text"
                 value={loginIdentifier}
                 onChange={(e) => setLoginIdentifier(e.target.value)}
-                placeholder={t('e.g. abhiruchi97 or 9826012345', 'उदा. abhiruchi97 या 9826012345')}
+                placeholder={t('e.g. abhiruchi97, email, or 9826012345', 'उदा. abhiruchi97, ईमेल या 9826012345')}
                 required
                 className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#851834] bg-stone-50/50"
               />
@@ -755,6 +1256,16 @@ export default function SignUpTab({
                   className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#851834] bg-stone-50/50"
                 />
               </div>
+              <div className="flex justify-end mt-1.5">
+                <button
+                  type="button"
+                  onClick={openForgotPasswordFlow}
+                  className="text-[11px] font-bold text-[#851834] hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <KeyRound className="w-3 h-3" />
+                  <span>{t('Forgot Password?', 'पासवर्ड भूल गए?')}</span>
+                </button>
+              </div>
             </div>
 
             <button
@@ -784,6 +1295,261 @@ export default function SignUpTab({
         )}
 
         {/* ========================================================= */}
+        {/* FORM C: FORGOT PASSWORD (EMAIL PASSWORD RESET LINK)       */}
+        {/* ========================================================= */}
+        {authMode === 'forgot' && (
+          <div className="space-y-4 text-left animate-in fade-in">
+            <div className="flex items-center justify-between border-b border-stone-100 pb-2.5">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-rose-50 text-[#851834] flex items-center justify-center border border-rose-200">
+                  <Mail className="w-3.5 h-3.5" />
+                </div>
+                <div>
+                  <h3 className="text-xs font-bold text-stone-900">
+                    {t('Email Password Reset Link', 'ईमेल पासवर्ड रीसेट लिंक')}
+                  </h3>
+                  <p className="text-[10px] text-stone-500">
+                    {forgotStep === 'identify'
+                      ? t('Enter email to receive password reset link', 'रीसेट लिंक पाने के लिए ईमेल दर्ज करें')
+                      : forgotStep === 'link_sent'
+                        ? t('Reset link dispatched to your email', 'आपके ईमेल पर रीसेट लिंक भेजा गया')
+                        : t('Set a new strong password for your account', 'अपने खाते के लिए नया मजबूत पासवर्ड चुनें')}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  clearResetQueryParamsFromUrl();
+                  setAuthMode('login');
+                  setForgotError(null);
+                }}
+                className="text-[11px] font-semibold text-stone-500 hover:text-stone-800 flex items-center gap-1 cursor-pointer"
+              >
+                <ArrowLeft className="w-3 h-3" />
+                <span>{t('Back', 'वापस')}</span>
+              </button>
+            </div>
+
+            {forgotError && (
+              <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
+                <span>{forgotError}</span>
+              </div>
+            )}
+
+            {isVerifyingResetLink && (
+              <div className="p-5 bg-stone-50 border border-stone-200 rounded-2xl text-center space-y-2 animate-in fade-in">
+                <RefreshCw className="w-6 h-6 animate-spin text-[#851834] mx-auto" />
+                <p className="text-xs font-semibold text-stone-700">
+                  {t('Verifying your password reset link...', 'आपके पासवर्ड रीसेट लिंक का सत्यापन हो रहा है...')}
+                </p>
+              </div>
+            )}
+
+            {!isVerifyingResetLink && forgotStep === 'identify' && (
+              <form onSubmit={handleForgotSendResetLink} className="space-y-3.5">
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1 flex items-center gap-1.5">
+                    <Mail className="w-3.5 h-3.5 text-stone-400" />
+                    <span>{t('Registered Email Address (or Username)', 'पंजीकृत ईमेल पता (या यूज़रनेम)')}</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={forgotIdentifier}
+                    onChange={(e) => setForgotIdentifier(e.target.value)}
+                    placeholder={t('e.g. abhiruchirathore97@gmail.com', 'उदा. abhiruchirathore97@gmail.com')}
+                    required
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#851834] bg-stone-50/50"
+                  />
+                  <p className="text-[10px] text-stone-400 mt-1">
+                    {t(
+                      'We will send a secure single-use password reset link to your email.',
+                      'हम आपके ईमेल पर एक सुरक्षित सिंगल-यूज़ पासवर्ड रीसेट लिंक भेजेंगे।'
+                    )}
+                  </p>
+                </div>
+                <button
+                  type="submit"
+                  disabled={forgotSending}
+                  className="w-full bg-gradient-to-r from-[#6e1628] via-[#851834] to-[#6e1628] disabled:opacity-60 text-amber-100 font-bold py-2.5 rounded-xl text-xs shadow-sm cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  {forgotSending ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                  <span>
+                    {forgotSending
+                      ? t('Sending Reset Link...', 'रीसेट लिंक भेजा जा रहा है...')
+                      : t('Send Password Reset Link', 'पासवर्ड रीसेट लिंक भेजें')}
+                  </span>
+                </button>
+              </form>
+            )}
+
+            {!isVerifyingResetLink && forgotStep === 'link_sent' && (
+              <div className="space-y-4 animate-in fade-in">
+                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 space-y-2 text-xs">
+                  <div className="flex items-start gap-2.5">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <p className="font-bold text-emerald-950">
+                        {t('Password Reset Link Sent to Your Email', 'आपके ईमेल पर पासवर्ड रीसेट लिंक भेजा गया है')}
+                      </p>
+                      <p className="text-[11px] text-emerald-800 break-all">
+                        {t('Email:', 'ईमेल:')} <strong className="font-semibold">{forgotDisplayEmail || forgotTargetEmail}</strong>
+                      </p>
+                      <p className="text-[11px] text-emerald-700 leading-relaxed pt-0.5">
+                        {t(
+                          'Please open the latest password reset email sent to your inbox (also check Spam/Junk folder) and click the link once.',
+                          'नया पासवर्ड सेट करने के लिए कृपया अपने ईमेल इनबॉक्स (या स्पैम/जंक फ़ोल्डर) में आया सबसे नया रीसेट ईमेल खोलें और लिंक पर एक बार क्लिक करें।'
+                        )}
+                      </p>
+                      <p className="text-[10px] text-amber-800 bg-amber-50 border border-amber-200/80 rounded-lg px-2.5 py-1.5 mt-1.5 leading-relaxed">
+                        {t(
+                          'Important: Sending another reset email automatically invalidates any previous email link. Wait at least 1 minute before resending.',
+                          'महत्वपूर्ण: नया रीसेट लिंक भेजने पर पुराना लिंक स्वतः अमान्य हो जाता है। पुनः भेजने से पहले कृपया 1 मिनट प्रतीक्षा करें।'
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setForgotStep('identify');
+                      setForgotError(null);
+                    }}
+                    className="px-3.5 py-2 rounded-xl border border-stone-200 text-stone-700 font-semibold text-[11px] hover:bg-stone-50 cursor-pointer"
+                  >
+                    {t('Use Different Email', 'दूसरा ईमेल बदलें')}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={forgotSending || resendCooldown > 0}
+                    onClick={() => dispatchEmailResetLink(forgotTargetEmail || forgotIdentifier)}
+                    className="px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-[#851834] border border-rose-200 font-bold text-[11px] flex items-center gap-1 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${forgotSending ? 'animate-spin' : ''}`} />
+                    <span>
+                      {resendCooldown > 0
+                        ? t(`Resend in ${resendCooldown}s`, `${resendCooldown} सेकंड में पुनः भेजें`)
+                        : t('Resend Reset Link', 'लिंक पुनः भेजें')}
+                    </span>
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearResetQueryParamsFromUrl();
+                    setAuthMode('login');
+                    setForgotError(null);
+                  }}
+                  className="w-full bg-gradient-to-r from-[#6e1628] via-[#851834] to-[#6e1628] text-amber-100 font-bold py-2.5 rounded-xl text-xs shadow-sm cursor-pointer"
+                >
+                  {t('Back to Sign In', 'साइन इन पर वापस जाएं')}
+                </button>
+              </div>
+            )}
+
+            {!isVerifyingResetLink && forgotStep === 'reset' && (
+              <form onSubmit={handleForgotResetPassword} className="space-y-3.5">
+                <div className="text-xs bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-stone-700 break-all">
+                  {t('Reset link verified for', 'रीसेट लिंक सत्यापित:')}{' '}
+                  <strong className="font-mono text-[#6e1628]">
+                    {forgotAccount ? `@${forgotAccount.username}` : forgotTargetEmail}
+                  </strong>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1 flex items-center justify-between">
+                    <span>{t('New Strong Password *', 'नया मजबूत पासवर्ड *')}</span>
+                    <button
+                      type="button"
+                      onClick={() => setShowForgotPassword(!showForgotPassword)}
+                      className="text-[10px] text-stone-400 hover:text-stone-600 cursor-pointer"
+                    >
+                      {showForgotPassword ? t('Hide', 'छिपाएं') : t('Show', 'दिखाएं')}
+                    </button>
+                  </label>
+                  <input
+                    type={showForgotPassword ? 'text' : 'password'}
+                    value={forgotNewPassword}
+                    onChange={(e) => setForgotNewPassword(e.target.value)}
+                    placeholder={t('e.g. Rathore@2026', 'उदा. Rathore@2026')}
+                    required
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#851834] bg-stone-50/50"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-stone-700 mb-1">
+                    {t('Confirm New Password *', 'नए पासवर्ड की पुष्टि करें *')}
+                  </label>
+                  <input
+                    type={showForgotPassword ? 'text' : 'password'}
+                    value={forgotConfirmPassword}
+                    onChange={(e) => setForgotConfirmPassword(e.target.value)}
+                    placeholder={t('Re-enter new password', 'नया पासवर्ड पुनः दर्ज करें')}
+                    required
+                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#851834] bg-stone-50/50"
+                  />
+                </div>
+
+                <div className="bg-stone-50 border border-stone-200 rounded-xl p-3 space-y-2 text-[11px]">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-stone-700">{t('Password Strength:', 'पासवर्ड मजबूती:')}</span>
+                    <span className={`font-bold ${
+                      forgotPasswordValidation.valid
+                        ? 'text-emerald-700'
+                        : forgotPasswordValidation.score >= 3
+                          ? 'text-amber-700'
+                          : 'text-rose-600'
+                    }`}>
+                      {forgotPasswordValidation.valid
+                        ? t('Strong ✓', 'मजबूत ✓')
+                        : forgotPasswordValidation.score >= 3
+                          ? t('Medium', 'मध्यम')
+                          : t('Weak', 'कमज़ोर')}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1 text-[10px]">
+                    <span className={forgotPasswordValidation.checks.minLength ? 'text-emerald-700 font-semibold' : 'text-stone-500'}>
+                      {forgotPasswordValidation.checks.minLength ? '✓' : '○'} {t('8+ characters', '8+ अक्षर')}
+                    </span>
+                    <span className={forgotPasswordValidation.checks.hasUpper ? 'text-emerald-700 font-semibold' : 'text-stone-500'}>
+                      {forgotPasswordValidation.checks.hasUpper ? '✓' : '○'} {t('Uppercase (A–Z)', 'बड़ा अक्षर')}
+                    </span>
+                    <span className={forgotPasswordValidation.checks.hasLower ? 'text-emerald-700 font-semibold' : 'text-stone-500'}>
+                      {forgotPasswordValidation.checks.hasLower ? '✓' : '○'} {t('Lowercase (a–z)', 'छोटा अक्षर')}
+                    </span>
+                    <span className={forgotPasswordValidation.checks.hasNumber ? 'text-emerald-700 font-semibold' : 'text-stone-500'}>
+                      {forgotPasswordValidation.checks.hasNumber ? '✓' : '○'} {t('Number (0–9)', 'अंक (0–9)')}
+                    </span>
+                    <span className={`col-span-2 ${forgotPasswordValidation.checks.hasSpecial ? 'text-emerald-700 font-semibold' : 'text-stone-500'}`}>
+                      {forgotPasswordValidation.checks.hasSpecial ? '✓' : '○'} {t('Special symbol (@, #, $, !, %)', 'विशेष चिह्न (@, #, $, !, %)')}
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={forgotResetting}
+                  className="w-full bg-gradient-to-r from-[#6e1628] via-[#851834] to-[#6e1628] disabled:opacity-60 text-amber-100 font-bold py-2.5 rounded-xl text-xs shadow-sm cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  {forgotResetting && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                  <span>
+                    {forgotResetting
+                      ? t('Updating Password...', 'पासवर्ड अपडेट हो रहा है...')
+                      : t('Update Password & Sign In', 'पासवर्ड अपडेट करें')}
+                  </span>
+                </button>
+              </form>
+            )}
+          </div>
+        )}
+
+        {/* ========================================================= */}
         {/* FORM B: SIGN UP WITH USERNAME & PASSWORD                  */}
         {/* ========================================================= */}
         {authMode === 'signup' && (
@@ -805,6 +1571,21 @@ export default function SignUpTab({
                 value={signupFullName}
                 onChange={(e) => setSignupFullName(e.target.value)}
                 placeholder={t('e.g. Abhiruchi Rathore', 'उदा. अभिरुचि राठौड़')}
+                required
+                className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#851834] bg-stone-50/50"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-stone-700 mb-1 flex items-center gap-1.5">
+                <Mail className="w-3.5 h-3.5 text-stone-400" />
+                <span>{t('Email Address * (for Password Reset Link)', 'ईमेल पता * (पासवर्ड रीसेट लिंक हेतु)')}</span>
+              </label>
+              <input
+                type="email"
+                value={signupEmail}
+                onChange={(e) => setSignupEmail(e.target.value)}
+                placeholder={t('e.g. name@gmail.com', 'उदा. name@gmail.com')}
                 required
                 className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#851834] bg-stone-50/50"
               />

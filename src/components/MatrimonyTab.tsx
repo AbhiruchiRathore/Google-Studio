@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { 
   Search, GraduationCap, Briefcase, Eye, Phone, X, ShieldAlert, Sparkles, 
   UserPlus, Lock, ShieldCheck, ArrowRight, Users, Heart, 
@@ -246,9 +246,38 @@ _Powered by Svayaa_`;
     config.contactAccessMode === 'free' ||
     (!config.subscriptionEnabled && config.contactAccessMode === 'subscription_required');
 
+  const clearModalHistoryEntry = useCallback(() => {
+    if (typeof window !== 'undefined' && window.history.state?.biodataModalId !== undefined) {
+      try {
+        window.history.replaceState({ tab: 'matrimony' }, '', '#matrimony');
+      } catch {
+        // ignore history errors
+      }
+    }
+  }, []);
+
+  // Close Biodata modal gracefully when Android / browser Back button is pressed
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onPopState = (event: PopStateEvent) => {
+      if (event.state?.biodataModalId === undefined) {
+        setSelectedProfileId(null);
+      }
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
   const handleOpenProfile = (id: number | string) => {
     setModalPhotoIndex(0);
     setSelectedProfileId(id);
+    if (typeof window !== 'undefined') {
+      try {
+        window.history.pushState({ tab: 'matrimony', biodataModalId: id }, '', '#matrimony');
+      } catch {
+        // ignore history errors
+      }
+    }
     if (isFreeOpenMode || isStrictPaywallActive) return;
     const isAlreadyUnlocked = unlockedProfiles.includes(id);
     const hasSlots = unlockedProfiles.length < FREE_LIMIT;
@@ -257,8 +286,22 @@ _Powered by Svayaa_`;
     }
   };
 
+  // Dismiss via X button or backdrop: pop our modal history entry cleanly
+  const handleDismissModal = () => {
+    setSelectedProfileId(null);
+    if (typeof window !== 'undefined' && window.history.state?.biodataModalId !== undefined) {
+      try {
+        window.history.back();
+      } catch {
+        clearModalHistoryEntry();
+      }
+    }
+  };
+
+  // Close without calling history.back() when immediately navigating to another tab/modal
   const handleCloseModal = () => {
     setSelectedProfileId(null);
+    clearModalHistoryEntry();
   };
 
   const isProfileAccessible = (id: number | string) => {
@@ -945,14 +988,14 @@ _Powered by Svayaa_`;
       {activeProfile && (
         <div 
           className="fixed inset-0 z-50 bg-stone-950/70 backdrop-blur-xs flex items-start sm:items-center justify-center px-3 sm:px-4 pt-[calc(0.75rem+var(--sat))] pb-[calc(1rem+var(--sab))] overflow-y-auto animate-in fade-in duration-200"
-          onClick={handleCloseModal}
+          onClick={handleDismissModal}
         >
           <div 
             className="bg-white rounded-3xl max-w-xl w-full p-5 sm:p-7 shadow-2xl border border-amber-300/80 relative my-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <button 
-              onClick={handleCloseModal} 
+              onClick={handleDismissModal} 
               className="absolute top-4 right-4 text-stone-400 hover:text-stone-700 p-1 rounded-full transition-colors cursor-pointer"
               aria-label="Close"
             >

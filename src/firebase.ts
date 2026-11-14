@@ -14,3 +14,10 @@ const firebaseConfig = {
 // Initialize Firebase (prevents duplicate initialization errors in Next.js/Vite)
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 export const auth = getAuth(app);
+
+// Secondary isolated auth instance for registering email/password users & verifying credentials
+// without triggering the primary onAuthStateChanged listener unexpectedly.
+const secondaryApp =
+  getApps().find((existing) => existing.name === 'signup-helper') ||
+  initializeApp(firebaseConfig, 'signup-helper');
+export const secondaryAuth = getAuth(secondaryApp);

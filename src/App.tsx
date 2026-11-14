@@ -40,8 +40,17 @@ const VALID_TABS = new Set<TabType>([
   'admin'
 ]);
 
+function hasPasswordResetParams(): boolean {
+  if (typeof window === 'undefined') return false;
+  const params = new URLSearchParams(window.location.search);
+  return Boolean(params.get('mode') === 'resetPassword' && params.get('oobCode'));
+}
+
 function getInitialTabFromUrl(): TabType {
   if (typeof window === 'undefined') return 'matrimony';
+  if (hasPasswordResetParams()) {
+    return 'signup';
+  }
   const hashTab = window.location.hash.replace('#', '') as TabType;
   if (VALID_TABS.has(hashTab) && hashTab !== 'admin') {
     return hashTab;
@@ -60,11 +69,15 @@ export const App: React.FC = () => {
   const [kundaliBoyId, setKundaliBoyId] = useState<number | string | null>(null);
   const [kundaliGirlId, setKundaliGirlId] = useState<number | string | null>(null);
 
-  const navigateToTab = useCallback((nextTab: TabType) => {
+  const navigateToTab = useCallback((nextTab: TabType, options?: { replace?: boolean }) => {
     setCurrentTab((prev) => {
       if (prev !== nextTab && typeof window !== 'undefined') {
         try {
-          window.history.pushState({ tab: nextTab }, '', `#${nextTab}`);
+          if (options?.replace) {
+            window.history.replaceState({ tab: nextTab }, '', `#${nextTab}`);
+          } else {
+            window.history.pushState({ tab: nextTab }, '', `#${nextTab}`);
+          }
         } catch {
           // Ignore history errors in restricted environments
         }
@@ -85,10 +98,10 @@ export const App: React.FC = () => {
       if (!window.history.state?.tab) {
         if (isAndroidEnvironment()) {
           // Push a root guard entry on Android WebView so pressing Back once doesn't immediately close the APK
-          window.history.replaceState({ tab: initialTab, isGuard: true }, '', `#${initialTab}`);
-          window.history.pushState({ tab: initialTab }, '', `#${initialTab}`);
+          window.history.replaceState({ tab: initialTab, isGuard: true }, '', `${window.location.search}#${initialTab}`);
+          window.history.pushState({ tab: initialTab }, '', `${window.location.search}#${initialTab}`);
         } else {
-          window.history.replaceState({ tab: initialTab }, '', `#${initialTab}`);
+          window.history.replaceState({ tab: initialTab }, '', `${window.location.search}#${initialTab}`);
         }
       }
     } catch {
@@ -98,29 +111,42 @@ export const App: React.FC = () => {
     const handlePopState = (event: PopStateEvent) => {
       const stateTab = event.state?.tab as TabType | undefined;
       const hashTab = window.location.hash.replace('#', '') as TabType;
-      const targetTab =
+      let targetTab =
         stateTab && VALID_TABS.has(stateTab)
           ? stateTab
           : VALID_TABS.has(hashTab)
             ? hashTab
             : 'matrimony';
 
+      // Prevent logged-in users from being thrown back onto the signup / sign-out screen on hardware Back
+      if (authSessionRef.current && targetTab === 'signup') {
+        targetTab = 'matrimony';
+        try {
+          window.history.replaceState({ tab: 'matrimony' }, '', '#matrimony');
+        } catch {
+          // ignore
+        }
+      }
+
       // If Android WebView hits the synthetic guard at root, keep user inside app and nudge once
       if (event.state?.isGuard) {
         if (currentTabRef.current !== 'matrimony') {
           setCurrentTab('matrimony');
           window.history.pushState({ tab: 'matrimony' }, '', '#matrimony');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
         } else {
           setBackNotice(true);
           window.history.pushState({ tab: 'matrimony' }, '', '#matrimony');
           setTimeout(() => setBackNotice(false), 2500);
         }
-        window.scrollTo({ top: 0, behavior: 'smooth' });
         return;
       }
 
+      const tabChanged = targetTab !== currentTabRef.current;
       setCurrentTab(targetTab);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      if (tabChanged) {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
     };
 
     window.addEventListener('popstate', handlePopState);
@@ -212,6 +238,8 @@ export const App: React.FC = () => {
     }
     return null;
   });
+  const authSessionRef = useRef<AuthSession | null>(authSession);
+  authSessionRef.current = authSession;
 
   // Global Auth Listener to handle Redirect returns across Web & APK WebView
   useEffect(() => {
@@ -238,7 +266,7 @@ export const App: React.FC = () => {
             console.error(e);
           }
           if (currentTabRef.current === 'signup') {
-            navigateToTab('dashboard');
+            navigateToTab('dashboard', { replace: true });
           }
         }
       })
@@ -266,7 +294,7 @@ export const App: React.FC = () => {
           console.error(e);
         }
         if (currentTabRef.current === 'signup') {
-          navigateToTab('dashboard');
+          navigateToTab('dashboard', { replace: true });
         }
       } else {
         const stored = localStorage.getItem('user_auth_session');
@@ -475,7 +503,7 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleLogin = (session: AuthSession) => {
+  const handleLogin = (session: AuthSession, redirectTab: TabType = 'dashboard') => {
     setAuthSession(session);
     try {
       localStorage.setItem('user_auth_session', JSON.stringify(session));
@@ -489,7 +517,7 @@ export const App: React.FC = () => {
     } catch (e) {
       console.error(e);
     }
-    navigateToTab('dashboard');
+    navigateToTab(redirectTab, { replace: currentTabRef.current === 'signup' });
   };
 
   const handleLogout = async () => {

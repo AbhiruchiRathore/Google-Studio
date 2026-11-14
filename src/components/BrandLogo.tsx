@@ -16,7 +16,7 @@ export const BRAND_LOGO_SRC = '/assets/aistudio/Gemini_Generated_Image_b1djv5b1d
 const LOGO_FRAME_SIZES: Record<BrandLogoSize, string> = {
   xs: 'h-6 w-8 rounded-md',
   sm: 'h-8 w-10 rounded-lg',
-  md: 'h-10 w-12 sm:h-11 sm:w-14 rounded-xl',
+  md: 'h-9 w-11 sm:h-11 sm:w-14 rounded-xl',
   lg: 'h-14 w-[4.5rem] rounded-2xl',
   xl: 'h-16 w-20 rounded-2xl',
 };
@@ -24,7 +24,7 @@ const LOGO_FRAME_SIZES: Record<BrandLogoSize, string> = {
 const TEXT_SIZES: Record<BrandLogoSize, string> = {
   xs: 'text-lg',
   sm: 'text-xl sm:text-2xl',
-  md: 'text-[22px] sm:text-[27px] lg:text-[30px]',
+  md: 'text-[19px] sm:text-[27px] lg:text-[30px]',
   lg: 'text-3xl',
   xl: 'text-4xl',
 };
@@ -50,7 +50,7 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
   const TextTag = asHeading ? 'h1' : 'span';
 
   return (
-    <div className={`inline-flex items-center gap-2.5 sm:gap-3 min-w-0 select-none ${className}`}>
+    <div className={`inline-flex items-center gap-2 sm:gap-3 min-w-0 select-none ${className}`}>
       <div
         className={`relative shrink-0 overflow-hidden bg-[#f7f4ec] ${LOGO_FRAME_SIZES[size]} ${frameBorder}`}
       >
