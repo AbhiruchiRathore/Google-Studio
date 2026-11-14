@@ -43,6 +43,14 @@ if (typeof window !== 'undefined') {
   window.addEventListener('orientationchange', syncAndroidEdgeInsets);
 }
 
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch((err) => {
+      console.warn('Service worker registration failed:', err);
+    });
+  });
+}
+
 const rootElement = document.getElementById('root');
 
 if (rootElement) {

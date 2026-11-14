@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#6e1628" />
+    <title>Offline - Rathore Rishtey</title>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1.5rem;
+        background: #FAF8F5;
+        color: #292524;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      }
+      .card {
+        max-width: 420px;
+        width: 100%;
+        background: #ffffff;
+        border: 1px solid #e7e5e4;
+        border-radius: 1.5rem;
+        padding: 2rem 1.5rem;
+        text-align: center;
+        box-shadow: 0 12px 30px rgba(110, 22, 40, 0.08);
+      }
+      .badge {
+        display: inline-block;
+        background: #fef3c7;
+        color: #78350f;
+        border: 1px solid #fcd34d;
+        border-radius: 9999px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        padding: 0.3rem 0.75rem;
+        margin-bottom: 1rem;
+      }
+      .icon {
+        width: 72px;
+        height: 72px;
+        border-radius: 1rem;
+        margin: 0 auto 1rem;
+        border: 1px solid #e7e5e4;
+        display: block;
+      }
+      h1 {
+        font-size: 1.35rem;
+        color: #6e1628;
+        margin-bottom: 0.5rem;
+      }
+      p {
+        font-size: 0.875rem;
+        line-height: 1.55;
+        color: #57534e;
+        margin-bottom: 0.75rem;
+      }
+      button {
+        margin-top: 0.75rem;
+        width: 100%;
+        border: none;
+        border-radius: 0.85rem;
+        padding: 0.8rem 1.25rem;
+        font-size: 0.875rem;
+        font-weight: 700;
+        color: #fef3c7;
+        background: linear-gradient(90deg, #6e1628, #851834);
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <img src="/pwa-192x192.png" alt="Rathore Rishtey" class="icon" />
+      <span class="badge">Offline Mode • ऑफ़लाइन मोड</span>
+      <h1>You are currently offline</h1>
+      <p>
+        Please check your mobile data or Wi-Fi connection to load the latest biodatas, kundali matching, and community directory updates.
+      </p>
+      <p>
+        नवीनतम बायोडाटा और समाज अपडेट देखने के लिए कृपया अपना इंटरनेट कनेक्शन जांचें।
+      </p>
+      <button type="button" onclick="window.location.reload()">Retry Connection / पुनः प्रयास करें</button>
+    </main>
+  </body>
+</html>

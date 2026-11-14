@@ -8,6 +8,7 @@ import { TabType, AuthSession } from '../types';
 import { useLanguage } from '../context/LanguageContext';
 import { useAdminConfig } from '../context/AdminConfigContext';
 import { BrandLogo } from './BrandLogo';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface HeaderProps {
   currentTab: TabType;
@@ -217,6 +218,7 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
 
           {/* Language Switcher & Account Actions (Desktop) */}
           <div className="hidden xl:flex items-center space-x-2 shrink-0">
+            <PWAInstallButton />
             {/* Hindi / English Language Switcher */}
             <div 
               className="flex items-center bg-black/25 border border-amber-400/40 rounded-xl p-0.5 text-[11px] font-bold shadow-inner"
@@ -508,6 +510,10 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
               </button>
             </div>
           )}
+
+          <div className="pt-1">
+            <PWAInstallButton compact />
+          </div>
         </div>
       )}
     </header>

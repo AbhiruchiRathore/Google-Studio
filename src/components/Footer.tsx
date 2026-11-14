@@ -103,16 +103,40 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateTab }) => {
                 {t('Add Family Details', 'पारिवारिक विवरण जोड़ें')}
               </button>
             )}
+            <a
+              href="/privacy-policy"
+              onClick={(e) => {
+                e.preventDefault();
+                onNavigateTab('privacy-policy');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className="hover:text-amber-300 cursor-pointer transition-colors"
+            >
+              {t('Privacy Policy', 'गोपनीयता नीति')}
+            </a>
           </div>
         </div>
 
         {/* Bottom Copyright & Powered by Svayaa */}
         <div className="flex flex-col sm:flex-row justify-between items-center text-[11px] text-stone-500 pt-6 border-t border-white/5 gap-3 text-center sm:text-left">
-          <div>
-            {t(
-              '© 2026 Rathore Rishtey Digital Portal. Dedicated to Rathore Samaj Samiti & community families.',
-              '© २०२६ राठौड़ रिश्ते डिजिटल पोर्टल। राठौड़ समाज समिति एवं समस्त परिवारों को समर्पित।'
-            )}
+          <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-3 gap-y-1">
+            <span>
+              {t(
+                '© 2026 Rathore Rishtey Digital Portal. Dedicated to Rathore Samaj Samiti & community families.',
+                '© २०२६ राठौड़ रिश्ते डिजिटल पोर्टल। राठौड़ समाज समिति एवं समस्त परिवारों को समर्पित।'
+              )}
+            </span>
+            <a
+              href="/privacy-policy"
+              onClick={(e) => {
+                e.preventDefault();
+                onNavigateTab('privacy-policy');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className="text-stone-400 hover:text-amber-300 underline transition-colors"
+            >
+              {t('Privacy Policy', 'गोपनीयता नीति')}
+            </a>
           </div>
           <div>
             <a 

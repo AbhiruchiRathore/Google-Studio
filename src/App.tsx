@@ -17,6 +17,8 @@ import { GuestListTab } from './components/GuestListTab';
 import { AdminDashboardTab } from './components/AdminDashboardTab';
 import { WhatsAppShare } from './components/WhatsAppShare';
 import { Footer } from './components/Footer';
+import { PrivacyPolicyTab } from './components/PrivacyPolicyTab';
+import { OfflineIndicator } from './components/OfflineIndicator';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, signOut, getRedirectResult, User } from 'firebase/auth';
 import { Sparkles, Lock } from 'lucide-react';
@@ -38,7 +40,8 @@ const VALID_TABS = new Set<TabType>([
   'advertise-shop',
   'family-details',
   'dashboard',
-  'admin'
+  'admin',
+  'privacy-policy'
 ]);
 
 function hasPasswordResetParams(): boolean {
@@ -47,16 +50,31 @@ function hasPasswordResetParams(): boolean {
   return Boolean(params.get('mode') === 'resetPassword' && params.get('oobCode'));
 }
 
+function isPrivacyPolicyPathname(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.location.pathname.replace(/\/+$/, '') === '/privacy-policy';
+}
+
 function getInitialTabFromUrl(): TabType {
   if (typeof window === 'undefined') return 'matrimony';
   if (hasPasswordResetParams()) {
     return 'signup';
+  }
+  if (isPrivacyPolicyPathname()) {
+    return 'privacy-policy';
   }
   const hashTab = window.location.hash.replace('#', '') as TabType;
   if (VALID_TABS.has(hashTab) && hashTab !== 'admin') {
     return hashTab;
   }
   return 'matrimony';
+}
+
+function getUrlForTab(tab: TabType, search = ''): string {
+  if (tab === 'privacy-policy') {
+    return '/privacy-policy';
+  }
+  return `/${search}#${tab}`;
 }
 
 export const App: React.FC = () => {
@@ -74,10 +92,11 @@ export const App: React.FC = () => {
     setCurrentTab((prev) => {
       if (prev !== nextTab && typeof window !== 'undefined') {
         try {
+          const targetUrl = getUrlForTab(nextTab);
           if (options?.replace) {
-            window.history.replaceState({ tab: nextTab }, '', `#${nextTab}`);
+            window.history.replaceState({ tab: nextTab }, '', targetUrl);
           } else {
-            window.history.pushState({ tab: nextTab }, '', `#${nextTab}`);
+            window.history.pushState({ tab: nextTab }, '', targetUrl);
           }
         } catch {
           // Ignore history errors in restricted environments
@@ -94,15 +113,16 @@ export const App: React.FC = () => {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const initialTab = getInitialTabFromUrl();
+    const initialUrl = getUrlForTab(initialTab, window.location.search);
 
     try {
       if (!window.history.state?.tab) {
         if (isAndroidEnvironment()) {
           // Push a root guard entry on Android WebView so pressing Back once doesn't immediately close the APK
-          window.history.replaceState({ tab: initialTab, isGuard: true }, '', `${window.location.search}#${initialTab}`);
-          window.history.pushState({ tab: initialTab }, '', `${window.location.search}#${initialTab}`);
+          window.history.replaceState({ tab: initialTab, isGuard: true }, '', initialUrl);
+          window.history.pushState({ tab: initialTab }, '', initialUrl);
         } else {
-          window.history.replaceState({ tab: initialTab }, '', `${window.location.search}#${initialTab}`);
+          window.history.replaceState({ tab: initialTab }, '', initialUrl);
         }
       }
     } catch {
@@ -112,18 +132,20 @@ export const App: React.FC = () => {
     const handlePopState = (event: PopStateEvent) => {
       const stateTab = event.state?.tab as TabType | undefined;
       const hashTab = window.location.hash.replace('#', '') as TabType;
-      let targetTab =
+      let targetTab: TabType =
         stateTab && VALID_TABS.has(stateTab)
           ? stateTab
-          : VALID_TABS.has(hashTab)
-            ? hashTab
-            : 'matrimony';
+          : isPrivacyPolicyPathname()
+            ? 'privacy-policy'
+            : VALID_TABS.has(hashTab)
+              ? hashTab
+              : 'matrimony';
 
       // Prevent logged-in users from being thrown back onto the signup / sign-out screen on hardware Back
       if (authSessionRef.current && targetTab === 'signup') {
         targetTab = 'matrimony';
         try {
-          window.history.replaceState({ tab: 'matrimony' }, '', '#matrimony');
+          window.history.replaceState({ tab: 'matrimony' }, '', '/#matrimony');
         } catch {
           // ignore
         }
@@ -133,11 +155,11 @@ export const App: React.FC = () => {
       if (event.state?.isGuard) {
         if (currentTabRef.current !== 'matrimony') {
           setCurrentTab('matrimony');
-          window.history.pushState({ tab: 'matrimony' }, '', '#matrimony');
+          window.history.pushState({ tab: 'matrimony' }, '', '/#matrimony');
           window.scrollTo({ top: 0, behavior: 'smooth' });
         } else {
           setBackNotice(true);
-          window.history.pushState({ tab: 'matrimony' }, '', '#matrimony');
+          window.history.pushState({ tab: 'matrimony' }, '', '/#matrimony');
           setTimeout(() => setBackNotice(false), 2500);
         }
         return;
@@ -817,8 +839,13 @@ export const App: React.FC = () => {
             renderFeatureDisabledCard('Family Details Registration', 'पारिवारिक विवरण पंजीकरण')
           )
         )}
+
+        {currentTab === 'privacy-policy' && (
+          <PrivacyPolicyTab onNavigateTab={navigateToTab} />
+        )}
       </main>
 
+      <OfflineIndicator />
       <WhatsAppShare />
       <Footer onNavigateTab={navigateToTab} />
     </div>

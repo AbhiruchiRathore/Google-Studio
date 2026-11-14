@@ -10,7 +10,8 @@ export type TabType =
   | 'create-profile' 
   | 'advertise-shop'
   | 'family-details'
-  | 'admin';
+  | 'admin'
+  | 'privacy-policy';
 
 export type GenderType = 'all' | 'Male' | 'Female';
 
