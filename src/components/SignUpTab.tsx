@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { AuthSession, TabType, UserAccount } from '../types';
 import { GoogleSignInModal } from './GoogleSignInModal';
-import { auth, secondaryAuth } from '../firebase';
+import { auth, secondaryAuth, db, secondaryDb } from '../firebase';
 import {
   GoogleAuthProvider,
   signInWithRedirect,
@@ -23,6 +23,7 @@ import {
 import { sanitizePhoneInput, validatePhoneNumber, validateStrongPassword } from '../utils/validation';
 import { useLanguage } from '../context/LanguageContext';
 import { BrandLogo } from './BrandLogo';
+import { syncUserProfileToFirestore, lookupEmailByUsernameFromFirestore } from '../utils/firebaseUserSync';
 
 interface SignUpTabProps {
   authSession: AuthSession | null;
@@ -98,7 +99,7 @@ function isKnownAuthorizedHost(hostname: string): boolean {
  * Helper to check if a Google account is already logged in on the phone/device
  */
 export function getExistingDeviceGoogleSession(): AuthSession | null {
-  if (auth.currentUser) {
+  if (auth.currentUser && auth.currentUser.providerData.some((p) => p.providerId === 'google.com')) {
     return {
       method: 'Google',
       name: auth.currentUser.displayName || auth.currentUser.email?.split('@')[0] || 'Google User',
@@ -137,7 +138,7 @@ export function getExistingDeviceGoogleSession(): AuthSession | null {
 export const signInWithDesktopBrowser = async (
   onSuccess?: (session: AuthSession) => void
 ): Promise<AuthSession | undefined> => {
-  if (auth.currentUser) {
+  if (auth.currentUser && auth.currentUser.providerData.some((p) => p.providerId === 'google.com')) {
     const existingSession: AuthSession = {
       method: 'Google',
       name: auth.currentUser.displayName || 'Google User',
@@ -183,7 +184,7 @@ export const signInWithDesktopBrowser = async (
 export const signInWithAndroidWebView = async (
   onSuccess?: (session: AuthSession) => void
 ): Promise<void> => {
-  if (auth.currentUser) {
+  if (auth.currentUser && auth.currentUser.providerData.some((p) => p.providerId === 'google.com')) {
     const existingSession: AuthSession = {
       method: 'Google',
       name: auth.currentUser.displayName || 'Google User',
@@ -228,6 +229,7 @@ export default function SignUpTab({
   const { lang, t } = useLanguage();
   const [showGoogleModal, setShowGoogleModal] = useState(false);
   const [unauthorizedDomain, setUnauthorizedDomain] = useState<string | null>(null);
+  const [emailProviderDisabled, setEmailProviderDisabled] = useState(false);
   const [copiedDomain, setCopiedDomain] = useState(false);
   const [isSigningIn, setIsSigningIn] = useState(false);
 
@@ -244,6 +246,7 @@ export default function SignUpTab({
   const [signupConfirmPassword, setSignupConfirmPassword] = useState('');
   const [showSignupPassword, setShowSignupPassword] = useState(false);
   const [signupError, setSignupError] = useState<string | null>(null);
+  const [isCreatingAccount, setIsCreatingAccount] = useState(false);
   const [signupSuccessInfo, setSignupSuccessInfo] = useState<{ username: string; fullName: string } | null>(null);
 
   const passwordValidation = validateStrongPassword(signupPassword, signupUsername);
@@ -253,6 +256,7 @@ export default function SignUpTab({
   const [loginPassword, setLoginPassword] = useState('');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   // Forgot Password (Email Password Reset Link — sent to email only)
   const [forgotStep, setForgotStep] = useState<'identify' | 'link_sent' | 'reset'>('identify');
@@ -271,6 +275,8 @@ export default function SignUpTab({
   const [forgotError, setForgotError] = useState<string | null>(null);
   const [passwordResetSuccessUser, setPasswordResetSuccessUser] = useState<string | null>(null);
 
+  const signupLockRef = useRef(false);
+  const loginLockRef = useRef(false);
   const forgotSendLockRef = useRef(false);
   const forgotResetLockRef = useRef(false);
 
@@ -298,9 +304,19 @@ export default function SignUpTab({
   // Logs in directly without password if Google account is already logged in on the phone,
   // otherwise invokes Google OAuth / modal asking for password.
   const handleGoogleSignIn = async () => {
-    const existing = getExistingDeviceGoogleSession();
-    if (existing) {
-      onLogin(existing, 'dashboard');
+    if (auth.currentUser && auth.currentUser.providerData.some((p) => p.providerId === 'google.com')) {
+      const activeSession: AuthSession = {
+        method: 'Google',
+        name: auth.currentUser.displayName || auth.currentUser.email?.split('@')[0] || 'Google User',
+        email: auth.currentUser.email || '',
+        photoUrl: auth.currentUser.photoURL || '',
+        loggedInAt: new Date().toISOString(),
+        verified: auth.currentUser.emailVerified
+      };
+      void syncUserProfileToFirestore(db, auth, auth.currentUser, {
+        provider: 'google.com'
+      });
+      onLogin(activeSession, 'dashboard');
       return;
     }
 
@@ -310,7 +326,10 @@ export default function SignUpTab({
         await signInWithAndroidWebView((session) => {
           onLogin(session, 'dashboard');
         });
-      } catch {
+      } catch (error: any) {
+        if (error?.code === 'auth/unauthorized-domain' && typeof window !== 'undefined') {
+          setUnauthorizedDomain(window.location.hostname);
+        }
         setShowGoogleModal(true);
       } finally {
         setIsSigningIn(false);
@@ -325,16 +344,11 @@ export default function SignUpTab({
         console.warn("Desktop Google Sign-In caught error:", error?.code, error?.message);
         if (
           error?.code === 'auth/unauthorized-domain' ||
-          error?.code === 'auth/popup-blocked' ||
-          error?.code === 'auth/operation-not-supported-in-this-environment' ||
           error?.message?.includes('authorized domain')
         ) {
-          setShowGoogleModal(true);
-        } else if (
-          error?.code === 'auth/popup-closed-by-user' ||
-          error?.code === 'auth/cancelled-popup-request'
-        ) {
-          // User closed popup intentionally, fall back quietly or offer modal
+          if (typeof window !== 'undefined') {
+            setUnauthorizedDomain(window.location.hostname);
+          }
           setShowGoogleModal(true);
         } else {
           setShowGoogleModal(true);
@@ -498,22 +512,27 @@ export default function SignUpTab({
       resolvedEmail = matched.email.trim().toLowerCase();
     } else if (isDirectEmail) {
       resolvedEmail = lower;
-    } else if (matched && !matched.email) {
-      setForgotError(
-        t(
-          'No email address is saved on this username yet. Please enter your email address directly to receive the reset link.',
-          'इस यूज़रनेम में ईमेल पता सहेजा नहीं गया है। रीसेट लिंक पाने के लिए कृपया अपना ईमेल पता दर्ज करें।'
-        )
-      );
-      return;
     } else {
-      setForgotError(
-        t(
-          'Please enter a valid registered email address (e.g. name@gmail.com).',
-          'कृपया एक मान्य पंजीकृत ईमेल पता दर्ज करें (जैसे name@gmail.com)।'
-        )
-      );
-      return;
+      const firestoreLookup = await lookupEmailByUsernameFromFirestore(auth, lower);
+      if (firestoreLookup?.email) {
+        resolvedEmail = firestoreLookup.email;
+      } else if (matched && !matched.email) {
+        setForgotError(
+          t(
+            'No email address is saved on this username yet. Please enter your email address directly to receive the reset link.',
+            'इस यूज़रनेम में ईमेल पता सहेजा नहीं गया है। रीसेट लिंक पाने के लिए कृपया अपना ईमेल पता दर्ज करें।'
+          )
+        );
+        return;
+      } else {
+        setForgotError(
+          t(
+            'Please enter a valid registered email address (e.g. name@gmail.com) or a registered username.',
+            'कृपया एक मान्य पंजीकृत ईमेल पता (जैसे name@gmail.com) या पंजीकृत यूज़रनेम दर्ज करें।'
+          )
+        );
+        return;
+      }
     }
 
     forgotSendLockRef.current = true;
@@ -695,11 +714,14 @@ export default function SignUpTab({
     setLoginError(null);
   };
 
-  // Sign Up Handler with strict email, 10-digit phone & Firebase email registration sync
+  // Sign Up Handler with strict email, 10-digit phone & mandatory Firebase Authentication + Firestore sync
   const handleSignupSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (signupLockRef.current || isCreatingAccount) return;
+
     setSignupError(null);
     setSignupPhoneError(null);
+    setEmailProviderDisabled(false);
 
     const cleanUsername = signupUsername.trim().toLowerCase();
     const cleanFullName = signupFullName.trim();
@@ -713,8 +735,8 @@ export default function SignUpTab({
     if (!cleanEmail || !EMAIL_REGEX.test(cleanEmail)) {
       setSignupError(
         t(
-          'Please enter a valid email address (used for password reset links).',
-          'कृपया एक मान्य ईमेल पता दर्ज करें (पासवर्ड रीसेट लिंक के लिए आवश्यक)।'
+          'Please enter a valid email address (used for Firebase login & password reset links).',
+          'कृपया एक मान्य ईमेल पता दर्ज करें (Firebase लॉगिन और पासवर्ड रीसेट लिंक के लिए आवश्यक)।'
         )
       );
       return;
@@ -769,21 +791,88 @@ export default function SignUpTab({
       return;
     }
 
-    // Sync Email/Password credentials to Firebase Auth (via isolated secondaryAuth)
-    // so sendPasswordResetEmail can deliver real password reset emails to their inbox.
+    signupLockRef.current = true;
+    setIsCreatingAccount(true);
+
+    let firebaseUid = `user_${Date.now()}`;
     try {
+      // Check if username already exists in Firestore directory across devices
+      const existingRemoteUsername = await lookupEmailByUsernameFromFirestore(secondaryAuth, cleanUsername);
+      if (existingRemoteUsername && existingRemoteUsername.email !== cleanEmail) {
+        setSignupError(
+          t(
+            `Username "@${cleanUsername}" is already taken. Please choose another username.`,
+            `यूज़रनेम "@${cleanUsername}" पहले से उपयोग में है। कृपया दूसरा यूज़रनेम चुनें।`
+          )
+        );
+        return;
+      }
+
+      // Create user in Firebase Authentication (appears in Firebase Console -> Authentication -> Users)
       const cred = await createUserWithEmailAndPassword(secondaryAuth, cleanEmail, signupPassword);
       if (cred.user) {
+        firebaseUid = cred.user.uid;
         await updateProfile(cred.user, { displayName: cleanFullName }).catch(() => {});
+        await syncUserProfileToFirestore(secondaryDb, secondaryAuth, cred.user, {
+          username: cleanUsername,
+          fullName: cleanFullName,
+          phone: phoneCheck.cleaned || '',
+          provider: 'password',
+          isNewUser: true
+        });
         await signOut(secondaryAuth).catch(() => {});
       }
-    } catch {
-      // Proceed cleanly if Firebase Email/Password sign-in is disabled or already registered
+    } catch (err: any) {
+      const code = err?.code || '';
+      if (code === 'auth/operation-not-allowed') {
+        setEmailProviderDisabled(true);
+        setSignupError(
+          t(
+            'Email/Password sign-in is disabled in your Firebase Console. Please enable Email/Password under Authentication → Sign-in method, then click Create Account again.',
+            'आपके Firebase Console में Email/Password साइन-इन बंद है। कृपया Authentication → Sign-in method में Email/Password चालू करें और फिर खाता बनाएं।'
+          )
+        );
+      } else if (code === 'auth/email-already-in-use') {
+        setSignupError(
+          t(
+            'This email address is already registered in Firebase. Please log in or use Forgot Password to reset your password.',
+            'यह ईमेल पता Firebase में पहले से पंजीकृत है। कृपया लॉग इन करें या पासवर्ड रीसेट करें।'
+          )
+        );
+      } else if (code === 'auth/weak-password') {
+        setSignupError(
+          t(
+            'Password is too weak for Firebase Authentication. Please choose a stronger password.',
+            'पासवर्ड बहुत कमज़ोर है। कृपया अधिक मजबूत पासवर्ड चुनें।'
+          )
+        );
+      } else if (code === 'auth/invalid-email') {
+        setSignupError(t('Please enter a valid email address.', 'कृपया एक मान्य ईमेल पता दर्ज करें।'));
+      } else if (code === 'auth/network-request-failed') {
+        setSignupError(
+          t(
+            'Network error while connecting to Firebase. Please check your internet connection and try again.',
+            'Firebase से जुड़ते समय नेटवर्क त्रुटि। कृपया अपना इंटरनेट जांचें और पुनः प्रयास करें।'
+          )
+        );
+      } else {
+        setSignupError(
+          err?.message ||
+            t(
+              'Could not create Firebase account right now. Please try again.',
+              'अभी Firebase खाता नहीं बनाया जा सका। कृपया पुनः प्रयास करें।'
+            )
+        );
+      }
+      return;
+    } finally {
+      signupLockRef.current = false;
+      setIsCreatingAccount(false);
     }
 
-    // Create and save account
+    // Save synced account metadata locally as well
     const newAccount: UserAccount = {
-      id: `user_${Date.now()}`,
+      id: firebaseUid,
       username: cleanUsername,
       fullName: cleanFullName,
       password: signupPassword,
@@ -814,10 +903,13 @@ export default function SignUpTab({
     setAuthMode('login');
   };
 
-  // Log In Handler (supports local accounts and passwords updated via Firebase email reset link)
+  // Log In Handler (authenticates via Firebase Auth primary instance so Signed In & Users stay in sync)
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loginLockRef.current || isLoggingIn) return;
+
     setLoginError(null);
+    setEmailProviderDisabled(false);
 
     const rawIdentifier = loginIdentifier.trim();
     const identifier = rawIdentifier.toLowerCase();
@@ -851,44 +943,73 @@ export default function SignUpTab({
       return;
     }
 
-    const accounts = getStoredAccounts();
-    const cleanedPhoneAttempt = sanitizePhoneInput(rawIdentifier);
-    const matched = accounts.find(acc => 
-      acc.username.toLowerCase() === identifier || 
-      (acc.phone && (acc.phone === identifier || (cleanedPhoneAttempt.length === 10 && acc.phone === cleanedPhoneAttempt))) ||
-      (acc.email && acc.email.toLowerCase() === identifier)
-    );
+    loginLockRef.current = true;
+    setIsLoggingIn(true);
 
-    const emailCandidate = matched?.email || (EMAIL_REGEX.test(identifier) ? identifier : '');
+    try {
+      const accounts = getStoredAccounts();
+      const cleanedPhoneAttempt = sanitizePhoneInput(rawIdentifier);
+      const matched = accounts.find(acc =>
+        acc.username.toLowerCase() === identifier ||
+        (acc.phone && (acc.phone === identifier || (cleanedPhoneAttempt.length === 10 && acc.phone === cleanedPhoneAttempt))) ||
+        (acc.email && acc.email.toLowerCase() === identifier)
+      );
 
-    if (matched && matched.password === password) {
-      const session: AuthSession = {
-        method: 'UsernamePassword',
-        name: matched.fullName || matched.username,
-        username: matched.username,
-        phone: matched.phone || '',
-        email: matched.email || '',
-        loggedInAt: new Date().toISOString(),
-        verified: true
-      };
-      onLogin(session, 'dashboard');
-      return;
-    }
+      let resolvedUsername = matched?.username;
+      let resolvedFullName = matched?.fullName;
+      let resolvedPhone = matched?.phone || '';
+      let emailCandidate = matched?.email?.trim().toLowerCase() || (EMAIL_REGEX.test(identifier) ? identifier : '');
 
-    // Fallback check against Firebase Auth (e.g. if password was updated via emailed reset link)
-    if (emailCandidate) {
-      try {
-        const cred = await signInWithEmailAndPassword(secondaryAuth, emailCandidate, password);
-        if (cred.user) {
-          const displayName = cred.user.displayName || matched?.fullName || emailCandidate.split('@')[0];
-          await signOut(secondaryAuth).catch(() => {});
+      // Resolve username -> email via Firestore for cross-device Username ID login
+      if (!emailCandidate && !identifier.includes('@')) {
+        const firestoreProfile = await lookupEmailByUsernameFromFirestore(auth, identifier);
+        if (firestoreProfile?.email) {
+          emailCandidate = firestoreProfile.email;
+          resolvedUsername = resolvedUsername || firestoreProfile.username;
+          resolvedFullName = resolvedFullName || firestoreProfile.fullName;
+          resolvedPhone = resolvedPhone || firestoreProfile.phone || '';
+        }
+      }
+
+      if (emailCandidate) {
+        try {
+          // Sign in on primary `auth` so Firebase Console updates Signed In timestamp and keeps user session active
+          const cred = await signInWithEmailAndPassword(auth, emailCandidate, password);
+          const displayName =
+            cred.user.displayName ||
+            resolvedFullName ||
+            resolvedUsername ||
+            emailCandidate.split('@')[0];
+          const finalUsername = resolvedUsername || emailCandidate.split('@')[0];
+
+          await syncUserProfileToFirestore(db, auth, cred.user, {
+            username: finalUsername,
+            fullName: displayName,
+            phone: resolvedPhone,
+            provider: 'password'
+          });
 
           if (matched) {
             const synced = accounts.map((acc) =>
-              acc.id === matched.id ? { ...acc, password } : acc
+              acc.id === matched.id ? { ...acc, id: cred.user.uid, password } : acc
             );
             try {
               localStorage.setItem('samaj_user_accounts', JSON.stringify(synced));
+            } catch {
+              // ignore
+            }
+          } else {
+            const cacheEntry: UserAccount = {
+              id: cred.user.uid,
+              username: finalUsername,
+              fullName: displayName,
+              password,
+              email: emailCandidate,
+              phone: resolvedPhone || undefined,
+              createdAt: new Date().toISOString()
+            };
+            try {
+              localStorage.setItem('samaj_user_accounts', JSON.stringify([cacheEntry, ...accounts]));
             } catch {
               // ignore
             }
@@ -897,26 +1018,146 @@ export default function SignUpTab({
           const session: AuthSession = {
             method: 'UsernamePassword',
             name: displayName,
-            username: matched?.username || emailCandidate.split('@')[0],
-            phone: matched?.phone || '',
+            username: finalUsername,
+            phone: resolvedPhone,
             email: emailCandidate,
             loggedInAt: new Date().toISOString(),
             verified: true
           };
           onLogin(session, 'dashboard');
           return;
+        } catch (err: any) {
+          const code = err?.code || '';
+
+          if (code === 'auth/operation-not-allowed') {
+            setEmailProviderDisabled(true);
+            setLoginError(
+              t(
+                'Email/Password sign-in is disabled in Firebase Console. Please enable Authentication → Sign-in method → Email/Password.',
+                'Firebase Console में Email/Password साइन-इन बंद है। कृपया Authentication → Sign-in method → Email/Password चालू करें।'
+              )
+            );
+            return;
+          }
+
+          // Auto-migrate legacy local-only account into Firebase Auth on matching password
+          if (
+            (code === 'auth/user-not-found' || code === 'auth/invalid-credential') &&
+            matched &&
+            matched.password === password
+          ) {
+            try {
+              const createdCred = await createUserWithEmailAndPassword(auth, emailCandidate, password);
+              if (createdCred.user) {
+                const displayName = matched.fullName || matched.username;
+                await updateProfile(createdCred.user, { displayName }).catch(() => {});
+                await syncUserProfileToFirestore(db, auth, createdCred.user, {
+                  username: matched.username,
+                  fullName: displayName,
+                  phone: matched.phone || '',
+                  provider: 'password',
+                  isNewUser: true
+                });
+                const updatedAccounts = accounts.map((acc) =>
+                  acc.id === matched.id ? { ...acc, id: createdCred.user.uid } : acc
+                );
+                try {
+                  localStorage.setItem('samaj_user_accounts', JSON.stringify(updatedAccounts));
+                } catch {
+                  // ignore
+                }
+                const session: AuthSession = {
+                  method: 'UsernamePassword',
+                  name: displayName,
+                  username: matched.username,
+                  phone: matched.phone || '',
+                  email: emailCandidate,
+                  loggedInAt: new Date().toISOString(),
+                  verified: true
+                };
+                onLogin(session, 'dashboard');
+                return;
+              }
+            } catch (createErr: any) {
+              if (createErr?.code === 'auth/operation-not-allowed') {
+                setEmailProviderDisabled(true);
+                setLoginError(
+                  t(
+                    'Email/Password sign-in is disabled in Firebase Console. Please enable it under Authentication → Sign-in method.',
+                    'Firebase Console में Email/Password साइन-इन बंद है। कृपया इसे Authentication → Sign-in method में चालू करें।'
+                  )
+                );
+                return;
+              }
+              if (createErr?.code === 'auth/email-already-in-use') {
+                setLoginError(t('Incorrect password. Please verify and try again.', 'गलत पासवर्ड। कृपया जांचें और पुनः प्रयास करें।'));
+                return;
+              }
+            }
+          }
+
+          if (code === 'auth/too-many-requests') {
+            setLoginError(
+              t(
+                'Too many failed attempts. Please wait a few minutes or use Forgot Password.',
+                'कई गलत प्रयास हुए हैं। कृपया कुछ मिनट प्रतीक्षा करें या पासवर्ड रीसेट करें।'
+              )
+            );
+            return;
+          }
+
+          if (code === 'auth/network-request-failed') {
+            setLoginError(
+              t(
+                'Network error while connecting to Firebase. Please check your internet connection.',
+                'Firebase से जुड़ते समय नेटवर्क त्रुटि। कृपया इंटरनेट जांचें।'
+              )
+            );
+            return;
+          }
+
+          if (code === 'auth/user-not-found' && !matched) {
+            setLoginError(
+              t(
+                'This username, email, or mobile number is not registered. Please sign up first.',
+                'यह यूज़रनेम, ईमेल या मोबाइल नंबर पंजीकृत नहीं है। कृपया पहले साइन अप करें।'
+              )
+            );
+            return;
+          }
+
+          if (matched || code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+            setLoginError(t('Incorrect password or unregistered account. Please verify or sign up first.', 'गलत पासवर्ड या अपंजीकृत खाता। कृपया जांचें या नया खाता बनाएं।'));
+            return;
+          }
         }
-      } catch {
-        // Invalid Firebase password or not a Firebase Email/Password account
       }
-    }
 
-    if (!matched) {
-      setLoginError(t('This username, email, or mobile number is not registered. Please sign up first.', 'यह यूज़रनेम, ईमेल या मोबाइल नंबर पंजीकृत नहीं है। कृपया पहले साइन अप करें।'));
-      return;
-    }
+      // Local-only record without any email attached
+      if (matched && !emailCandidate && matched.password === password) {
+        const session: AuthSession = {
+          method: 'UsernamePassword',
+          name: matched.fullName || matched.username,
+          username: matched.username,
+          phone: matched.phone || '',
+          email: '',
+          loggedInAt: new Date().toISOString(),
+          verified: true
+        };
+        onLogin(session, 'dashboard');
+        return;
+      }
 
-    setLoginError(t('Incorrect password. Please verify and try again.', 'गलत पासवर्ड। कृपया जांचें और पुनः प्रयास करें।'));
+      if (!matched) {
+        setLoginError(t('This username, email, or mobile number is not registered. Please sign up first.', 'यह यूज़रनेम, ईमेल या मोबाइल नंबर पंजीकृत नहीं है। कृपया पहले साइन अप करें।'));
+        return;
+      }
+
+      setLoginError(t('Incorrect password. Please verify and try again.', 'गलत पासवर्ड। कृपया जांचें और पुनः प्रयास करें।'));
+    } finally {
+      loginLockRef.current = false;
+      setIsLoggingIn(false);
+    }
   };
 
   const isProcessingEmailResetCallback =
@@ -1204,6 +1445,43 @@ export default function SignUpTab({
           </div>
         )}
 
+        {emailProviderDisabled && (
+          <div className="bg-amber-50/90 border border-amber-300 rounded-2xl p-4 text-left space-y-2.5 animate-in fade-in duration-200 text-xs">
+            <div className="flex items-start gap-2.5">
+              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <h4 className="font-bold text-amber-950 text-xs">
+                  {t('Enable Email/Password Sign-In in Firebase Console', 'Firebase Console में Email/Password साइन-इन चालू करें')}
+                </h4>
+                <p className="text-amber-900 text-[11px] leading-relaxed">
+                  {t(
+                    'To store Username ID & Password users in Firebase Authentication alongside Google users, turn ON "Email/Password" under Authentication → Sign-in method.',
+                    'Google उपयोगकर्ताओं के साथ Username ID और Password उपयोगकर्ताओं को Firebase Authentication में सहेजने के लिए Authentication → Sign-in method में "Email/Password" चालू करें।'
+                  )}
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <a
+                href="https://console.firebase.google.com/project/rathore-rishtey/authentication/providers"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 bg-amber-700 hover:bg-amber-800 text-white font-semibold py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 text-[11px] transition-colors shadow-xs"
+              >
+                <span>{t('Open Sign-in Providers', 'Firebase Sign-in Providers खोलें')}</span>
+                <ExternalLink className="w-3 h-3" />
+              </a>
+              <button
+                type="button"
+                onClick={() => setEmailProviderDisabled(false)}
+                className="px-3 py-2 bg-white border border-amber-200 text-amber-900 rounded-xl text-[11px] font-semibold cursor-pointer"
+              >
+                {t('Dismiss', 'बंद करें')}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ========================================================= */}
         {/* FORM A: LOG IN WITH USERNAME & PASSWORD                   */}
         {/* ========================================================= */}
@@ -1270,10 +1548,19 @@ export default function SignUpTab({
 
             <button
               type="submit"
-              className="w-full bg-gradient-to-r from-[#6e1628] via-[#851834] to-[#6e1628] text-amber-100 hover:text-white font-bold py-3 rounded-xl text-xs shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer border border-amber-300/30"
+              disabled={isLoggingIn}
+              className="w-full bg-gradient-to-r from-[#6e1628] via-[#851834] to-[#6e1628] text-amber-100 hover:text-white font-bold py-3 rounded-xl text-xs shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer border border-amber-300/30 disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              <LogIn className="w-4 h-4 text-amber-300" />
-              <span>{t('Sign In with Password', 'पासवर्ड से साइन इन करें')}</span>
+              {isLoggingIn ? (
+                <RefreshCw className="w-4 h-4 animate-spin text-amber-300" />
+              ) : (
+                <LogIn className="w-4 h-4 text-amber-300" />
+              )}
+              <span>
+                {isLoggingIn
+                  ? t('Signing In...', 'साइन इन हो रहा है...')
+                  : t('Sign In with Password', 'पासवर्ड से साइन इन करें')}
+              </span>
             </button>
 
             <div className="text-center pt-2">
@@ -1741,10 +2028,19 @@ export default function SignUpTab({
 
             <button
               type="submit"
-              className="w-full bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-stone-950 font-bold py-3 rounded-xl text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer mt-2"
+              disabled={isCreatingAccount}
+              className="w-full bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-stone-950 font-bold py-3 rounded-xl text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer mt-2 disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              <UserPlus className="w-4 h-4" />
-              <span>{t('Create Account', 'खाता बनाएं')}</span>
+              {isCreatingAccount ? (
+                <RefreshCw className="w-4 h-4 animate-spin" />
+              ) : (
+                <UserPlus className="w-4 h-4" />
+              )}
+              <span>
+                {isCreatingAccount
+                  ? t('Creating Firebase Account...', 'खाता बनाया जा रहा है...')
+                  : t('Create Account', 'खाता बनाएं')}
+              </span>
             </button>
 
             <div className="text-center pt-2">

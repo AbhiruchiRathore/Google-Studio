@@ -63,6 +63,11 @@ export interface MatrimonyProfile {
   updatedAt?: string;
 }
 
+export interface BusinessContact {
+  name: string;
+  phone: string;
+}
+
 export interface BusinessAd {
   id: number | string;
   title: string;
@@ -71,6 +76,7 @@ export interface BusinessAd {
   city?: string;
   address: string;
   phone: string;
+  contacts?: BusinessContact[];
   tagline?: string;
   offer?: string;
   rating?: string;
@@ -81,6 +87,7 @@ export interface BusinessAd {
   viewsCount?: number;
   inquiriesCount?: number;
   banner?: string;
+  bannerFit?: 'cover' | 'contain';
   description?: string;
   createdAt?: string;
   updatedAt?: string;

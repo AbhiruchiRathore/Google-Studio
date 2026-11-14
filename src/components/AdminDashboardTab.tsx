@@ -1302,7 +1302,12 @@ export const AdminDashboardTab: React.FC<AdminDashboardTabProps> = ({
                   <p className="text-stone-600">
                     {t('Owner:', 'संचालक:')} {ad.owner} · {ad.category}
                   </p>
-                  <p className="text-stone-500 font-mono">📞 {ad.phone}</p>
+                  <p className="text-stone-500 font-mono">
+                    📞{' '}
+                    {ad.contacts && ad.contacts.length > 1
+                      ? ad.contacts.map((c) => `${c.name}: ${c.phone}`).join(' | ')
+                      : ad.phone}
+                  </p>
                   {ad.adPricePaid !== undefined && (
                     <p className="text-[11px] font-semibold text-emerald-800">
                       {ad.adPricePaid > 0

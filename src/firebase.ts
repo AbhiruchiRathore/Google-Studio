@@ -1,5 +1,6 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCVwIvNC34zuWCejJs-uTrxCijC0Q7nxlk",
@@ -14,10 +15,12 @@ const firebaseConfig = {
 // Initialize Firebase (prevents duplicate initialization errors in Next.js/Vite)
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 export const auth = getAuth(app);
+export const db = getFirestore(app);
 
-// Secondary isolated auth instance for registering email/password users & verifying credentials
+// Secondary isolated auth instance for registering email/password users
 // without triggering the primary onAuthStateChanged listener unexpectedly.
 const secondaryApp =
   getApps().find((existing) => existing.name === 'signup-helper') ||
   initializeApp(firebaseConfig, 'signup-helper');
 export const secondaryAuth = getAuth(secondaryApp);
+export const secondaryDb = getFirestore(secondaryApp);

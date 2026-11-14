@@ -17,13 +17,14 @@ import { GuestListTab } from './components/GuestListTab';
 import { AdminDashboardTab } from './components/AdminDashboardTab';
 import { WhatsAppShare } from './components/WhatsAppShare';
 import { Footer } from './components/Footer';
-import { auth } from './firebase';
-import { onAuthStateChanged, signOut, getRedirectResult } from 'firebase/auth';
+import { auth, db } from './firebase';
+import { onAuthStateChanged, signOut, getRedirectResult, User } from 'firebase/auth';
 import { Sparkles, Lock } from 'lucide-react';
 import { useLanguage } from './context/LanguageContext';
 import { useAdminConfig, DEFAULT_ADMIN_CONFIG } from './context/AdminConfigContext';
 import { sanitizePhoneInput } from './utils/validation';
 import { getSessionOwnerKey, isProfileOwnedBySession } from './utils/profileOwnership';
+import { syncUserProfileToFirestore, testFirestoreConnection } from './utils/firebaseUserSync';
 
 const VALID_TABS = new Set<TabType>([
   'matrimony',
@@ -241,30 +242,98 @@ export const App: React.FC = () => {
   const authSessionRef = useRef<AuthSession | null>(authSession);
   authSessionRef.current = authSession;
 
-  // Global Auth Listener to handle Redirect returns across Web & APK WebView
+  // Verify Firestore reachability once on boot (non-blocking)
+  useEffect(() => {
+    void testFirestoreConnection();
+  }, []);
+
+  // Build consistent AuthSession from Firebase Auth User without overwriting UsernamePassword metadata
+  const buildAndSyncFirebaseSession = useCallback((user: User): AuthSession => {
+    const isGoogleProvider = user.providerData.some((p) => p.providerId === 'google.com');
+    const cleanEmail = (user.email || '').trim().toLowerCase();
+
+    let matchedUsername: string | undefined;
+    let matchedFullName: string | undefined;
+    let matchedPhone: string | undefined;
+
+    try {
+      const storedSessionRaw = localStorage.getItem('user_auth_session');
+      if (storedSessionRaw) {
+        const parsedSession = JSON.parse(storedSessionRaw) as AuthSession;
+        if (!cleanEmail || !parsedSession.email || parsedSession.email.toLowerCase() === cleanEmail) {
+          matchedUsername = parsedSession.username;
+          matchedFullName = parsedSession.name;
+          matchedPhone = parsedSession.phone;
+        }
+      }
+
+      const accountsRaw = localStorage.getItem('samaj_user_accounts');
+      if (accountsRaw && cleanEmail) {
+        const accounts = JSON.parse(accountsRaw) as Array<{
+          email?: string;
+          username?: string;
+          fullName?: string;
+          phone?: string;
+        }>;
+        const found = accounts.find((a) => a.email && a.email.toLowerCase() === cleanEmail);
+        if (found) {
+          matchedUsername = matchedUsername || found.username;
+          matchedFullName = matchedFullName || found.fullName;
+          matchedPhone = matchedPhone || found.phone;
+        }
+      }
+    } catch {
+      // ignore storage errors
+    }
+
+    const displayName =
+      user.displayName ||
+      matchedFullName ||
+      matchedUsername ||
+      (cleanEmail ? cleanEmail.split('@')[0] : '') ||
+      (isGoogleProvider ? 'Google User' : 'Samaj Member');
+
+    const session: AuthSession = {
+      method: isGoogleProvider ? 'Google' : 'UsernamePassword',
+      name: displayName,
+      email: user.email || '',
+      username: matchedUsername || (!isGoogleProvider && cleanEmail ? cleanEmail.split('@')[0] : undefined),
+      phone: matchedPhone || user.phoneNumber || undefined,
+      photoUrl: user.photoURL || '',
+      loggedInAt: new Date().toISOString(),
+      verified: user.emailVerified || !isGoogleProvider
+    };
+
+    try {
+      localStorage.setItem('user_auth_session', JSON.stringify(session));
+      if (isGoogleProvider) {
+        localStorage.setItem('device_google_account', JSON.stringify({
+          name: session.name,
+          email: session.email,
+          photoUrl: session.photoUrl
+        }));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+
+    void syncUserProfileToFirestore(db, auth, user, {
+      username: session.username,
+      fullName: session.name,
+      phone: session.phone,
+      provider: isGoogleProvider ? 'google.com' : 'password'
+    });
+
+    return session;
+  }, []);
+
+  // Global Auth Listener to handle Redirect returns & Email/Password / Google sign-ins across Web & APK WebView
   useEffect(() => {
     getRedirectResult(auth)
       .then((result) => {
         if (result?.user) {
-          const session: AuthSession = {
-            method: 'Google',
-            name: result.user.displayName || 'Google User',
-            email: result.user.email || '',
-            photoUrl: result.user.photoURL || '',
-            loggedInAt: new Date().toISOString(),
-            verified: result.user.emailVerified
-          };
+          const session = buildAndSyncFirebaseSession(result.user);
           setAuthSession(session);
-          try {
-            localStorage.setItem('user_auth_session', JSON.stringify(session));
-            localStorage.setItem('device_google_account', JSON.stringify({
-              name: session.name,
-              email: session.email,
-              photoUrl: session.photoUrl
-            }));
-          } catch (e) {
-            console.error(e);
-          }
           if (currentTabRef.current === 'signup') {
             navigateToTab('dashboard', { replace: true });
           }
@@ -274,25 +343,8 @@ export const App: React.FC = () => {
 
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
-        const session: AuthSession = {
-          method: 'Google',
-          name: user.displayName || 'Google User',
-          email: user.email || '',
-          photoUrl: user.photoURL || '',
-          loggedInAt: new Date().toISOString(),
-          verified: user.emailVerified
-        };
+        const session = buildAndSyncFirebaseSession(user);
         setAuthSession(session);
-        try {
-          localStorage.setItem('user_auth_session', JSON.stringify(session));
-          localStorage.setItem('device_google_account', JSON.stringify({
-            name: session.name,
-            email: session.email,
-            photoUrl: session.photoUrl
-          }));
-        } catch (e) {
-          console.error(e);
-        }
         if (currentTabRef.current === 'signup') {
           navigateToTab('dashboard', { replace: true });
         }
@@ -304,7 +356,7 @@ export const App: React.FC = () => {
       }
     });
     return () => unsubscribe();
-  }, []);
+  }, [buildAndSyncFirebaseSession, navigateToTab]);
 
   // Profiles owned by the currently logged-in account (max 1 profile per login)
   const userOwnedProfiles = useMemo(() => {

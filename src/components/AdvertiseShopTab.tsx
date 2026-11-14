@@ -37,6 +37,8 @@ export const AdvertiseShopTab: React.FC<AdvertiseShopTabProps> = ({
     owner: authSession?.name || '',
     category: '',
     phone: sanitizePhoneInput(authSession?.phone || ''),
+    secondaryOwner: '',
+    secondaryPhone: '',
     address: '',
     city: 'Indore',
     description: '',
@@ -72,6 +74,11 @@ export const AdvertiseShopTab: React.FC<AdvertiseShopTabProps> = ({
       } else {
         setPhoneError(null);
       }
+      return;
+    }
+    if (name === 'secondaryPhone') {
+      const cleaned = sanitizePhoneInput(target.value);
+      setFormData(prev => ({ ...prev, secondaryPhone: cleaned }));
       return;
     }
     const value = target.type === 'checkbox' ? (target as HTMLInputElement).checked : target.value;
@@ -119,17 +126,37 @@ export const AdvertiseShopTab: React.FC<AdvertiseShopTabProps> = ({
       return;
     }
 
+    const secOwner = formData.secondaryOwner.trim();
+    const secPhoneCleaned = sanitizePhoneInput(formData.secondaryPhone);
+    if (secPhoneCleaned.length > 0) {
+      const secCheck = validatePhoneNumber(secPhoneCleaned, false);
+      if (!secCheck.valid) {
+        const msg = lang === 'hi' ? (secCheck.errorHi || '') : (secCheck.errorEn || '');
+        setFormError(msg);
+        return;
+      }
+    }
+
+    const contacts = [{ name: formData.owner.trim(), phone: phoneCheck.cleaned }];
+    if (secOwner || secPhoneCleaned) {
+      contacts.push({
+        name: secOwner || formData.owner.trim(),
+        phone: secPhoneCleaned || phoneCheck.cleaned
+      });
+    }
+
     const isFeaturedPlacement =
       (formData.adTier === 'featured' && config.featuredAdsEnabled) || formData.adTier === 'spotlight';
 
     const newAd: BusinessAd = {
       id: Date.now(),
       title: formData.name.trim(),
-      owner: formData.owner.trim(),
+      owner: secOwner ? `${formData.owner.trim()} & ${secOwner}` : formData.owner.trim(),
       category: formData.category.trim(),
       city: formData.city.trim() || 'Indore',
       address: formData.address.trim(),
       phone: phoneCheck.cleaned,
+      contacts,
       tagline: formData.description.trim(),
       description: formData.description.trim(),
       offer: formData.offer.trim(),
@@ -317,6 +344,38 @@ export const AdvertiseShopTab: React.FC<AdvertiseShopTabProps> = ({
               {phoneError && (
                 <p className="text-[11px] text-rose-600 font-medium mt-1">{phoneError}</p>
               )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-amber-50/40 border border-amber-200/80 rounded-xl p-3.5">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                {t('2nd Owner / Partner Name (Optional)', 'दूसरा संचालक / पार्टनर नाम (वैकल्पिक)')}
+              </label>
+              <input
+                type="text"
+                name="secondaryOwner"
+                value={formData.secondaryOwner}
+                onChange={handleChange}
+                className="w-full border border-amber-300 rounded-lg p-2.5 text-xs bg-white focus:ring-2 focus:ring-amber-500"
+                placeholder={t('e.g., Pradeep Rathod', 'उदा. प्रदीप राठौड़')}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
+                <span>{t('2nd Contact Number (Optional)', 'दूसरा संपर्क नंबर (वैकल्पिक)')}</span>
+                <span className="text-[10px] font-mono text-stone-400">{formData.secondaryPhone.length}/10</span>
+              </label>
+              <input
+                type="tel"
+                inputMode="numeric"
+                maxLength={10}
+                name="secondaryPhone"
+                value={formData.secondaryPhone}
+                onChange={handleChange}
+                className="w-full border border-amber-300 rounded-lg p-2.5 text-xs bg-white font-mono focus:ring-2 focus:ring-amber-500"
+                placeholder={t('2nd 10-digit mobile number', 'दूसरा 10 अंकों का मोबाइल नंबर')}
+              />
             </div>
           </div>
 

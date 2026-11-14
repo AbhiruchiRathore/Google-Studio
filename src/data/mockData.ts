@@ -491,6 +491,61 @@ export const INITIAL_PROFILES: MatrimonyProfile[] = [
 
 export const INITIAL_ADS: BusinessAd[] = [
   {
+    id: 6,
+    title: "Shri Ambika Oil Industries",
+    owner: "Nandkishor Rathod & Pradeep Rathod",
+    category: "Manufacturing & Oil",
+    city: "Vijayapur, Karnataka",
+    address: "Plot No - M-25, Industrial Estate, Station Back Road, Vijayapur - 586103, Karnataka",
+    phone: "+91 94490 27659",
+    contacts: [
+      { name: "Pradeep Rathod", phone: "+91 94490 27659" },
+      { name: "Nandkishor Rathod", phone: "944941799" }
+    ],
+    tagline: "Edible Oil Processing, Bottling & Bulk Tin Packaging • Industrial Estate, Vijayapur",
+    description: "Shri Ambika Oil Industries — Trusted producer & wholesale supplier of pure edible oils in bottles and bulk tins. Contacts: Nandkishor Rathod (944941799) & Pradeep Rathod (9449027659).",
+    offer: "Bulk & Wholesale Edible Oil Supply • Bottles & Tin Packs",
+    rating: "5.0 ★",
+    isFeatured: true,
+    adTier: "featured",
+    banner: "/assets/aistudio/image_9bd59be9.png",
+    bannerFit: "contain"
+  },
+  {
+    id: 5,
+    title: "Shree Rathore Enterprises (श्री राठौर एंटरप्राइजेस)",
+    owner: "Shri. Dilip Kumar Babulal Rathore",
+    category: "Wholesale & Kirana",
+    city: "Akot, Dist. Akola, Maharashtra",
+    address: "Gol Bazar, Akot, Dist. Akola, Maharashtra (गोल बाजार, आकोट, जि. अकोला)",
+    phone: "+91 81499 34323",
+    tagline: "अगरबत्ती, कुमकुम गुलाल पूजा साहित्य, किराणा, डिस्पोजेबल आइटम सभी प्रकार के सामान के होलसेल विक्रेता।",
+    description: "Wholesale dealer in Agarbatti (Zed Black, Cycle Pure Agarbathi), Devak, Kumkum Gulal, Pooja Sahitya, Kirana, Dry Fruits & all Disposable Items. Proprietor: Shri. Dilip Kumar Babulal Rathore.",
+    offer: "Wholesale Dealer • Agarbatti, Pooja Sahitya, Kirana & Disposables",
+    rating: "5.0 ★",
+    isFeatured: true,
+    adTier: "featured",
+    banner: "/assets/aistudio/image_a8538c74.png",
+    bannerFit: "contain"
+  },
+  {
+    id: 4,
+    title: "Ramprasad Chivda (रामप्रसाद चिवडा)",
+    owner: "Rathod (Chaudhari) Family • Est. 1957",
+    category: "Food & Namkeen",
+    city: "Ahilyanagar (Ahmednagar), Maharashtra",
+    address: "6821, Ramprasad Chivda, Chitale Road, Ahilyanagar, Maharashtra - 414001 | Ph: (0241) 2343412",
+    phone: "+91 94222 34711",
+    tagline: "1957 से स्वाद की विरासत • स्पेशल पोहा चिवड़ा, स्पेशल मका चिवड़ा, स्पेशल बटाटा चिवड़ा। ताज़े मेवे व पारंपरिक विधि से निर्मित।",
+    description: "Ahilyanagar's renowned legacy of taste across three generations since 1957. Fresh Dry-Fruit Poha Chivda, Maka Chivda & Batata Chivda prepared with finest ingredients and traditional recipes. Landline: (0241) 2343412 | Mobile: +91 94222 34711.",
+    offer: "Est. 1957 • Special Poha, Maka & Batata Chivda",
+    rating: "5.0 ★",
+    isFeatured: true,
+    adTier: "featured",
+    banner: "/assets/aistudio/image_d976df01.png",
+    bannerFit: "cover"
+  },
+  {
     id: 1,
     title: "Rathore Saree & Textile Emporium",
     owner: "Rameshwar Rathore",
@@ -644,6 +699,9 @@ export const BOOKLET_PAGES = [
     title: "राठौर व्यापार निर्देशिका (Business Directory)",
     subtitle: "स्वजातीय बंधुओं के स्थानीय व्यापार को प्राथमिकता दें",
     content: [
+      "• Shri Ambika Oil Industries (Nandkishor Rathod: 944941799 | Pradeep Rathod: 9449027659) - Plot No M-25, Industrial Estate, Station Back Road, Vijayapur - 586103, Karnataka",
+      "• श्री राठौर एंटरप्राइजेस (श्री. दिलीप कुमार बाबूलाल राठौर) - गोल बाजार, आकोट, जि. अकोला (अगरबत्ती, पूजा साहित्य, किराणा व डिस्पोजेबल आइटम होलसेल विक्रेता | मो. 8149934323)",
+      "• रामप्रसाद चिवडा (1957 से सुप्रसिद्ध) - 6821, चितले रोड, अहिल्यानगर, महाराष्ट्र (स्पे. पोहा, मका व बटाटा चिवड़ा | संपर्क: 9422234711)",
       "• राठौर साड़ी एवं टेक्सटाइल एम्पोरियम - राजवाड़ा, इंदौर (10% समाज विशेष छूट)",
       "• श्री राठौर हार्डवेयर एवं इलेक्ट्रॉनिक्स - फ्रीगंज, उज्जैन (15 किमी तक निःशुल्क डिलीवरी)",
       "• राठौर ज्वैलर्स एवं सिल्वर पैलेस - सराफा बाजार, खरगोन (सिल्वर मेकिंग चार्ज फ्री)",

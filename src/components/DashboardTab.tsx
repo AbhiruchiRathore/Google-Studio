@@ -494,9 +494,26 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
       return;
     }
 
+    const secContact = editingAd.contacts?.[1];
+    const secName = (secContact?.name || '').trim();
+    const secPhone = sanitizePhoneInput(secContact?.phone || '');
+    const hasSecond = Boolean(secName || secPhone);
+    const primaryOwnerName = hasSecond
+      ? (editingAd.contacts?.[0]?.name || editingAd.owner || '').trim()
+      : (editingAd.owner || editingAd.contacts?.[0]?.name || '').trim();
+    const normalizedContacts = [{ name: primaryOwnerName, phone: phoneRes.cleaned }];
+    if (hasSecond) {
+      normalizedContacts.push({
+        name: secName || primaryOwnerName,
+        phone: secPhone || phoneRes.cleaned
+      });
+    }
+
     const cleanedAd: BusinessAd = {
       ...editingAd,
-      phone: phoneRes.cleaned
+      owner: secName ? `${primaryOwnerName} & ${secName}` : primaryOwnerName,
+      phone: phoneRes.cleaned,
+      contacts: normalizedContacts
     };
 
     const exists = ads.some(a => a.id === cleanedAd.id);
@@ -1822,6 +1839,9 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                       onChange={(e) => setEditingAd({ ...editingAd, category: e.target.value })}
                       className="w-full p-2.5 rounded-xl border border-stone-200 bg-white"
                     >
+                      <option value="Manufacturing & Oil">{t('Manufacturing & Oil', 'उद्योग एवं ऑयल मिल')}</option>
+                      <option value="Wholesale & Kirana">{t('Wholesale & Kirana', 'होलसेल एवं किराणा')}</option>
+                      <option value="Food & Namkeen">{t('Food & Namkeen', 'खाद्य एवं नमकीन')}</option>
                       <option value="Clothing & Retail">{t('Clothing & Retail', 'कपड़े और रिटेल')}</option>
                       <option value="Hardware & Home Imprv.">{t('Hardware & Home Imprv.', 'हार्डवेयर व गृह निर्माण')}</option>
                       <option value="Jewelry & Gold">{t('Jewelry & Gold', 'ज्वेलरी व आभूषण')}</option>
@@ -1864,6 +1884,51 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                       onChange={(e) => setEditingAd({ ...editingAd, city: e.target.value })}
                       placeholder={t('e.g. Indore', 'जैसे: इंदौर')}
                       className="w-full p-2.5 rounded-xl border border-stone-200 bg-stone-50/40"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs bg-rose-50/40 p-3 rounded-xl border border-rose-100">
+                  <div>
+                    <label className="block font-bold text-stone-700 mb-1">
+                      {t('2nd Owner / Partner Name (Optional)', 'दूसरा संचालक नाम (वैकल्पिक)')}
+                    </label>
+                    <input
+                      type="text"
+                      value={editingAd.contacts?.[1]?.name || ''}
+                      onChange={(e) => {
+                        const existingContacts = editingAd.contacts || [{ name: editingAd.owner, phone: editingAd.phone }];
+                        const first = existingContacts[0] || { name: editingAd.owner, phone: editingAd.phone };
+                        const second = existingContacts[1] || { name: '', phone: '' };
+                        setEditingAd({
+                          ...editingAd,
+                          contacts: [first, { ...second, name: e.target.value }]
+                        });
+                      }}
+                      placeholder={t('Partner name', 'पार्टनर का नाम')}
+                      className="w-full p-2.5 rounded-xl border border-stone-200 bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-stone-700 mb-1">
+                      {t('2nd Contact Number (Optional)', 'दूसरा मोबाइल नंबर (वैकल्पिक)')}
+                    </label>
+                    <input
+                      type="tel"
+                      inputMode="numeric"
+                      maxLength={10}
+                      value={editingAd.contacts?.[1]?.phone || ''}
+                      onChange={(e) => {
+                        const existingContacts = editingAd.contacts || [{ name: editingAd.owner, phone: editingAd.phone }];
+                        const first = existingContacts[0] || { name: editingAd.owner, phone: editingAd.phone };
+                        const second = existingContacts[1] || { name: '', phone: '' };
+                        setEditingAd({
+                          ...editingAd,
+                          contacts: [first, { ...second, phone: sanitizePhoneInput(e.target.value) }]
+                        });
+                      }}
+                      placeholder={t('2nd 10-digit number', 'दूसरा 10 अंकों का नंबर')}
+                      className="w-full p-2.5 rounded-xl border border-stone-200 bg-white font-mono"
                     />
                   </div>
                 </div>
@@ -3242,6 +3307,12 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               </p>
               {previewAd.address && (
                 <p className="text-stone-500 font-light">📍 {previewAd.address}</p>
+              )}
+              {previewAd.contacts && previewAd.contacts.length > 1 && (
+                <p className="text-[11px] text-stone-600 bg-stone-50 border border-stone-200 rounded-lg px-2.5 py-1.5">
+                  <span className="font-semibold text-stone-700">{t('Alt. Contact:', 'अतिरिक्त संपर्क:')}</span>{' '}
+                  {previewAd.contacts.slice(1).map((c) => `${c.name} (${c.phone})`).join(', ')}
+                </p>
               )}
               {previewAd.offer && (
                 <div className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-2.5 rounded-xl font-semibold flex items-center gap-1.5">

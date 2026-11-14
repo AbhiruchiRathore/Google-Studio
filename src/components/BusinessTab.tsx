@@ -1,11 +1,18 @@
 import React, { useState } from 'react';
 import { Store, PlusCircle, Phone, Tag, Star, X, Sparkles, UserPlus, Heart, Share2, AlertCircle } from 'lucide-react';
-import { BusinessAd, TabType, AuthSession } from '../types';
+import { BusinessAd, BusinessContact, TabType, AuthSession } from '../types';
 import { sanitizePhoneInput, validatePhoneNumber } from '../utils/validation';
 import { useLanguage } from '../context/LanguageContext';
 import { useAdminConfig } from '../context/AdminConfigContext';
 import { shareViaWhatsApp } from '../utils/shareAndPrint';
 import { ImageUploadField } from './ImageUploadField';
+
+function getAdContacts(ad: BusinessAd): BusinessContact[] {
+  if (Array.isArray(ad.contacts) && ad.contacts.length > 0) {
+    return ad.contacts.filter((c) => c.name?.trim() || c.phone?.trim());
+  }
+  return [{ name: ad.owner, phone: ad.phone }];
+}
 
 interface BusinessTabProps {
   authSession: AuthSession | null;
@@ -25,6 +32,7 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({
   const [showQuickModal, setShowQuickModal] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [modalError, setModalError] = useState<string | null>(null);
+  const [previewBanner, setPreviewBanner] = useState<{ url: string; title: string } | null>(null);
 
   const cycleLabel =
     config.adBillingCycle === 'monthly'
@@ -38,6 +46,8 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({
     owner: '',
     category: 'Clothing & Retail',
     phone: '',
+    secondaryOwner: '',
+    secondaryPhone: '',
     address: '',
     tagline: '',
     offer: 'Special Samaj Member Discount',
@@ -98,18 +108,52 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({
 
   const shareAdWhatsApp = (ad: BusinessAd, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
+    const adContacts = getAdContacts(ad);
+    const contactsText =
+      adContacts.length > 1
+        ? adContacts.map((c) => `${c.name}: ${c.phone}`).join(' | ')
+        : adContacts[0]?.phone || ad.phone;
+    const ownersLabel = adContacts.length > 1 ? adContacts.map((c) => c.name).join(' & ') : ad.owner;
+
     const text = lang === 'hi'
-      ? `🛍️ *राठौड़ समाज व्यापार डायरेक्टरी* 🛍️\n\n*${ad.title}*\n*श्रेणी:* ${ad.category}\n*संचालक:* ${ad.owner} ${ad.city ? `(${ad.city})` : ''}\n${ad.tagline || ad.description ? `*विवरण:* ${ad.tagline || ad.description}\n` : ''}${ad.offer ? `🎁 *विशेष ऑफर:* ${ad.offer}\n` : ''}${ad.address ? `📍 *पता:* ${ad.address}\n` : ''}📞 *संपर्क:* ${ad.phone}\n\n✨ *राठौड़ समाज व्यापार डायरेक्टरी से जुड़ें:*\nhttps://svayaa.com/`
-      : `🛍️ *Rathore Samaj Business Directory* 🛍️\n\n*${ad.title}*\n*Category:* ${ad.category}\n*Owner:* ${ad.owner} ${ad.city ? `(${ad.city})` : ''}\n${ad.tagline || ad.description ? `*About:* ${ad.tagline || ad.description}\n` : ''}${ad.offer ? `🎁 *Special Offer:* ${ad.offer}\n` : ''}${ad.address ? `📍 *Address:* ${ad.address}\n` : ''}📞 *Contact:* ${ad.phone}\n\n✨ *Connect with Rathore Samaj businesses on our community portal:*\nhttps://svayaa.com/\n_Powered by Svayaa_`;
+      ? `🛍️ *राठौड़ समाज व्यापार डायरेक्टरी* 🛍️\n\n*${ad.title}*\n*श्रेणी:* ${ad.category}\n*संचालक:* ${ownersLabel} ${ad.city ? `(${ad.city})` : ''}\n${ad.tagline || ad.description ? `*विवरण:* ${ad.tagline || ad.description}\n` : ''}${ad.offer ? `🎁 *विशेष ऑफर:* ${ad.offer}\n` : ''}${ad.address ? `📍 *पता:* ${ad.address}\n` : ''}📞 *संपर्क:* ${contactsText}\n\n✨ *राठौड़ समाज व्यापार डायरेक्टरी से जुड़ें:*\nhttps://svayaa.com/`
+      : `🛍️ *Rathore Samaj Business Directory* 🛍️\n\n*${ad.title}*\n*Category:* ${ad.category}\n*Owner(s):* ${ownersLabel} ${ad.city ? `(${ad.city})` : ''}\n${ad.tagline || ad.description ? `*About:* ${ad.tagline || ad.description}\n` : ''}${ad.offer ? `🎁 *Special Offer:* ${ad.offer}\n` : ''}${ad.address ? `📍 *Address:* ${ad.address}\n` : ''}📞 *Contact:* ${contactsText}\n\n✨ *Connect with Rathore Samaj businesses on our community portal:*\nhttps://svayaa.com/\n_Powered by Svayaa_`;
 
     shareViaWhatsApp(text);
   };
 
-  const categories = ['all', 'Clothing & Retail', 'Hardware & Home Imprv.', 'Jewelry & Gold'];
+  const categories = [
+    'all',
+    'Manufacturing & Oil',
+    'Wholesale & Kirana',
+    'Food & Namkeen',
+    'Clothing & Retail',
+    'Hardware & Home Imprv.',
+    'Jewelry & Gold',
+    ...Array.from(
+      new Set(
+        ads
+          .map((ad) => ad.category)
+          .filter(
+            (c) =>
+              Boolean(c) &&
+              c !== 'Manufacturing & Oil' &&
+              c !== 'Wholesale & Kirana' &&
+              c !== 'Food & Namkeen' &&
+              c !== 'Clothing & Retail' &&
+              c !== 'Hardware & Home Imprv.' &&
+              c !== 'Jewelry & Gold'
+          )
+      )
+    )
+  ];
 
   const translateCategory = (cat: string) => {
     switch (cat) {
       case 'all': return t('All Businesses', 'सभी व्यापार');
+      case 'Manufacturing & Oil': return t('Manufacturing & Oil', 'उद्योग एवं ऑयल मिल');
+      case 'Wholesale & Kirana': return t('Wholesale & Kirana', 'होलसेल एवं किराणा');
+      case 'Food & Namkeen': return t('Food & Namkeen', 'खाद्य एवं नमकीन');
       case 'Clothing & Retail': return t('Clothing & Retail', 'वस्त्र एवं रिटेल');
       case 'Hardware & Home Imprv.': return t('Hardware & Home Imprv.', 'हार्डवेयर व गृह निर्माण');
       case 'Jewelry & Gold': return t('Jewelry & Gold', 'ज्वेलरी व स्वर्ण');
@@ -146,13 +190,33 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({
           ? config.featuredAdPrice
           : config.standardAdPrice;
 
+    const primaryOwner = formState.owner.trim() || 'Samaj Business Owner';
+    const secOwner = formState.secondaryOwner.trim();
+    const secPhone = sanitizePhoneInput(formState.secondaryPhone);
+    if (secPhone && secPhone.length > 0) {
+      const secCheck = validatePhoneNumber(secPhone, false);
+      if (!secCheck.valid) {
+        setModalError(lang === 'hi' ? (secCheck.errorHi || '') : (secCheck.errorEn || ''));
+        return;
+      }
+    }
+
+    const contacts: BusinessContact[] = [{ name: primaryOwner, phone: phoneCheck.cleaned }];
+    if (secOwner || secPhone) {
+      contacts.push({
+        name: secOwner || primaryOwner,
+        phone: secPhone || phoneCheck.cleaned
+      });
+    }
+
     onAddQuickAd({
       title: formState.title.trim(),
-      owner: formState.owner.trim() || 'Samaj Business Owner',
+      owner: secOwner ? `${primaryOwner} & ${secOwner}` : primaryOwner,
       category: formState.category,
       city: 'Indore',
       address: formState.address.trim() || 'Main City Market',
       phone: phoneCheck.cleaned,
+      contacts,
       tagline: formState.tagline.trim() || 'Quality services & verified products for community members.',
       offer: formState.offer,
       rating: '5.0 ★',
@@ -172,6 +236,8 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({
       owner: '',
       category: 'Clothing & Retail',
       phone: '',
+      secondaryOwner: '',
+      secondaryPhone: '',
       address: '',
       tagline: '',
       offer: 'Special Samaj Member Discount',
@@ -278,6 +344,7 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredAds.map((ad) => {
           const bannerUrl = ad.banner || "https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=600&q=80";
+          const adContacts = getAdContacts(ad);
 
           return (
             <div 
@@ -285,11 +352,21 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({
               className="bg-white rounded-2xl shadow-sm border border-stone-200/80 overflow-hidden flex flex-col justify-between hover:shadow-xl hover:border-amber-400/50 transition-all duration-300 group"
             >
               <div>
-                <div className="relative h-44 bg-stone-100 overflow-hidden">
+                <div
+                  onClick={() => setPreviewBanner({ url: bannerUrl, title: ad.title })}
+                  className={`relative aspect-[5/4] w-full overflow-hidden cursor-pointer ${
+                    ad.bannerFit === 'contain' ? 'bg-amber-50/75' : 'bg-stone-100'
+                  }`}
+                  title={t('Click to view full image', 'पूरी फ़ोटो देखने के लिए क्लिक करें')}
+                >
                   <img 
                     src={bannerUrl} 
                     alt={ad.title} 
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                    className={`w-full h-full transition-transform duration-500 ${
+                      ad.bannerFit === 'contain'
+                        ? 'object-contain group-hover:scale-[1.02]'
+                        : 'object-cover object-center group-hover:scale-105'
+                    }`}
                   />
                   <div className="absolute top-3 left-3 bg-[#24050b]/90 text-amber-300 text-xs font-semibold px-2.5 py-1 rounded-md shadow-xs border border-amber-500/30 backdrop-blur-xs">
                     {ad.category}
@@ -318,7 +395,10 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({
                   </h3>
 
                   <p className="text-xs text-stone-600 font-medium mb-2.5 break-words">
-                    {t('Owner:', 'संचालक:')} {ad.owner} {ad.city ? `· ${ad.city}` : ''}
+                    {adContacts.length > 1
+                      ? `${t('Owners:', 'संचालक:')} ${adContacts.map((c) => c.name).join(' & ')}`
+                      : `${t('Owner:', 'संचालक:')} ${ad.owner}`}{' '}
+                    {ad.city ? `· ${ad.city}` : ''}
                   </p>
 
                   <p className="text-xs text-stone-600 mb-3 leading-relaxed break-words">
@@ -326,9 +406,22 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({
                   </p>
 
                   {ad.address && (
-                    <p className="text-[11px] text-stone-500 mb-3 break-words">
+                    <p className="text-[11px] text-stone-500 mb-2 break-words">
                       📍 {ad.address}
                     </p>
+                  )}
+
+                  {adContacts.length > 1 && (
+                    <div className="text-[11px] text-stone-600 bg-stone-50 border border-stone-200/80 rounded-lg px-2.5 py-1.5 mb-3 space-y-0.5 break-words">
+                      {adContacts.slice(1).map((extra, idx) => (
+                        <p key={`${extra.name}-${extra.phone}-${idx}`}>
+                          <span className="font-semibold text-stone-700">
+                            {t('Alt. Contact:', 'अतिरिक्त संपर्क:')}
+                          </span>{' '}
+                          {extra.name} (<span className="font-mono">{extra.phone}</span>)
+                        </p>
+                      ))}
+                    </div>
                   )}
 
                   {ad.offer && (
@@ -372,10 +465,10 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({
                 )}
 
                 <a 
-                  href={`tel:${ad.phone}`} 
+                  href={`tel:${ad.phone || adContacts[0]?.phone}`} 
                   className="w-full bg-gradient-to-r from-[#380812] to-[#540e1b] hover:from-[#24050b] hover:to-[#380812] text-amber-200 font-semibold py-2.5 px-3 rounded-xl text-xs flex flex-wrap items-center justify-center gap-1.5 text-center transition-all shadow-xs border border-amber-500/20 cursor-pointer"
                 >
-                  <Phone className="w-3.5 h-3.5 text-amber-300 shrink-0" /> <span className="whitespace-nowrap">{t('Call Owner', 'कॉल करें')} ({ad.phone})</span>
+                  <Phone className="w-3.5 h-3.5 text-amber-300 shrink-0" /> <span className="whitespace-nowrap">{t('Call Owner', 'कॉल करें')} ({ad.phone || adContacts[0]?.phone})</span>
                 </a>
               </div>
             </div>
@@ -477,6 +570,35 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({
                 />
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 bg-stone-50 p-3 rounded-xl border border-stone-200">
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">
+                    {t('2nd Owner / Partner (Optional)', 'दूसरा संचालक नाम (वैकल्पिक)')}
+                  </label>
+                  <input
+                    type="text"
+                    value={formState.secondaryOwner}
+                    onChange={(e) => setFormState({ ...formState, secondaryOwner: e.target.value })}
+                    className="w-full p-2 border rounded-lg border-stone-300 bg-white focus:ring-2 focus:ring-amber-500"
+                    placeholder={t('Partner name', 'पार्टनर का नाम')}
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">
+                    {t('2nd Contact Number (Optional)', 'दूसरा मोबाइल नंबर (वैकल्पिक)')}
+                  </label>
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    maxLength={10}
+                    value={formState.secondaryPhone}
+                    onChange={(e) => setFormState({ ...formState, secondaryPhone: sanitizePhoneInput(e.target.value) })}
+                    className="w-full p-2 border rounded-lg border-stone-300 bg-white focus:ring-2 focus:ring-amber-500 font-mono"
+                    placeholder={t('2nd 10-digit number', 'दूसरा 10 अंकों का नंबर')}
+                  />
+                </div>
+              </div>
+
               <div>
                 <ImageUploadField
                   label={t('Shop Photo / Banner (Optional)', 'दुकान की फ़ोटो / बैनर (वैकल्पिक)')}
@@ -548,6 +670,36 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({
                 {t('Submit Advertisement', 'विज्ञापन सबमिट करें')}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* FULL-SIZE BUSINESS IMAGE / FLYER PREVIEW */}
+      {previewBanner && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={() => setPreviewBanner(null)}
+        >
+          <div
+            className="relative max-w-2xl w-full max-h-[90vh] flex flex-col items-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setPreviewBanner(null)}
+              className="absolute -top-3 -right-3 bg-white text-stone-800 hover:bg-stone-100 p-2 rounded-full shadow-lg cursor-pointer z-10"
+              aria-label={t('Close preview', 'प्रीव्यू बंद करें')}
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <img
+              src={previewBanner.url}
+              alt={previewBanner.title}
+              className="max-h-[82vh] w-auto max-w-full rounded-2xl object-contain shadow-2xl border border-amber-300/40 bg-white"
+            />
+            <p className="mt-2.5 text-xs font-semibold text-amber-100 text-center">
+              {previewBanner.title}
+            </p>
           </div>
         </div>
       )}
