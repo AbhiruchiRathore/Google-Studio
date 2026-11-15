@@ -46,8 +46,18 @@ const VALID_TABS = new Set<TabType>([
 
 function hasPasswordResetParams(): boolean {
   if (typeof window === 'undefined') return false;
-  const params = new URLSearchParams(window.location.search);
-  return Boolean(params.get('mode') === 'resetPassword' && params.get('oobCode'));
+  const searchParams = new URLSearchParams(window.location.search);
+  if (searchParams.get('mode') === 'resetPassword' && searchParams.get('oobCode')) {
+    return true;
+  }
+  const hashQueryIndex = window.location.hash.indexOf('?');
+  if (hashQueryIndex >= 0) {
+    const hashParams = new URLSearchParams(window.location.hash.slice(hashQueryIndex + 1));
+    if (hashParams.get('mode') === 'resetPassword' && hashParams.get('oobCode')) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function isPrivacyPolicyPathname(): boolean {
@@ -63,7 +73,7 @@ function getInitialTabFromUrl(): TabType {
   if (isPrivacyPolicyPathname()) {
     return 'privacy-policy';
   }
-  const hashTab = window.location.hash.replace('#', '') as TabType;
+  const hashTab = window.location.hash.replace('#', '').split('?')[0] as TabType;
   if (VALID_TABS.has(hashTab) && hashTab !== 'admin') {
     return hashTab;
   }
@@ -113,7 +123,9 @@ export const App: React.FC = () => {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const initialTab = getInitialTabFromUrl();
-    const initialUrl = getUrlForTab(initialTab, window.location.search);
+    const initialUrl = hasPasswordResetParams()
+      ? `${window.location.pathname}${window.location.search}${window.location.hash}`
+      : getUrlForTab(initialTab, window.location.search);
 
     try {
       if (!window.history.state?.tab) {
@@ -356,7 +368,7 @@ export const App: React.FC = () => {
         if (result?.user) {
           const session = buildAndSyncFirebaseSession(result.user);
           setAuthSession(session);
-          if (currentTabRef.current === 'signup') {
+          if (currentTabRef.current === 'signup' && !hasPasswordResetParams()) {
             navigateToTab('dashboard', { replace: true });
           }
         }
@@ -367,7 +379,7 @@ export const App: React.FC = () => {
       if (user) {
         const session = buildAndSyncFirebaseSession(user);
         setAuthSession(session);
-        if (currentTabRef.current === 'signup') {
+        if (currentTabRef.current === 'signup' && !hasPasswordResetParams()) {
           navigateToTab('dashboard', { replace: true });
         }
       } else {

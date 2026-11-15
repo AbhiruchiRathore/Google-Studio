@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   LogOut, CheckCircle2, Copy, Check, ExternalLink, 
-  AlertTriangle, RefreshCw, HelpCircle,
+  AlertTriangle, RefreshCw,
   User, Lock, Eye, EyeOff, Phone, UserPlus, LogIn,
-  AlertCircle, ShieldCheck, KeyRound, ArrowLeft, Mail, Send
+  AlertCircle, KeyRound, ArrowLeft, Mail, Send
 } from 'lucide-react';
 import { AuthSession, TabType, UserAccount } from '../types';
 import { GoogleSignInModal } from './GoogleSignInModal';
@@ -85,14 +85,67 @@ function verifyOobCodeOnce(code: string): Promise<string> {
   return pending;
 }
 
-function isKnownAuthorizedHost(hostname: string): boolean {
-  const host = hostname.toLowerCase();
-  return (
-    host === 'localhost' ||
-    host === '127.0.0.1' ||
-    host.endsWith('.firebaseapp.com') ||
-    host.endsWith('.web.app')
-  );
+function extractPasswordResetParams(): { mode: string | null; oobCode: string | null } {
+  if (typeof window === 'undefined') return { mode: null, oobCode: null };
+  const searchParams = new URLSearchParams(window.location.search);
+  const searchMode = searchParams.get('mode');
+  const searchCode = searchParams.get('oobCode');
+  if (searchMode === 'resetPassword' && searchCode) {
+    return { mode: searchMode, oobCode: searchCode };
+  }
+  const hashQueryIndex = window.location.hash.indexOf('?');
+  if (hashQueryIndex >= 0) {
+    const hashParams = new URLSearchParams(window.location.hash.slice(hashQueryIndex + 1));
+    const hashMode = hashParams.get('mode');
+    const hashCode = hashParams.get('oobCode');
+    if (hashMode === 'resetPassword' && hashCode) {
+      return { mode: hashMode, oobCode: hashCode };
+    }
+  }
+  return { mode: null, oobCode: null };
+}
+
+const RESET_THROTTLE_STORAGE_KEY = 'samaj_reset_last_sent';
+const RESET_COOLDOWN_MS = 60_000;
+
+function getRecentResetInfo(email?: string): { email: string; remainingSec: number } | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(RESET_THROTTLE_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { email?: string; sentAt?: number };
+    if (!parsed?.email || typeof parsed.sentAt !== 'number') return null;
+    if (email && parsed.email.toLowerCase() !== email.toLowerCase()) return null;
+    const elapsed = Date.now() - parsed.sentAt;
+    if (elapsed >= RESET_COOLDOWN_MS) return null;
+    return {
+      email: parsed.email,
+      remainingSec: Math.max(1, Math.ceil((RESET_COOLDOWN_MS - elapsed) / 1000))
+    };
+  } catch {
+    return null;
+  }
+}
+
+function recordResetSent(email: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.setItem(
+      RESET_THROTTLE_STORAGE_KEY,
+      JSON.stringify({ email: email.toLowerCase(), sentAt: Date.now() })
+    );
+  } catch {
+    // ignore storage errors
+  }
+}
+
+function clearResetSentRecord(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.removeItem(RESET_THROTTLE_STORAGE_KEY);
+  } catch {
+    // ignore storage errors
+  }
 }
 
 /**
@@ -233,8 +286,13 @@ export default function SignUpTab({
   const [copiedDomain, setCopiedDomain] = useState(false);
   const [isSigningIn, setIsSigningIn] = useState(false);
 
+  const initialResetParams = extractPasswordResetParams();
+  const hasInitialResetLink = initialResetParams.mode === 'resetPassword' && Boolean(initialResetParams.oobCode);
+
   // Authentication Mode: 'login', 'signup', or 'forgot'
-  const [authMode, setAuthMode] = useState<'login' | 'signup' | 'forgot'>('login');
+  const [authMode, setAuthMode] = useState<'login' | 'signup' | 'forgot'>(
+    hasInitialResetLink ? 'forgot' : 'login'
+  );
 
   // Sign Up Form State
   const [signupFullName, setSignupFullName] = useState('');
@@ -264,10 +322,12 @@ export default function SignUpTab({
   const [forgotAccount, setForgotAccount] = useState<UserAccount | null>(null);
   const [forgotTargetEmail, setForgotTargetEmail] = useState('');
   const [forgotDisplayEmail, setForgotDisplayEmail] = useState('');
-  const [firebaseOobCode, setFirebaseOobCode] = useState<string | null>(null);
+  const [firebaseOobCode, setFirebaseOobCode] = useState<string | null>(
+    hasInitialResetLink ? initialResetParams.oobCode : null
+  );
   const [forgotSending, setForgotSending] = useState(false);
   const [forgotResetting, setForgotResetting] = useState(false);
-  const [isVerifyingResetLink, setIsVerifyingResetLink] = useState(false);
+  const [isVerifyingResetLink, setIsVerifyingResetLink] = useState(hasInitialResetLink);
   const [resendCooldown, setResendCooldown] = useState(0);
   const [forgotNewPassword, setForgotNewPassword] = useState('');
   const [forgotConfirmPassword, setForgotConfirmPassword] = useState('');
@@ -373,7 +433,9 @@ export default function SignUpTab({
       url.searchParams.delete('oobCode');
       url.searchParams.delete('apiKey');
       url.searchParams.delete('lang');
-      const cleaned = `${url.pathname}${url.search}${url.hash || '#signup'}`;
+      url.searchParams.delete('continueUrl');
+      const cleanHash = (url.hash || '#signup').split('?')[0] || '#signup';
+      const cleaned = `${url.pathname}${url.search}${cleanHash}`;
       window.history.replaceState(window.history.state, '', cleaned);
     } catch {
       // ignore history errors
@@ -392,9 +454,7 @@ export default function SignUpTab({
   // Detect Firebase email password reset callback (?mode=resetPassword&oobCode=...)
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const params = new URLSearchParams(window.location.search);
-    const modeParam = params.get('mode');
-    const oobCodeParam = params.get('oobCode');
+    const { mode: modeParam, oobCode: oobCodeParam } = extractPasswordResetParams();
 
     if (modeParam !== 'resetPassword' || !oobCodeParam) return;
 
@@ -421,9 +481,10 @@ export default function SignUpTab({
       })
       .catch((err: any) => {
         if (cancelled) return;
+        const code = err?.code || '';
         setIsVerifyingResetLink(false);
         setForgotStep('identify');
-        if (err?.code === 'auth/network-request-failed') {
+        if (code === 'auth/network-request-failed') {
           setForgotError(
             t(
               'Network error while verifying your reset link. Please check your internet connection and reload.',
@@ -432,19 +493,35 @@ export default function SignUpTab({
           );
           return;
         }
-        if (err?.code === 'auth/expired-action-code') {
+        if (code === 'auth/operation-not-allowed') {
+          setEmailProviderDisabled(true);
+          setForgotError(
+            t(
+              'Email/Password sign-in is currently disabled in Firebase Authentication.',
+              'Firebase Authentication में Email/Password साइन-इन अभी बंद है।'
+            )
+          );
+        } else if (code === 'auth/expired-action-code') {
           setForgotError(
             t(
               'This password reset link has expired. Please request a new reset link below.',
               'यह पासवर्ड रीसेट लिंक समाप्त हो चुका है। कृपया नीचे से नया रीसेट लिंक मंगाएं।'
             )
           );
-        } else {
+        } else if (code === 'auth/invalid-action-code') {
           setForgotError(
             t(
-              'This reset link has already been used or replaced by a newer email. If you sent multiple requests, please open the LATEST email in your inbox or request a fresh link.',
-              'यह रीसेट लिंक पहले ही उपयोग हो चुका है या नए ईमेल द्वारा बदल दिया गया है। कृपया अपने इनबॉक्स का सबसे नया (Latest) ईमेल खोलें या नया लिंक मंगाएं।'
+              'This reset link has already been used or was replaced by a newer email. In Gmail, scroll to the bottom message in the thread or request one fresh link below.',
+              'यह रीसेट लिंक पहले ही उपयोग हो चुका है या नए ईमेल द्वारा बदल दिया गया है। Gmail में कृपया थ्रेड के सबसे नीचे (नए) ईमेल का लिंक खोलें या नीचे से नया लिंक मंगाएं।'
             )
+          );
+        } else {
+          setForgotError(
+            err?.message ||
+              t(
+                'Could not verify this reset link. Please request a fresh password reset link below.',
+                'इस रीसेट लिंक का सत्यापन नहीं हो सका। कृपया नीचे से नया रीसेट लिंक मंगाएं।'
+              )
           );
         }
         clearResetQueryParamsFromUrl();
@@ -457,30 +534,42 @@ export default function SignUpTab({
 
   const openForgotPasswordFlow = () => {
     setAuthMode('forgot');
+    setForgotError(null);
+    setLoginError(null);
+    setFirebaseOobCode(null);
+    setForgotNewPassword('');
+    setForgotConfirmPassword('');
+
+    const recent = getRecentResetInfo();
+    if (recent) {
+      setForgotTargetEmail(recent.email);
+      setForgotDisplayEmail(recent.email);
+      setResendCooldown(recent.remainingSec);
+      setForgotStep('link_sent');
+      return;
+    }
+
     setForgotStep('identify');
     setForgotIdentifier(loginIdentifier.trim());
     setForgotAccount(null);
     setForgotTargetEmail('');
     setForgotDisplayEmail('');
-    setFirebaseOobCode(null);
     setResendCooldown(0);
-    setForgotNewPassword('');
-    setForgotConfirmPassword('');
-    setForgotError(null);
-    setLoginError(null);
   };
 
   const dispatchEmailResetLink = async (rawInput: string) => {
     if (forgotSendLockRef.current || forgotSending) return;
     setForgotError(null);
+    setEmailProviderDisabled(false);
+
     const trimmed = rawInput.trim();
     const lower = trimmed.toLowerCase();
 
     if (!lower) {
       setForgotError(
         t(
-          'Please enter your registered email address (or username linked with an email).',
-          'कृपया अपना पंजीकृत ईमेल पता (या ईमेल से जुड़ा यूज़रनेम) दर्ज करें।'
+          'Please enter your registered email address or username.',
+          'कृपया अपना पंजीकृत ईमेल पता या यूज़रनेम दर्ज करें।'
         )
       );
       return;
@@ -496,119 +585,146 @@ export default function SignUpTab({
       return;
     }
 
-    const accounts = getStoredAccounts();
-    const cleanedPhone = sanitizePhoneInput(trimmed);
-    const matched = accounts.find(
-      (acc) =>
-        (acc.email && acc.email.toLowerCase() === lower) ||
-        acc.username.toLowerCase() === lower ||
-        (acc.phone && (acc.phone === lower || (cleanedPhone.length === 10 && acc.phone === cleanedPhone)))
-    ) || null;
-
-    const isDirectEmail = EMAIL_REGEX.test(lower);
-    let resolvedEmail = '';
-
-    if (matched?.email) {
-      resolvedEmail = matched.email.trim().toLowerCase();
-    } else if (isDirectEmail) {
-      resolvedEmail = lower;
-    } else {
-      const firestoreLookup = await lookupEmailByUsernameFromFirestore(auth, lower);
-      if (firestoreLookup?.email) {
-        resolvedEmail = firestoreLookup.email;
-      } else if (matched && !matched.email) {
-        setForgotError(
-          t(
-            'No email address is saved on this username yet. Please enter your email address directly to receive the reset link.',
-            'इस यूज़रनेम में ईमेल पता सहेजा नहीं गया है। रीसेट लिंक पाने के लिए कृपया अपना ईमेल पता दर्ज करें।'
-          )
-        );
-        return;
-      } else {
-        setForgotError(
-          t(
-            'Please enter a valid registered email address (e.g. name@gmail.com) or a registered username.',
-            'कृपया एक मान्य पंजीकृत ईमेल पता (जैसे name@gmail.com) या पंजीकृत यूज़रनेम दर्ज करें।'
-          )
-        );
-        return;
-      }
-    }
-
     forgotSendLockRef.current = true;
     setForgotSending(true);
+
     try {
-      if (typeof window !== 'undefined' && isKnownAuthorizedHost(window.location.hostname)) {
-        try {
-          await sendPasswordResetEmail(auth, resolvedEmail, {
-            url: `${window.location.origin}${window.location.pathname}#signup`,
-            handleCodeInApp: false
-          });
-        } catch (continueErr: any) {
-          if (
-            continueErr?.code === 'auth/unauthorized-continue-uri' ||
-            continueErr?.code === 'auth/invalid-continue-uri'
-          ) {
-            await sendPasswordResetEmail(auth, resolvedEmail);
-          } else {
-            throw continueErr;
-          }
-        }
+      const accounts = getStoredAccounts();
+      const cleanedPhone = sanitizePhoneInput(trimmed);
+      const matched = accounts.find(
+        (acc) =>
+          (acc.email && acc.email.toLowerCase() === lower) ||
+          acc.username.toLowerCase() === lower ||
+          (acc.phone && (acc.phone === lower || (cleanedPhone.length === 10 && acc.phone === cleanedPhone)))
+      ) || null;
+
+      const isDirectEmail = EMAIL_REGEX.test(lower);
+      let resolvedEmail = '';
+
+      if (matched?.email) {
+        resolvedEmail = matched.email.trim().toLowerCase();
+      } else if (isDirectEmail) {
+        resolvedEmail = lower;
       } else {
-        await sendPasswordResetEmail(auth, resolvedEmail);
+        const firestoreLookup = await lookupEmailByUsernameFromFirestore(auth, lower);
+        if (firestoreLookup?.email) {
+          resolvedEmail = firestoreLookup.email;
+        } else if (matched && !matched.email) {
+          setForgotError(
+            t(
+              'No email address is saved on this username. Please enter your email address directly.',
+              'इस यूज़रनेम में ईमेल पता सहेजा नहीं गया है। कृपया सीधे अपना ईमेल पता दर्ज करें।'
+            )
+          );
+          return;
+        } else {
+          setForgotError(
+            t(
+              'Enter a valid email address (e.g. name@gmail.com) or a registered username.',
+              'कृपया एक मान्य ईमेल पता (जैसे name@gmail.com) या पंजीकृत यूज़रनेम दर्ज करें।'
+            )
+          );
+          return;
+        }
       }
-    } catch (err: any) {
+
+      // Guard against sending a duplicate email within 60s for the same address,
+      // which would immediately invalidate the first email link while it is in transit.
+      const recentForSameEmail = getRecentResetInfo(resolvedEmail);
+      if (recentForSameEmail) {
+        setForgotAccount(matched);
+        setForgotTargetEmail(resolvedEmail);
+        setForgotDisplayEmail(isDirectEmail ? resolvedEmail : maskEmailAddress(resolvedEmail));
+        setFirebaseOobCode(null);
+        setResendCooldown(recentForSameEmail.remainingSec);
+        setForgotStep('link_sent');
+        return;
+      }
+
+      try {
+        if (typeof window !== 'undefined') {
+          try {
+            await sendPasswordResetEmail(auth, resolvedEmail, {
+              url: `${window.location.origin}${window.location.pathname}#signup`,
+              handleCodeInApp: false
+            });
+          } catch (continueErr: any) {
+            if (
+              continueErr?.code === 'auth/unauthorized-continue-uri' ||
+              continueErr?.code === 'auth/invalid-continue-uri'
+            ) {
+              await sendPasswordResetEmail(auth, resolvedEmail);
+            } else {
+              throw continueErr;
+            }
+          }
+        } else {
+          await sendPasswordResetEmail(auth, resolvedEmail);
+        }
+      } catch (err: any) {
+        const code = err?.code || '';
+        if (code === 'auth/operation-not-allowed') {
+          setEmailProviderDisabled(true);
+          setForgotError(
+            t(
+              'Email/Password sign-in is disabled in Firebase Console. Enable Email/Password under Authentication → Sign-in method.',
+              'Firebase Console में Email/Password साइन-इन बंद है। कृपया Authentication → Sign-in method में इसे चालू करें।'
+            )
+          );
+          return;
+        }
+        if (code === 'auth/invalid-email') {
+          setForgotError(t('Please enter a valid email address.', 'कृपया एक मान्य ईमेल पता दर्ज करें।'));
+          return;
+        }
+        if (code === 'auth/user-not-found') {
+          setForgotError(
+            t(
+              'No account found with this email address. Please check your email or sign up first.',
+              'इस ईमेल पते से कोई खाता नहीं मिला। कृपया जांचें या नया खाता बनाएं।'
+            )
+          );
+          return;
+        }
+        if (code === 'auth/too-many-requests') {
+          setForgotError(
+            t(
+              'Too many reset requests sent. Please wait a few minutes and check your inbox.',
+              'बहुत अधिक अनुरोध भेजे गए हैं। कृपया कुछ मिनट प्रतीक्षा करें और अपना इनबॉक्स जांचें।'
+            )
+          );
+          return;
+        }
+        if (code === 'auth/network-request-failed') {
+          setForgotError(
+            t(
+              'Network error while sending the reset email. Please check your internet connection.',
+              'रीसेट ईमेल भेजने में नेटवर्क त्रुटि। कृपया अपना इंटरनेट कनेक्शन जांचें।'
+            )
+          );
+          return;
+        }
+        setForgotError(
+          err?.message ||
+            t(
+              'Could not send password reset email right now. Please try again shortly.',
+              'अभी पासवर्ड रीसेट ईमेल नहीं भेजा जा सका। कृपया थोड़ी देर बाद पुनः प्रयास करें।'
+            )
+        );
+        return;
+      }
+
+      recordResetSent(resolvedEmail);
+      setForgotAccount(matched);
+      setForgotTargetEmail(resolvedEmail);
+      setForgotDisplayEmail(isDirectEmail ? resolvedEmail : maskEmailAddress(resolvedEmail));
+      setFirebaseOobCode(null);
+      setResendCooldown(60);
+      setForgotStep('link_sent');
+    } finally {
       forgotSendLockRef.current = false;
       setForgotSending(false);
-      if (err?.code === 'auth/invalid-email') {
-        setForgotError(t('Please enter a valid email address.', 'कृपया एक मान्य ईमेल पता दर्ज करें।'));
-        return;
-      }
-      if (err?.code === 'auth/user-not-found') {
-        setForgotError(
-          t(
-            'No email account found with this address. Please check your email or sign up first.',
-            'इस ईमेल पते से कोई खाता नहीं मिला। कृपया जांचें या नया खाता बनाएं।'
-          )
-        );
-        return;
-      }
-      if (err?.code === 'auth/too-many-requests') {
-        setForgotError(
-          t(
-            'Too many reset requests sent. Please wait a few minutes and check your email inbox.',
-            'बहुत अधिक अनुरोध भेजे गए हैं। कृपया कुछ मिनट प्रतीक्षा करें और अपना ईमेल जांचें।'
-          )
-        );
-        return;
-      }
-      if (err?.code === 'auth/network-request-failed') {
-        setForgotError(
-          t(
-            'Network error while sending the reset email. Please check your internet connection.',
-            'रीसेट ईमेल भेजने में नेटवर्क त्रुटि। कृपया अपना इंटरनेट कनेक्शन जांचें।'
-          )
-        );
-        return;
-      }
-      setForgotError(
-        err?.message ||
-          t(
-            'Could not send password reset email right now. Please try again shortly.',
-            'अभी पासवर्ड रीसेट ईमेल नहीं भेजा जा सका। कृपया थोड़ी देर बाद पुनः प्रयास करें।'
-          )
-      );
-      return;
     }
-
-    forgotSendLockRef.current = false;
-    setForgotSending(false);
-    setForgotAccount(matched);
-    setForgotTargetEmail(resolvedEmail);
-    setForgotDisplayEmail(isDirectEmail ? resolvedEmail : maskEmailAddress(resolvedEmail));
-    setFirebaseOobCode(null);
-    setResendCooldown(60);
-    setForgotStep('link_sent');
   };
 
   const handleForgotSendResetLink = async (e: React.FormEvent) => {
@@ -703,6 +819,7 @@ export default function SignUpTab({
     }
 
     clearResetQueryParamsFromUrl();
+    clearResetSentRecord();
 
     const identifierForLogin = forgotAccount?.username || forgotTargetEmail;
     setLoginIdentifier(identifierForLogin);
@@ -1213,268 +1330,259 @@ export default function SignUpTab({
     );
   }
 
+  const renderPasswordMeter = (password: string, validation: ReturnType<typeof validateStrongPassword>) => {
+    if (!password) return null;
+    const missing: string[] = [];
+    if (!validation.checks.minLength) missing.push(t('8+ chars', '8+ अक्षर'));
+    if (!validation.checks.hasUpper) missing.push(t('uppercase', 'बड़ा अक्षर'));
+    if (!validation.checks.hasLower) missing.push(t('lowercase', 'छोटा अक्षर'));
+    if (!validation.checks.hasNumber) missing.push(t('number', 'अंक'));
+    if (!validation.checks.hasSpecial) missing.push(t('symbol (@#$!%)', 'विशेष चिह्न'));
+
+    return (
+      <div className="space-y-1.5 pt-0.5">
+        <div className="grid grid-cols-5 gap-1 h-1">
+          {[1, 2, 3, 4, 5].map((level) => (
+            <div
+              key={level}
+              className={`rounded-full transition-colors ${
+                validation.score >= level
+                  ? validation.valid
+                    ? 'bg-emerald-600'
+                    : validation.score >= 3
+                      ? 'bg-amber-500'
+                      : 'bg-rose-500'
+                  : 'bg-stone-200'
+              }`}
+            />
+          ))}
+        </div>
+        <div className="flex items-center justify-between gap-2 text-[11px]">
+          <span className={validation.valid ? 'text-emerald-700 font-medium' : 'text-stone-500'}>
+            {validation.valid
+              ? t('Strong password', 'मजबूत पासवर्ड')
+              : `${t('Add:', 'जोड़ें:')} ${missing.join(', ')}`}
+          </span>
+          {validation.valid && <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />}
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <div className="space-y-6 max-w-md mx-auto py-3 sm:py-8 px-0 sm:px-4">
+    <div className="max-w-md mx-auto py-4 sm:py-8 px-1 sm:px-4">
       <GoogleSignInModal isOpen={showGoogleModal} onClose={() => setShowGoogleModal(false)} onSuccess={handleModalSuccess} />
 
-      <div className="bg-white p-5 sm:p-8 rounded-3xl border border-stone-200/90 shadow-sm space-y-6">
-        <div className="text-center space-y-1">
+      <div className="bg-white p-6 sm:p-8 rounded-2xl border border-stone-200/90 shadow-sm space-y-5">
+        <div className="text-center space-y-1.5">
           <div className="flex justify-center">
-            <BrandLogo size="lg" showText={false} tone="crimson" />
+            <BrandLogo size="md" showText={false} tone="crimson" />
           </div>
-          <h2 className="font-logo text-3xl sm:text-4xl font-bold text-[#6e1628] leading-tight">
+          <h2 className="font-logo text-2xl sm:text-3xl font-bold text-[#6e1628] leading-tight">
             {t('Rathore Rishtey', 'राठौड़ रिश्ते')}
           </h2>
-          <p className="text-xs text-stone-500 font-light">
-            {t('Rathore Rajput Community • Matrimonial & Business Directory', 'राठौड़ राजपूत समाज • वैवाहिक एवं व्यापार डायरेक्टरी')}
+          <p className="text-xs text-stone-500">
+            {t('Matrimonial & Business Directory', 'वैवाहिक एवं व्यापार डायरेक्टरी')}
           </p>
         </div>
 
-        {/* ========================================================= */}
-        {/* SECTION 1: CONTINUE WITH GOOGLE                           */}
-        {/* Logs in directly without password if logged in on phone   */}
-        {/* ========================================================= */}
-        <div className="space-y-2.5">
-          <button 
-            type="button" 
-            onClick={handleGoogleSignIn} 
-            disabled={isSigningIn}
-            className="w-full flex items-center justify-center gap-3 bg-white border border-stone-300 hover:bg-stone-50/80 active:bg-stone-100 text-stone-700 font-semibold py-3 px-4 rounded-xl shadow-2xs hover:shadow-xs transition-all text-xs cursor-pointer disabled:opacity-60"
-          >
-            {isSigningIn ? (
-              <RefreshCw className="w-4 h-4 animate-spin text-amber-700" />
-            ) : (
-              <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
-              </svg>
-            )}
-            <span className="truncate">
-              {isSigningIn
-                ? t('Connecting to Google...', 'Google से जुड़ रहा है...')
-                : deviceGoogleSession
-                  ? t(`Continue with Google (${deviceGoogleSession.email})`, `Google के साथ जारी रखें (${deviceGoogleSession.email})`)
-                  : t('Continue with Google', 'Google के साथ जारी रखें')}
-            </span>
-          </button>
-
-          {deviceGoogleSession ? (
-            <div className="flex items-center justify-between text-[11px] px-1">
-              <span className="text-emerald-700 font-medium flex items-center gap-1">
-                <CheckCircle2 className="w-3 h-3" />
-                {t('Logged in on device — 1-tap without password', 'डिवाइस में लॉग इन — बिना पासवर्ड 1-क्लिक लॉगिन')}
-              </span>
-              <button
-                type="button"
-                onClick={() => setShowGoogleModal(true)}
-                className="text-stone-500 hover:text-stone-800 underline cursor-pointer"
-              >
-                {t('Switch account', 'खाता बदलें')}
-              </button>
-            </div>
-          ) : (
-            <p className="text-[11px] text-center text-stone-400">
-              {t('Logs in directly if already signed in on phone; otherwise asks for password.', 'फ़ोन में पहले से लॉग इन होने पर बिना पासवर्ड प्रवेश, अन्यथा पासवर्ड पूछेगा।')}
-            </p>
-          )}
-
-          {/* Domain Authorization Diagnostic Panel */}
-          {unauthorizedDomain && (
-            <div className="bg-amber-50/90 border border-amber-300 rounded-2xl p-4 text-left space-y-3 animate-in fade-in duration-200 text-xs">
-              <div className="flex items-start gap-2.5">
-                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                <div>
-                  <h4 className="font-bold text-amber-950 text-xs">
-                    {t('Firebase Domain Authorization', 'Firebase डोमेन प्रमाणीकरण')}
-                  </h4>
-                  <p className="text-amber-800 text-[11px] mt-0.5 leading-relaxed">
-                    {t(
-                      'Add this domain to Firebase Authorized Domains for native popup OAuth.',
-                      'पॉपअप OAuth के लिए इस डोमेन को Firebase Authorized Domains में जोड़ें।'
-                    )}
-                  </p>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-xl border border-amber-200 p-2.5 flex items-center justify-between gap-2 shadow-2xs">
-                <div className="truncate min-w-0">
-                  <span className="text-[10px] uppercase font-semibold text-stone-400 block">
-                    {t('Domain to add:', 'जोड़ने हेतु डोमेन:')}
-                  </span>
-                  <code className="text-xs font-mono font-bold text-stone-800 truncate block select-all">
-                    {unauthorizedDomain}
-                  </code>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    navigator.clipboard.writeText(unauthorizedDomain);
-                    setCopiedDomain(true);
-                    setTimeout(() => setCopiedDomain(false), 2000);
-                  }}
-                  className="px-2.5 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-900 rounded-lg text-xs font-medium flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer"
-                >
-                  {copiedDomain ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copiedDomain ? t('Copied!', 'कॉपी किया!') : t('Copy', 'कॉपी')}</span>
-                </button>
-              </div>
-
-              <div className="flex gap-2">
-                <a
-                  href="https://console.firebase.google.com/project/rathore-rishtey/authentication/settings"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-1 bg-amber-700 hover:bg-amber-800 text-white font-semibold py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 text-[11px] transition-colors shadow-xs"
-                >
-                  <span>{t('Firebase Console', 'Firebase कंसोल')}</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-                <button
-                  type="button"
-                  onClick={() => setUnauthorizedDomain(null)}
-                  className="px-3 py-2 bg-white border border-amber-200 text-amber-900 rounded-xl text-[11px] font-semibold cursor-pointer"
-                >
-                  {t('Close', 'बंद करें')}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {!unauthorizedDomain && (
+        {/* Google Sign-In */}
+        {authMode !== 'forgot' && (
+          <div className="space-y-2">
             <button
               type="button"
-              onClick={() => setUnauthorizedDomain(window.location.hostname)}
-              className="text-[11px] text-stone-400 hover:text-stone-600 flex items-center justify-center gap-1 mx-auto transition-colors cursor-pointer"
+              onClick={handleGoogleSignIn}
+              disabled={isSigningIn}
+              className="w-full flex items-center justify-center gap-2.5 bg-white border border-stone-300 hover:bg-stone-50 active:bg-stone-100 text-stone-800 font-semibold py-2.5 px-4 rounded-xl transition-colors text-xs sm:text-sm cursor-pointer disabled:opacity-60"
             >
-              <HelpCircle className="w-3 h-3" />
-              <span>{t('Need help with Firebase Authorized Domains?', 'Firebase अधिकृत डोमेन के बारे में सहायता चाहिए?')}</span>
+              {isSigningIn ? (
+                <RefreshCw className="w-4 h-4 animate-spin text-amber-700 shrink-0" />
+              ) : (
+                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                </svg>
+              )}
+              <span className="truncate">
+                {isSigningIn
+                  ? t('Connecting to Google...', 'Google से जुड़ रहा है...')
+                  : deviceGoogleSession
+                    ? t(`Continue as ${deviceGoogleSession.email}`, `${deviceGoogleSession.email} से जारी रखें`)
+                    : t('Continue with Google', 'Google के साथ जारी रखें')}
+              </span>
             </button>
-          )}
-        </div>
 
-        {/* Divider */}
-        <div className="relative flex items-center justify-center my-4">
-          <div className="border-t border-stone-200 w-full"></div>
-          <span className="bg-white px-3 text-[11px] text-stone-400 uppercase tracking-wider font-semibold absolute">
-            {t('OR USE SAMAJ ACCOUNT', 'या समाज खाते का उपयोग करें')}
-          </span>
-        </div>
-
-        {/* ========================================================= */}
-        {/* SECTION 2: SIGN UP / LOG IN TOGGLE TABS                   */}
-        {/* ========================================================= */}
-        <div className="flex rounded-2xl bg-stone-100 p-1 border border-stone-200">
-          <button
-            type="button"
-            onClick={() => {
-              setAuthMode('login');
-              setLoginError(null);
-            }}
-            className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-              authMode === 'login' || authMode === 'forgot'
-                ? 'bg-white text-[#4c0d1b] shadow-xs border border-stone-200/80 font-bold'
-                : 'text-stone-500 hover:text-stone-800'
-            }`}
-          >
-            <LogIn className="w-3.5 h-3.5 text-amber-700" />
-            <span>{t('Log In', 'लॉग इन')}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setAuthMode('signup');
-              setSignupError(null);
-              setPasswordResetSuccessUser(null);
-            }}
-            className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-              authMode === 'signup'
-                ? 'bg-white text-[#4c0d1b] shadow-xs border border-stone-200/80 font-bold'
-                : 'text-stone-500 hover:text-stone-800'
-            }`}
-          >
-            <UserPlus className="w-3.5 h-3.5 text-amber-700" />
-            <span>{t('Sign Up', 'साइन अप')}</span>
-          </button>
-        </div>
-
-        {/* ========================================================= */}
-        {/* SUCCESS NOTIFICATION AFTER PASSWORD RESET                 */}
-        {/* ========================================================= */}
-        {passwordResetSuccessUser && authMode === 'login' && (
-          <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-left space-y-1 animate-in fade-in">
-            <div className="flex items-start gap-2.5">
-              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-              <div>
-                <h4 className="font-bold text-emerald-950 text-xs">
-                  {t('Password Updated Successfully!', 'पासवर्ड सफलतापूर्वक बदल गया!')}
-                </h4>
-                <p className="text-[11px] text-emerald-800 mt-0.5">
-                  {t(
-                    `New password saved for @${passwordResetSuccessUser}. Please sign in below.`,
-                    `@${passwordResetSuccessUser} के लिए नया पासवर्ड सहेजा गया है। नीचे साइन इन करें।`
-                  )}
-                </p>
+            {deviceGoogleSession && (
+              <div className="flex items-center justify-end px-1">
+                <button
+                  type="button"
+                  onClick={() => setShowGoogleModal(true)}
+                  className="text-[11px] text-stone-500 hover:text-stone-800 underline cursor-pointer"
+                >
+                  {t('Use a different Google account', 'दूसरा Google खाता चुनें')}
+                </button>
               </div>
+            )}
+
+            {unauthorizedDomain && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 text-left space-y-2.5 text-xs">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <p className="font-semibold text-amber-950">
+                      {t('Authorize this domain in Firebase Console', 'Firebase Console में यह डोमेन जोड़ें')}
+                    </p>
+                    <div className="flex items-center justify-between gap-2 bg-white border border-amber-200 rounded-lg px-2.5 py-1.5">
+                      <code className="text-[11px] font-mono text-stone-800 truncate select-all">
+                        {unauthorizedDomain}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(unauthorizedDomain);
+                          setCopiedDomain(true);
+                          setTimeout(() => setCopiedDomain(false), 2000);
+                        }}
+                        className="text-[11px] font-medium text-amber-900 hover:text-amber-700 flex items-center gap-1 shrink-0 cursor-pointer"
+                      >
+                        {copiedDomain ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                        <span>{copiedDomain ? t('Copied', 'कॉपी') : t('Copy', 'कॉपी')}</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <a
+                    href="https://console.firebase.google.com/project/rathore-rishtey/authentication/settings"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[11px] font-semibold text-amber-900 hover:underline flex items-center gap-1"
+                  >
+                    <span>{t('Open Firebase Console', 'Firebase कंसोल खोलें')}</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => setUnauthorizedDomain(null)}
+                    className="text-[11px] text-stone-500 hover:text-stone-800 cursor-pointer"
+                  >
+                    {t('Dismiss', 'बंद करें')}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="relative flex items-center justify-center py-2">
+              <div className="border-t border-stone-200 w-full" />
+              <span className="bg-white px-3 text-xs text-stone-400">
+                {t('or', 'या')}
+              </span>
+            </div>
+
+            {/* Clean Log In / Sign Up Switcher */}
+            <div className="grid grid-cols-2 rounded-xl bg-stone-100 p-1 gap-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode('login');
+                  setLoginError(null);
+                }}
+                className={`py-2 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                  authMode === 'login'
+                    ? 'bg-white text-[#4c0d1b] shadow-2xs'
+                    : 'text-stone-600 hover:text-stone-900'
+                }`}
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>{t('Log In', 'लॉग इन')}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode('signup');
+                  setSignupError(null);
+                  setPasswordResetSuccessUser(null);
+                }}
+                className={`py-2 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                  authMode === 'signup'
+                    ? 'bg-white text-[#4c0d1b] shadow-2xs'
+                    : 'text-stone-600 hover:text-stone-900'
+                }`}
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                <span>{t('Sign Up', 'साइन अप')}</span>
+              </button>
             </div>
           </div>
         )}
 
-        {/* ========================================================= */}
-        {/* SUCCESS NOTIFICATION AFTER SIGN UP                        */}
-        {/* ========================================================= */}
+        {/* Success notices */}
+        {passwordResetSuccessUser && authMode === 'login' && (
+          <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-left flex items-start gap-2.5 text-xs">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-emerald-950">
+                {t('Password updated', 'पासवर्ड बदल गया')}
+              </p>
+              <p className="text-[11px] text-emerald-800 mt-0.5">
+                {t(
+                  `Sign in with your new password for ${passwordResetSuccessUser}.`,
+                  `${passwordResetSuccessUser} के लिए नए पासवर्ड से साइन इन करें।`
+                )}
+              </p>
+            </div>
+          </div>
+        )}
+
         {signupSuccessInfo && authMode === 'login' && (
-          <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-left space-y-2 animate-in fade-in">
-            <div className="flex items-start gap-2.5">
-              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-              <div>
-                <h4 className="font-bold text-emerald-950 text-xs">
-                  {t('🎉 Congratulations! Your account has been created successfully!', '🎉 बधाई हो! आपका खाता सफलतापूर्वक बन गया है!')}
-                </h4>
-                <p className="text-[11px] text-emerald-800 mt-0.5">
-                  {t('Your Username:', 'आपका यूज़रनेम:')}{' '}
-                  <strong className="font-mono bg-white px-1.5 py-0.5 rounded border border-emerald-200 text-emerald-900">@{signupSuccessInfo.username}</strong>
-                </p>
-                <p className="text-[11px] text-emerald-700 mt-1">
-                  {t('Enter your password below to Sign In.', 'साइन इन करने के लिए नीचे अपना पासवर्ड दर्ज करें।')}
-                </p>
-              </div>
+          <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-left flex items-start gap-2.5 text-xs">
+            <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-emerald-950">
+                {t('Account created successfully', 'खाता सफलतापूर्वक बन गया')}
+              </p>
+              <p className="text-[11px] text-emerald-800 mt-0.5">
+                {t('Username:', 'यूज़रनेम:')} <span className="font-mono font-semibold">@{signupSuccessInfo.username}</span>
+                {' · '}
+                {t('Sign in below to continue.', 'आगे बढ़ने के लिए नीचे साइन इन करें।')}
+              </p>
             </div>
           </div>
         )}
 
         {emailProviderDisabled && (
-          <div className="bg-amber-50/90 border border-amber-300 rounded-2xl p-4 text-left space-y-2.5 animate-in fade-in duration-200 text-xs">
-            <div className="flex items-start gap-2.5">
-              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 text-left space-y-2 text-xs">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
               <div className="space-y-1">
-                <h4 className="font-bold text-amber-950 text-xs">
-                  {t('Enable Email/Password Sign-In in Firebase Console', 'Firebase Console में Email/Password साइन-इन चालू करें')}
-                </h4>
-                <p className="text-amber-900 text-[11px] leading-relaxed">
+                <p className="font-semibold text-amber-950">
+                  {t('Enable Email/Password in Firebase', 'Firebase में Email/Password चालू करें')}
+                </p>
+                <p className="text-[11px] text-amber-900">
                   {t(
-                    'To store Username ID & Password users in Firebase Authentication alongside Google users, turn ON "Email/Password" under Authentication → Sign-in method.',
-                    'Google उपयोगकर्ताओं के साथ Username ID और Password उपयोगकर्ताओं को Firebase Authentication में सहेजने के लिए Authentication → Sign-in method में "Email/Password" चालू करें।'
+                    'Turn on Email/Password under Authentication → Sign-in method in Firebase Console.',
+                    'Firebase Console में Authentication → Sign-in method के अंतर्गत Email/Password चालू करें।'
                   )}
                 </p>
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex items-center justify-between gap-2 pt-0.5">
               <a
                 href="https://console.firebase.google.com/project/rathore-rishtey/authentication/providers"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex-1 bg-amber-700 hover:bg-amber-800 text-white font-semibold py-2 px-3 rounded-xl flex items-center justify-center gap-1.5 text-[11px] transition-colors shadow-xs"
+                className="text-[11px] font-semibold text-amber-900 hover:underline flex items-center gap-1"
               >
-                <span>{t('Open Sign-in Providers', 'Firebase Sign-in Providers खोलें')}</span>
+                <span>{t('Open Sign-in Providers', 'Firebase Providers खोलें')}</span>
                 <ExternalLink className="w-3 h-3" />
               </a>
               <button
                 type="button"
                 onClick={() => setEmailProviderDisabled(false)}
-                className="px-3 py-2 bg-white border border-amber-200 text-amber-900 rounded-xl text-[11px] font-semibold cursor-pointer"
+                className="text-[11px] text-stone-500 hover:text-stone-800 cursor-pointer"
               >
                 {t('Dismiss', 'बंद करें')}
               </button>
@@ -1482,66 +1590,63 @@ export default function SignUpTab({
           </div>
         )}
 
-        {/* ========================================================= */}
-        {/* FORM A: LOG IN WITH USERNAME & PASSWORD                   */}
-        {/* ========================================================= */}
+        {/* FORM A: LOG IN */}
         {authMode === 'login' && (
-          <form onSubmit={handleLoginSubmit} className="space-y-4 text-left animate-in fade-in">
+          <form onSubmit={handleLoginSubmit} className="space-y-4 text-left">
             {loginError && (
-              <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
+              <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-500 mt-0.5" />
                 <span>{loginError}</span>
               </div>
             )}
 
             <div>
-              <label className="block text-xs font-bold text-stone-700 mb-1 flex items-center gap-1.5">
-                <User className="w-3.5 h-3.5 text-stone-400" />
-                <span>{t('Username, Email, or Mobile Number', 'यूज़रनेम, ईमेल या मोबाइल नंबर')}</span>
+              <label className="block text-xs font-semibold text-stone-700 mb-1.5">
+                {t('Username, Email, or Mobile', 'यूज़रनेम, ईमेल या मोबाइल')}
               </label>
-              <input
-                type="text"
-                value={loginIdentifier}
-                onChange={(e) => setLoginIdentifier(e.target.value)}
-                placeholder={t('e.g. abhiruchi97, email, or 9826012345', 'उदा. abhiruchi97, ईमेल या 9826012345')}
-                required
-                className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#851834] bg-stone-50/50"
-              />
+              <div className="relative">
+                <User className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  value={loginIdentifier}
+                  onChange={(e) => setLoginIdentifier(e.target.value)}
+                  placeholder={t('Username, email, or 10-digit mobile', 'यूज़रनेम, ईमेल या मोबाइल नंबर')}
+                  required
+                  className="w-full pl-9 pr-3.5 py-2.5 text-sm sm:text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#851834] focus:border-transparent bg-white"
+                />
+              </div>
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-stone-700 mb-1 flex items-center justify-between">
-                <span className="flex items-center gap-1.5">
-                  <Lock className="w-3.5 h-3.5 text-stone-400" />
-                  <span>{t('Password', 'पासवर्ड')}</span>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setShowLoginPassword(!showLoginPassword)}
-                  className="text-[11px] text-stone-400 hover:text-stone-600 flex items-center gap-1 cursor-pointer"
-                >
-                  {showLoginPassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
-                  <span>{showLoginPassword ? t('Hide', 'छिपाएं') : t('Show', 'दिखाएं')}</span>
-                </button>
-              </label>
-              <div className="relative">
-                <input
-                  type={showLoginPassword ? "text" : "password"}
-                  value={loginPassword}
-                  onChange={(e) => setLoginPassword(e.target.value)}
-                  placeholder={t('Enter your account password', 'अपना पासवर्ड दर्ज करें')}
-                  required
-                  className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#851834] bg-stone-50/50"
-                />
-              </div>
-              <div className="flex justify-end mt-1.5">
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-semibold text-stone-700">
+                  {t('Password', 'पासवर्ड')}
+                </label>
                 <button
                   type="button"
                   onClick={openForgotPasswordFlow}
-                  className="text-[11px] font-bold text-[#851834] hover:underline flex items-center gap-1 cursor-pointer"
+                  className="text-[11px] font-semibold text-[#851834] hover:underline cursor-pointer"
                 >
-                  <KeyRound className="w-3 h-3" />
-                  <span>{t('Forgot Password?', 'पासवर्ड भूल गए?')}</span>
+                  {t('Forgot password?', 'पासवर्ड भूल गए?')}
+                </button>
+              </div>
+              <div className="relative">
+                <Lock className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type={showLoginPassword ? 'text' : 'password'}
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  placeholder={t('Enter your password', 'अपना पासवर्ड दर्ज करें')}
+                  required
+                  className="w-full pl-9 pr-10 py-2.5 text-sm sm:text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#851834] focus:border-transparent bg-white"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowLoginPassword(!showLoginPassword)}
+                  aria-label={showLoginPassword ? t('Hide password', 'पासवर्ड छिपाएं') : t('Show password', 'पासवर्ड दिखाएं')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-stone-400 hover:text-stone-700 cursor-pointer"
+                >
+                  {showLoginPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
@@ -1549,60 +1654,27 @@ export default function SignUpTab({
             <button
               type="submit"
               disabled={isLoggingIn}
-              className="w-full bg-gradient-to-r from-[#6e1628] via-[#851834] to-[#6e1628] text-amber-100 hover:text-white font-bold py-3 rounded-xl text-xs shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer border border-amber-300/30 disabled:opacity-60 disabled:cursor-not-allowed"
+              className="w-full bg-[#6e1628] hover:bg-[#851834] text-white font-semibold py-2.5 px-4 rounded-xl text-xs sm:text-sm shadow-xs transition-colors flex items-center justify-center gap-2 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {isLoggingIn ? (
-                <RefreshCw className="w-4 h-4 animate-spin text-amber-300" />
-              ) : (
-                <LogIn className="w-4 h-4 text-amber-300" />
-              )}
+              {isLoggingIn && <RefreshCw className="w-4 h-4 animate-spin" />}
               <span>
-                {isLoggingIn
-                  ? t('Signing In...', 'साइन इन हो रहा है...')
-                  : t('Sign In with Password', 'पासवर्ड से साइन इन करें')}
+                {isLoggingIn ? t('Signing In...', 'साइन इन हो रहा है...') : t('Sign In', 'साइन इन करें')}
               </span>
             </button>
-
-            <div className="text-center pt-2">
-              <p className="text-xs text-stone-500">
-                {t("Don't have an account?", 'क्या आपका खाता नहीं है?')}{' '}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAuthMode('signup');
-                    setSignupError(null);
-                  }}
-                  className="text-[#851834] font-bold hover:underline cursor-pointer"
-                >
-                  {t('Create one now', 'अभी नया बनाएं')}
-                </button>
-              </p>
-            </div>
           </form>
         )}
 
-        {/* ========================================================= */}
-        {/* FORM C: FORGOT PASSWORD (EMAIL PASSWORD RESET LINK)       */}
-        {/* ========================================================= */}
+        {/* FORM B: FORGOT PASSWORD */}
         {authMode === 'forgot' && (
-          <div className="space-y-4 text-left animate-in fade-in">
-            <div className="flex items-center justify-between border-b border-stone-100 pb-2.5">
+          <div className="space-y-4 text-left">
+            <div className="flex items-center justify-between border-b border-stone-100 pb-3">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-rose-50 text-[#851834] flex items-center justify-center border border-rose-200">
-                  <Mail className="w-3.5 h-3.5" />
-                </div>
-                <div>
-                  <h3 className="text-xs font-bold text-stone-900">
-                    {t('Email Password Reset Link', 'ईमेल पासवर्ड रीसेट लिंक')}
-                  </h3>
-                  <p className="text-[10px] text-stone-500">
-                    {forgotStep === 'identify'
-                      ? t('Enter email to receive password reset link', 'रीसेट लिंक पाने के लिए ईमेल दर्ज करें')
-                      : forgotStep === 'link_sent'
-                        ? t('Reset link dispatched to your email', 'आपके ईमेल पर रीसेट लिंक भेजा गया')
-                        : t('Set a new strong password for your account', 'अपने खाते के लिए नया मजबूत पासवर्ड चुनें')}
-                  </p>
-                </div>
+                <KeyRound className="w-4 h-4 text-[#851834]" />
+                <h3 className="text-sm font-bold text-stone-900">
+                  {forgotStep === 'reset'
+                    ? t('Create New Password', 'नया पासवर्ड बनाएं')
+                    : t('Reset Password', 'पासवर्ड रीसेट करें')}
+                </h3>
               </div>
               <button
                 type="button"
@@ -1611,116 +1683,112 @@ export default function SignUpTab({
                   setAuthMode('login');
                   setForgotError(null);
                 }}
-                className="text-[11px] font-semibold text-stone-500 hover:text-stone-800 flex items-center gap-1 cursor-pointer"
+                className="text-xs font-medium text-stone-500 hover:text-stone-800 flex items-center gap-1 cursor-pointer"
               >
-                <ArrowLeft className="w-3 h-3" />
+                <ArrowLeft className="w-3.5 h-3.5" />
                 <span>{t('Back', 'वापस')}</span>
               </button>
             </div>
 
             {forgotError && (
-              <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
+              <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-500 mt-0.5" />
                 <span>{forgotError}</span>
               </div>
             )}
 
             {isVerifyingResetLink && (
-              <div className="p-5 bg-stone-50 border border-stone-200 rounded-2xl text-center space-y-2 animate-in fade-in">
+              <div className="py-6 text-center space-y-2.5">
                 <RefreshCw className="w-6 h-6 animate-spin text-[#851834] mx-auto" />
-                <p className="text-xs font-semibold text-stone-700">
-                  {t('Verifying your password reset link...', 'आपके पासवर्ड रीसेट लिंक का सत्यापन हो रहा है...')}
+                <p className="text-xs font-medium text-stone-600">
+                  {t('Verifying reset link...', 'रीसेट लिंक सत्यापित हो रहा है...')}
                 </p>
               </div>
             )}
 
             {!isVerifyingResetLink && forgotStep === 'identify' && (
-              <form onSubmit={handleForgotSendResetLink} className="space-y-3.5">
+              <form onSubmit={handleForgotSendResetLink} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-bold text-stone-700 mb-1 flex items-center gap-1.5">
-                    <Mail className="w-3.5 h-3.5 text-stone-400" />
-                    <span>{t('Registered Email Address (or Username)', 'पंजीकृत ईमेल पता (या यूज़रनेम)')}</span>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1.5">
+                    {t('Registered Email or Username', 'पंजीकृत ईमेल या यूज़रनेम')}
                   </label>
-                  <input
-                    type="text"
-                    value={forgotIdentifier}
-                    onChange={(e) => setForgotIdentifier(e.target.value)}
-                    placeholder={t('e.g. abhiruchirathore97@gmail.com', 'उदा. abhiruchirathore97@gmail.com')}
-                    required
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#851834] bg-stone-50/50"
-                  />
-                  <p className="text-[10px] text-stone-400 mt-1">
+                  <div className="relative">
+                    <Mail className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={forgotIdentifier}
+                      onChange={(e) => setForgotIdentifier(e.target.value)}
+                      placeholder={t('name@gmail.com or username', 'name@gmail.com या यूज़रनेम')}
+                      required
+                      className="w-full pl-9 pr-3.5 py-2.5 text-sm sm:text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#851834] focus:border-transparent bg-white"
+                    />
+                  </div>
+                  <p className="text-[11px] text-stone-500 mt-1.5 leading-relaxed">
                     {t(
-                      'We will send a secure single-use password reset link to your email.',
-                      'हम आपके ईमेल पर एक सुरक्षित सिंगल-यूज़ पासवर्ड रीसेट लिंक भेजेंगे।'
+                      'We will email you a password reset link. If you usually sign in with Google, go back and tap Continue with Google.',
+                      'हम आपके ईमेल पर पासवर्ड रीसेट लिंक भेजेंगे। यदि आप Google से साइन इन करते हैं, तो वापस जाकर Google से जारी रखें।'
                     )}
                   </p>
                 </div>
                 <button
                   type="submit"
                   disabled={forgotSending}
-                  className="w-full bg-gradient-to-r from-[#6e1628] via-[#851834] to-[#6e1628] disabled:opacity-60 text-amber-100 font-bold py-2.5 rounded-xl text-xs shadow-sm cursor-pointer flex items-center justify-center gap-1.5"
+                  className="w-full bg-[#6e1628] hover:bg-[#851834] disabled:opacity-60 text-white font-semibold py-2.5 px-4 rounded-xl text-xs sm:text-sm shadow-xs cursor-pointer flex items-center justify-center gap-2 transition-colors"
                 >
-                  {forgotSending ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                  {forgotSending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                   <span>
                     {forgotSending
-                      ? t('Sending Reset Link...', 'रीसेट लिंक भेजा जा रहा है...')
-                      : t('Send Password Reset Link', 'पासवर्ड रीसेट लिंक भेजें')}
+                      ? t('Sending Link...', 'लिंक भेजा जा रहा है...')
+                      : t('Send Reset Link', 'रीसेट लिंक भेजें')}
                   </span>
                 </button>
               </form>
             )}
 
             {!isVerifyingResetLink && forgotStep === 'link_sent' && (
-              <div className="space-y-4 animate-in fade-in">
-                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 space-y-2 text-xs">
+              <div className="space-y-4">
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-2 text-xs">
                   <div className="flex items-start gap-2.5">
-                    <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                     <div className="min-w-0 flex-1 space-y-1">
-                      <p className="font-bold text-emerald-950">
-                        {t('Password Reset Link Sent to Your Email', 'आपके ईमेल पर पासवर्ड रीसेट लिंक भेजा गया है')}
+                      <p className="font-semibold text-emerald-950">
+                        {t('Reset link sent', 'रीसेट लिंक भेजा गया')}
                       </p>
-                      <p className="text-[11px] text-emerald-800 break-all">
-                        {t('Email:', 'ईमेल:')} <strong className="font-semibold">{forgotDisplayEmail || forgotTargetEmail}</strong>
+                      <p className="text-[11px] text-emerald-900 break-all">
+                        {t('Sent to', 'ईमेल:')} <span className="font-semibold">{forgotDisplayEmail || forgotTargetEmail}</span>
                       </p>
-                      <p className="text-[11px] text-emerald-700 leading-relaxed pt-0.5">
+                      <p className="text-[11px] text-emerald-800 leading-relaxed pt-0.5">
                         {t(
-                          'Please open the latest password reset email sent to your inbox (also check Spam/Junk folder) and click the link once.',
-                          'नया पासवर्ड सेट करने के लिए कृपया अपने ईमेल इनबॉक्स (या स्पैम/जंक फ़ोल्डर) में आया सबसे नया रीसेट ईमेल खोलें और लिंक पर एक बार क्लिक करें।'
-                        )}
-                      </p>
-                      <p className="text-[10px] text-amber-800 bg-amber-50 border border-amber-200/80 rounded-lg px-2.5 py-1.5 mt-1.5 leading-relaxed">
-                        {t(
-                          'Important: Sending another reset email automatically invalidates any previous email link. Wait at least 1 minute before resending.',
-                          'महत्वपूर्ण: नया रीसेट लिंक भेजने पर पुराना लिंक स्वतः अमान्य हो जाता है। पुनः भेजने से पहले कृपया 1 मिनट प्रतीक्षा करें।'
+                          'Check your inbox or Spam folder. If multiple emails appear in a thread, open the newest message at the bottom and click once.',
+                          'अपना इनबॉक्स या स्पैम फ़ोल्डर जांचें। यदि एक ही थ्रेड में कई ईमेल दिखें, तो सबसे नीचे वाला नया ईमेल खोलें और लिंक पर एक बार क्लिक करें।'
                         )}
                       </p>
                     </div>
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                <div className="flex items-center justify-between gap-2">
                   <button
                     type="button"
                     onClick={() => {
                       setForgotStep('identify');
                       setForgotError(null);
                     }}
-                    className="px-3.5 py-2 rounded-xl border border-stone-200 text-stone-700 font-semibold text-[11px] hover:bg-stone-50 cursor-pointer"
+                    className="px-3 py-2 rounded-xl border border-stone-200 text-stone-700 font-medium text-xs hover:bg-stone-50 cursor-pointer"
                   >
-                    {t('Use Different Email', 'दूसरा ईमेल बदलें')}
+                    {t('Change Email', 'ईमेल बदलें')}
                   </button>
                   <button
                     type="button"
                     disabled={forgotSending || resendCooldown > 0}
                     onClick={() => dispatchEmailResetLink(forgotTargetEmail || forgotIdentifier)}
-                    className="px-3.5 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-[#851834] border border-rose-200 font-bold text-[11px] flex items-center gap-1 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                    className="px-3.5 py-2 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-800 font-semibold text-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    <RefreshCw className={`w-3 h-3 ${forgotSending ? 'animate-spin' : ''}`} />
+                    <RefreshCw className={`w-3.5 h-3.5 ${forgotSending ? 'animate-spin' : ''}`} />
                     <span>
                       {resendCooldown > 0
-                        ? t(`Resend in ${resendCooldown}s`, `${resendCooldown} सेकंड में पुनः भेजें`)
-                        : t('Resend Reset Link', 'लिंक पुनः भेजें')}
+                        ? t(`Resend in ${resendCooldown}s`, `${resendCooldown}s में पुनः भेजें`)
+                        : t('Resend Link', 'पुनः भेजें')}
                     </span>
                   </button>
                 </div>
@@ -1732,7 +1800,7 @@ export default function SignUpTab({
                     setAuthMode('login');
                     setForgotError(null);
                   }}
-                  className="w-full bg-gradient-to-r from-[#6e1628] via-[#851834] to-[#6e1628] text-amber-100 font-bold py-2.5 rounded-xl text-xs shadow-sm cursor-pointer"
+                  className="w-full bg-[#6e1628] hover:bg-[#851834] text-white font-semibold py-2.5 rounded-xl text-xs shadow-xs cursor-pointer transition-colors"
                 >
                   {t('Back to Sign In', 'साइन इन पर वापस जाएं')}
                 </button>
@@ -1740,95 +1808,68 @@ export default function SignUpTab({
             )}
 
             {!isVerifyingResetLink && forgotStep === 'reset' && (
-              <form onSubmit={handleForgotResetPassword} className="space-y-3.5">
-                <div className="text-xs bg-stone-50 border border-stone-200 rounded-xl px-3 py-2 text-stone-700 break-all">
-                  {t('Reset link verified for', 'रीसेट लिंक सत्यापित:')}{' '}
-                  <strong className="font-mono text-[#6e1628]">
+              <form onSubmit={handleForgotResetPassword} className="space-y-4">
+                <p className="text-xs text-stone-600 break-all">
+                  {t('Resetting password for', 'खाते का पासवर्ड बदलें:')}{' '}
+                  <strong className="text-stone-900">
                     {forgotAccount ? `@${forgotAccount.username}` : forgotTargetEmail}
                   </strong>
-                </div>
+                </p>
 
                 <div>
-                  <label className="block text-xs font-bold text-stone-700 mb-1 flex items-center justify-between">
-                    <span>{t('New Strong Password *', 'नया मजबूत पासवर्ड *')}</span>
+                  <label className="block text-xs font-semibold text-stone-700 mb-1.5">
+                    {t('New Password', 'नया पासवर्ड')}
+                  </label>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type={showForgotPassword ? 'text' : 'password'}
+                      value={forgotNewPassword}
+                      onChange={(e) => setForgotNewPassword(e.target.value)}
+                      placeholder={t('Create a strong password', 'मजबूत पासवर्ड बनाएं')}
+                      required
+                      className="w-full pl-9 pr-10 py-2.5 text-sm sm:text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#851834] focus:border-transparent bg-white"
+                    />
                     <button
                       type="button"
                       onClick={() => setShowForgotPassword(!showForgotPassword)}
-                      className="text-[10px] text-stone-400 hover:text-stone-600 cursor-pointer"
+                      aria-label={showForgotPassword ? t('Hide password', 'पासवर्ड छिपाएं') : t('Show password', 'पासवर्ड दिखाएं')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-stone-400 hover:text-stone-700 cursor-pointer"
                     >
-                      {showForgotPassword ? t('Hide', 'छिपाएं') : t('Show', 'दिखाएं')}
+                      {showForgotPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
-                  </label>
-                  <input
-                    type={showForgotPassword ? 'text' : 'password'}
-                    value={forgotNewPassword}
-                    onChange={(e) => setForgotNewPassword(e.target.value)}
-                    placeholder={t('e.g. Rathore@2026', 'उदा. Rathore@2026')}
-                    required
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#851834] bg-stone-50/50"
-                  />
+                  </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-stone-700 mb-1">
-                    {t('Confirm New Password *', 'नए पासवर्ड की पुष्टि करें *')}
+                  <label className="block text-xs font-semibold text-stone-700 mb-1.5">
+                    {t('Confirm New Password', 'नए पासवर्ड की पुष्टि करें')}
                   </label>
-                  <input
-                    type={showForgotPassword ? 'text' : 'password'}
-                    value={forgotConfirmPassword}
-                    onChange={(e) => setForgotConfirmPassword(e.target.value)}
-                    placeholder={t('Re-enter new password', 'नया पासवर्ड पुनः दर्ज करें')}
-                    required
-                    className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#851834] bg-stone-50/50"
-                  />
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type={showForgotPassword ? 'text' : 'password'}
+                      value={forgotConfirmPassword}
+                      onChange={(e) => setForgotConfirmPassword(e.target.value)}
+                      placeholder={t('Re-enter new password', 'नया पासवर्ड पुनः दर्ज करें')}
+                      required
+                      className="w-full pl-9 pr-3.5 py-2.5 text-sm sm:text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#851834] focus:border-transparent bg-white"
+                    />
+                  </div>
                 </div>
 
-                <div className="bg-stone-50 border border-stone-200 rounded-xl p-3 space-y-2 text-[11px]">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-stone-700">{t('Password Strength:', 'पासवर्ड मजबूती:')}</span>
-                    <span className={`font-bold ${
-                      forgotPasswordValidation.valid
-                        ? 'text-emerald-700'
-                        : forgotPasswordValidation.score >= 3
-                          ? 'text-amber-700'
-                          : 'text-rose-600'
-                    }`}>
-                      {forgotPasswordValidation.valid
-                        ? t('Strong ✓', 'मजबूत ✓')
-                        : forgotPasswordValidation.score >= 3
-                          ? t('Medium', 'मध्यम')
-                          : t('Weak', 'कमज़ोर')}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-1 text-[10px]">
-                    <span className={forgotPasswordValidation.checks.minLength ? 'text-emerald-700 font-semibold' : 'text-stone-500'}>
-                      {forgotPasswordValidation.checks.minLength ? '✓' : '○'} {t('8+ characters', '8+ अक्षर')}
-                    </span>
-                    <span className={forgotPasswordValidation.checks.hasUpper ? 'text-emerald-700 font-semibold' : 'text-stone-500'}>
-                      {forgotPasswordValidation.checks.hasUpper ? '✓' : '○'} {t('Uppercase (A–Z)', 'बड़ा अक्षर')}
-                    </span>
-                    <span className={forgotPasswordValidation.checks.hasLower ? 'text-emerald-700 font-semibold' : 'text-stone-500'}>
-                      {forgotPasswordValidation.checks.hasLower ? '✓' : '○'} {t('Lowercase (a–z)', 'छोटा अक्षर')}
-                    </span>
-                    <span className={forgotPasswordValidation.checks.hasNumber ? 'text-emerald-700 font-semibold' : 'text-stone-500'}>
-                      {forgotPasswordValidation.checks.hasNumber ? '✓' : '○'} {t('Number (0–9)', 'अंक (0–9)')}
-                    </span>
-                    <span className={`col-span-2 ${forgotPasswordValidation.checks.hasSpecial ? 'text-emerald-700 font-semibold' : 'text-stone-500'}`}>
-                      {forgotPasswordValidation.checks.hasSpecial ? '✓' : '○'} {t('Special symbol (@, #, $, !, %)', 'विशेष चिह्न (@, #, $, !, %)')}
-                    </span>
-                  </div>
-                </div>
+                {renderPasswordMeter(forgotNewPassword, forgotPasswordValidation)}
 
                 <button
                   type="submit"
                   disabled={forgotResetting}
-                  className="w-full bg-gradient-to-r from-[#6e1628] via-[#851834] to-[#6e1628] disabled:opacity-60 text-amber-100 font-bold py-2.5 rounded-xl text-xs shadow-sm cursor-pointer flex items-center justify-center gap-1.5"
+                  className="w-full bg-[#6e1628] hover:bg-[#851834] disabled:opacity-60 text-white font-semibold py-2.5 rounded-xl text-xs sm:text-sm shadow-xs cursor-pointer flex items-center justify-center gap-2 transition-colors"
                 >
-                  {forgotResetting && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                  {forgotResetting && <RefreshCw className="w-4 h-4 animate-spin" />}
                   <span>
                     {forgotResetting
                       ? t('Updating Password...', 'पासवर्ड अपडेट हो रहा है...')
-                      : t('Update Password & Sign In', 'पासवर्ड अपडेट करें')}
+                      : t('Update Password', 'पासवर्ड अपडेट करें')}
                   </span>
                 </button>
               </form>
@@ -1836,237 +1877,158 @@ export default function SignUpTab({
           </div>
         )}
 
-        {/* ========================================================= */}
-        {/* FORM B: SIGN UP WITH USERNAME & PASSWORD                  */}
-        {/* ========================================================= */}
+        {/* FORM C: SIGN UP */}
         {authMode === 'signup' && (
-          <form onSubmit={handleSignupSubmit} className="space-y-3.5 text-left animate-in fade-in">
+          <form onSubmit={handleSignupSubmit} className="space-y-3.5 text-left">
             {signupError && (
-              <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
+              <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-500 mt-0.5" />
                 <span>{signupError}</span>
               </div>
             )}
 
             <div>
-              <label className="block text-xs font-bold text-stone-700 mb-1 flex items-center gap-1.5">
-                <User className="w-3.5 h-3.5 text-stone-400" />
-                <span>{t('Full Name *', 'पूरा नाम *')}</span>
+              <label className="block text-xs font-semibold text-stone-700 mb-1">
+                {t('Full Name', 'पूरा नाम')}
               </label>
-              <input
-                type="text"
-                value={signupFullName}
-                onChange={(e) => setSignupFullName(e.target.value)}
-                placeholder={t('e.g. Abhiruchi Rathore', 'उदा. अभिरुचि राठौड़')}
-                required
-                className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#851834] bg-stone-50/50"
-              />
+              <div className="relative">
+                <User className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  value={signupFullName}
+                  onChange={(e) => setSignupFullName(e.target.value)}
+                  placeholder={t('e.g. Abhiruchi Rathore', 'उदा. अभिरुचि राठौड़')}
+                  required
+                  className="w-full pl-9 pr-3.5 py-2.5 text-sm sm:text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#851834] focus:border-transparent bg-white"
+                />
+              </div>
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-stone-700 mb-1 flex items-center gap-1.5">
-                <Mail className="w-3.5 h-3.5 text-stone-400" />
-                <span>{t('Email Address * (for Password Reset Link)', 'ईमेल पता * (पासवर्ड रीसेट लिंक हेतु)')}</span>
+              <label className="block text-xs font-semibold text-stone-700 mb-1">
+                {t('Email Address', 'ईमेल पता')}
               </label>
-              <input
-                type="email"
-                value={signupEmail}
-                onChange={(e) => setSignupEmail(e.target.value)}
-                placeholder={t('e.g. name@gmail.com', 'उदा. name@gmail.com')}
-                required
-                className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#851834] bg-stone-50/50"
-              />
+              <div className="relative">
+                <Mail className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="email"
+                  value={signupEmail}
+                  onChange={(e) => setSignupEmail(e.target.value)}
+                  placeholder="name@gmail.com"
+                  required
+                  className="w-full pl-9 pr-3.5 py-2.5 text-sm sm:text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#851834] focus:border-transparent bg-white"
+                />
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-bold text-stone-700 mb-1">
-                  {t('Username *', 'यूज़रनेम *')}
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  {t('Username', 'यूज़रनेम')}
                 </label>
                 <input
                   type="text"
                   value={signupUsername}
                   onChange={(e) => setSignupUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
-                  placeholder="e.g. abhiruchi97"
+                  placeholder="abhiruchi97"
                   required
-                  className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#851834] bg-stone-50/50"
+                  className="w-full px-3.5 py-2.5 text-sm sm:text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#851834] focus:border-transparent bg-white"
                 />
-                <span className="text-[10px] text-stone-400">{t('Unique login handle', 'विशिष्ट लॉगिन नाम')}</span>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-stone-700 mb-1 flex items-center gap-1">
-                  <Phone className="w-3 h-3 text-stone-400" />
-                  <span>{t('Mobile (10 Digits)', 'मोबाइल (10 अंक)')}</span>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  {t('Mobile (Optional)', 'मोबाइल (वैकल्पिक)')}
                 </label>
-                <input
-                  type="tel"
-                  inputMode="numeric"
-                  maxLength={10}
-                  value={signupPhone}
-                  onChange={(e) => {
-                    const cleaned = sanitizePhoneInput(e.target.value);
-                    setSignupPhone(cleaned);
-                    if (cleaned.length > 0) {
-                      const check = validatePhoneNumber(cleaned, false);
-                      setSignupPhoneError(
-                        check.valid ? null : (lang === 'hi' ? check.errorHi || null : check.errorEn || null)
-                      );
-                    } else {
-                      setSignupPhoneError(null);
-                    }
-                  }}
-                  placeholder={t('10-digit mobile', '10 अंकों का नंबर')}
-                  className={`w-full px-3.5 py-2.5 text-xs rounded-xl border focus:outline-none focus:ring-2 bg-stone-50/50 font-mono ${
-                    signupPhoneError
-                      ? 'border-rose-400 focus:ring-rose-500'
-                      : 'border-stone-300 focus:ring-[#851834]'
-                  }`}
-                />
-                <div className="flex items-center justify-between mt-0.5">
-                  <span className={`text-[10px] ${signupPhoneError ? 'text-rose-600 font-medium' : 'text-stone-400'}`}>
-                    {signupPhoneError || t('Optional · Starts with 6-9', 'वैकल्पिक · 6-9 से शुरू')}
-                  </span>
-                  <span className="text-[10px] font-mono text-stone-400">{signupPhone.length}/10</span>
+                <div className="relative">
+                  <Phone className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    maxLength={10}
+                    value={signupPhone}
+                    onChange={(e) => {
+                      const cleaned = sanitizePhoneInput(e.target.value);
+                      setSignupPhone(cleaned);
+                      if (cleaned.length > 0) {
+                        const check = validatePhoneNumber(cleaned, false);
+                        setSignupPhoneError(
+                          check.valid ? null : (lang === 'hi' ? check.errorHi || null : check.errorEn || null)
+                        );
+                      } else {
+                        setSignupPhoneError(null);
+                      }
+                    }}
+                    placeholder={t('10-digit mobile', '10 अंकों का नंबर')}
+                    className={`w-full pl-8 pr-3 py-2.5 text-sm sm:text-xs rounded-xl border focus:outline-none focus:ring-2 bg-white tabular-nums ${
+                      signupPhoneError
+                        ? 'border-rose-400 focus:ring-rose-500'
+                        : 'border-stone-300 focus:ring-[#851834] focus:border-transparent'
+                    }`}
+                  />
                 </div>
+                {signupPhoneError && (
+                  <p className="text-[11px] text-rose-600 mt-1">{signupPhoneError}</p>
+                )}
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-bold text-stone-700 mb-1 flex items-center justify-between">
-                  <span>{t('Password *', 'पासवर्ड *')}</span>
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  {t('Password', 'पासवर्ड')}
+                </label>
+                <div className="relative">
+                  <input
+                    type={showSignupPassword ? 'text' : 'password'}
+                    value={signupPassword}
+                    onChange={(e) => setSignupPassword(e.target.value)}
+                    placeholder={t('8+ chars, e.g. Name@123', 'जैसे Name@123')}
+                    required
+                    className="w-full pl-3.5 pr-9 py-2.5 text-sm sm:text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#851834] focus:border-transparent bg-white"
+                  />
                   <button
                     type="button"
                     onClick={() => setShowSignupPassword(!showSignupPassword)}
-                    className="text-[10px] text-stone-400 hover:text-stone-600 cursor-pointer"
+                    aria-label={showSignupPassword ? t('Hide password', 'पासवर्ड छिपाएं') : t('Show password', 'पासवर्ड दिखाएं')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-stone-400 hover:text-stone-700 cursor-pointer"
                   >
-                    {showSignupPassword ? t('Hide', 'छिपाएं') : t('Show', 'दिखाएं')}
+                    {showSignupPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                   </button>
-                </label>
-                <input
-                  type={showSignupPassword ? "text" : "password"}
-                  value={signupPassword}
-                  onChange={(e) => setSignupPassword(e.target.value)}
-                  placeholder={t('Strong (e.g. Name@123)', 'मजबूत (उदा. Name@123)')}
-                  required
-                  className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#851834] bg-stone-50/50"
-                />
+                </div>
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-stone-700 mb-1">
-                  {t('Confirm Password *', 'पासवर्ड की पुष्टि करें *')}
+                <label className="block text-xs font-semibold text-stone-700 mb-1">
+                  {t('Confirm Password', 'पासवर्ड पुष्टि')}
                 </label>
                 <input
-                  type={showSignupPassword ? "text" : "password"}
+                  type={showSignupPassword ? 'text' : 'password'}
                   value={signupConfirmPassword}
                   onChange={(e) => setSignupConfirmPassword(e.target.value)}
                   placeholder={t('Re-enter password', 'पासवर्ड पुनः दर्ज करें')}
                   required
-                  className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#851834] bg-stone-50/50"
+                  className="w-full px-3.5 py-2.5 text-sm sm:text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#851834] focus:border-transparent bg-white"
                 />
               </div>
             </div>
 
-            {/* Live Strong Password Checklist & Strength Meter */}
-            <div className="bg-stone-50 border border-stone-200 rounded-xl p-3 space-y-2 text-[11px]">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-stone-700">
-                  {t('Strong Password Rules:', 'मजबूत पासवर्ड नियम:')}
-                </span>
-                <span className={`font-bold ${
-                  passwordValidation.valid
-                    ? 'text-emerald-700'
-                    : passwordValidation.score >= 3
-                      ? 'text-amber-700'
-                      : 'text-rose-600'
-                }`}>
-                  {passwordValidation.valid
-                    ? t('Strong ✓', 'मजबूत ✓')
-                    : passwordValidation.score >= 3
-                      ? t('Medium', 'मध्यम')
-                      : t('Weak', 'कमज़ोर')}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-5 gap-1 h-1.5">
-                {[1, 2, 3, 4, 5].map((level) => (
-                  <div
-                    key={level}
-                    className={`rounded-full transition-colors ${
-                      passwordValidation.score >= level
-                        ? passwordValidation.valid
-                          ? 'bg-emerald-500'
-                          : passwordValidation.score >= 3
-                            ? 'bg-amber-500'
-                            : 'bg-rose-500'
-                        : 'bg-stone-200'
-                    }`}
-                  />
-                ))}
-              </div>
-
-              <div className="grid grid-cols-2 gap-1 text-[10px]">
-                <span className={passwordValidation.checks.minLength ? 'text-emerald-700 font-semibold' : 'text-stone-500'}>
-                  {passwordValidation.checks.minLength ? '✓' : '○'} {t('8+ characters', 'कम से कम 8 अक्षर')}
-                </span>
-                <span className={passwordValidation.checks.hasUpper ? 'text-emerald-700 font-semibold' : 'text-stone-500'}>
-                  {passwordValidation.checks.hasUpper ? '✓' : '○'} {t('Uppercase (A–Z)', 'बड़ा अक्षर (A–Z)')}
-                </span>
-                <span className={passwordValidation.checks.hasLower ? 'text-emerald-700 font-semibold' : 'text-stone-500'}>
-                  {passwordValidation.checks.hasLower ? '✓' : '○'} {t('Lowercase (a–z)', 'छोटा अक्षर (a–z)')}
-                </span>
-                <span className={passwordValidation.checks.hasNumber ? 'text-emerald-700 font-semibold' : 'text-stone-500'}>
-                  {passwordValidation.checks.hasNumber ? '✓' : '○'} {t('Number (0–9)', 'अंक (0–9)')}
-                </span>
-                <span className={`col-span-2 ${passwordValidation.checks.hasSpecial ? 'text-emerald-700 font-semibold' : 'text-stone-500'}`}>
-                  {passwordValidation.checks.hasSpecial ? '✓' : '○'} {t('Special symbol (@, #, $, !, %, etc.)', 'विशेष चिह्न (@, #, $, !, % आदि)')}
-                </span>
-              </div>
-            </div>
+            {renderPasswordMeter(signupPassword, passwordValidation)}
 
             <button
               type="submit"
               disabled={isCreatingAccount}
-              className="w-full bg-gradient-to-r from-amber-400 via-amber-500 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-stone-950 font-bold py-3 rounded-xl text-xs shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer mt-2 disabled:opacity-60 disabled:cursor-not-allowed"
+              className="w-full bg-[#6e1628] hover:bg-[#851834] text-white font-semibold py-2.5 px-4 rounded-xl text-xs sm:text-sm shadow-xs transition-colors flex items-center justify-center gap-2 cursor-pointer mt-1 disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {isCreatingAccount ? (
-                <RefreshCw className="w-4 h-4 animate-spin" />
-              ) : (
-                <UserPlus className="w-4 h-4" />
-              )}
+              {isCreatingAccount && <RefreshCw className="w-4 h-4 animate-spin" />}
               <span>
                 {isCreatingAccount
-                  ? t('Creating Firebase Account...', 'खाता बनाया जा रहा है...')
+                  ? t('Creating Account...', 'खाता बनाया जा रहा है...')
                   : t('Create Account', 'खाता बनाएं')}
               </span>
             </button>
-
-            <div className="text-center pt-2">
-              <p className="text-xs text-stone-500">
-                {t('Already registered?', 'पहले से पंजीकृत हैं?')}{' '}
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAuthMode('login');
-                    setLoginError(null);
-                  }}
-                  className="text-[#851834] font-bold hover:underline cursor-pointer"
-                >
-                  {t('Log In here', 'यहाँ लॉग इन करें')}
-                </button>
-              </p>
-            </div>
           </form>
         )}
-
-        <div className="border-t border-stone-100 pt-3 text-center">
-          <p className="text-[11px] text-stone-400 flex items-center justify-center gap-1.5">
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-            <span>{t('100% Verified Rathore Rajput Community Platform', '100% सत्यापित राठौड़ राजपूत समाज पोर्टल')}</span>
-          </p>
-        </div>
       </div>
     </div>
   );
