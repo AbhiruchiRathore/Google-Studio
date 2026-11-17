@@ -30,6 +30,7 @@ interface SignUpTabProps {
   onLogin: (session: AuthSession, redirectTab?: TabType) => void;
   onLogout: () => void;
   onNavigateTab: (tab: TabType) => void;
+  onSignupComplete?: () => void;
   hasRegisteredProfile?: boolean;
   unlockedCount?: number;
 }
@@ -278,6 +279,7 @@ export default function SignUpTab({
   onLogin,
   onLogout,
   onNavigateTab,
+  onSignupComplete,
 }: SignUpTabProps) {
   const { lang, t } = useLanguage();
   const [showGoogleModal, setShowGoogleModal] = useState(false);
@@ -1018,6 +1020,7 @@ export default function SignUpTab({
 
     // Switch view to provide login option as requested
     setAuthMode('login');
+    onSignupComplete?.();
   };
 
   // Log In Handler (authenticates via Firebase Auth primary instance so Signed In & Users stay in sync)

@@ -95,12 +95,14 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ onNavigateTab, authSessi
         {/* 4 Trust Pillars / Metrics */}
         <div className="mt-6 sm:mt-8 pt-5 sm:pt-6 border-t border-amber-500/20 grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-4 max-w-5xl mx-auto">
           <div className="bg-white/5 backdrop-blur-xs rounded-xl p-3 sm:p-4 border border-amber-400/20 text-center">
-            <p className="text-xl sm:text-2xl font-serif font-bold text-amber-300">450+</p>
+            <p className="text-xl sm:text-2xl font-serif font-bold text-amber-300 tabular-nums">
+              {t('First 100', 'प्रथम १००')}
+            </p>
             <p className="text-[11px] sm:text-xs text-stone-300 font-medium mt-0.5">
-              {t('Verified Biodatas', 'सत्यापित बायोडाटा')}
+              {t('Free Lifetime Premium', 'निःशुल्क आजीवन प्रीमियम')}
             </p>
             <p className="text-[10px] text-amber-200/60 mt-0.5">
-              {t('Groom & Bride Directory', 'वर-वधु परिचय')}
+              {t('For Verified Profiles', 'सत्यापित बायोडाटा हेतु')}
             </p>
           </div>
 

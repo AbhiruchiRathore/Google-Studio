@@ -1,5 +1,7 @@
-import { initializeApp, getApps, getApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
+import "firebase/auth";
+import "firebase/firestore";
+import { getAuth, initializeAuth, browserLocalPersistence, Auth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -12,9 +14,19 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-GFYLBBQXHG"
 };
 
+function initSafeAuth(firebaseApp: FirebaseApp): Auth {
+  try {
+    return getAuth(firebaseApp);
+  } catch {
+    return initializeAuth(firebaseApp, {
+      persistence: browserLocalPersistence,
+    });
+  }
+}
+
 // Initialize Firebase (prevents duplicate initialization errors in Next.js/Vite)
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-export const auth = getAuth(app);
+export const auth = initSafeAuth(app);
 export const db = getFirestore(app);
 
 // Secondary isolated auth instance for registering email/password users
@@ -22,5 +34,5 @@ export const db = getFirestore(app);
 const secondaryApp =
   getApps().find((existing) => existing.name === 'signup-helper') ||
   initializeApp(firebaseConfig, 'signup-helper');
-export const secondaryAuth = getAuth(secondaryApp);
+export const secondaryAuth = initSafeAuth(secondaryApp);
 export const secondaryDb = getFirestore(secondaryApp);

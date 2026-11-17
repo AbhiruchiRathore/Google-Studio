@@ -19,6 +19,9 @@ import { WhatsAppShare } from './components/WhatsAppShare';
 import { Footer } from './components/Footer';
 import { PrivacyPolicyTab } from './components/PrivacyPolicyTab';
 import { OfflineIndicator } from './components/OfflineIndicator';
+import { FoundingOfferCard } from './components/FoundingOfferCard';
+import { LocationPermissionModal } from './components/LocationPermissionModal';
+import { useUserLocation } from './hooks/useUserLocation';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, signOut, getRedirectResult, User } from 'firebase/auth';
 import { Sparkles, Lock } from 'lucide-react';
@@ -275,6 +278,42 @@ export const App: React.FC = () => {
   });
   const authSessionRef = useRef<AuthSession | null>(authSession);
   authSessionRef.current = authSession;
+  const prevAuthSessionRef = useRef<AuthSession | null>(authSession);
+
+  const {
+    location: userLocation,
+    status: locationStatus,
+    errorMessage: locationError,
+    hasAskedOnSignup,
+    requestDeviceLocation,
+    selectManualCity,
+    dismissPrompt,
+    markAskedOnSignup
+  } = useUserLocation();
+  const [showLocationPermissionModal, setShowLocationPermissionModal] = useState(false);
+
+  const openLocationPromptIfNeeded = useCallback((forceNewSignup = false) => {
+    if (userLocation || locationStatus === 'granted') return;
+    if (!forceNewSignup && hasAskedOnSignup) return;
+    markAskedOnSignup();
+    setShowLocationPermissionModal(true);
+  }, [userLocation, locationStatus, hasAskedOnSignup, markAskedOnSignup]);
+
+  const handleSignupComplete = useCallback(() => {
+    openLocationPromptIfNeeded(true);
+  }, [openLocationPromptIfNeeded]);
+
+  // Ask for device location permission like standard apps when a user signs up / signs in for the first time
+  useEffect(() => {
+    const prev = prevAuthSessionRef.current;
+    prevAuthSessionRef.current = authSession;
+    if (!prev && authSession && authSession.username !== 'AdminAbhi' && !hasPasswordResetParams()) {
+      const timer = window.setTimeout(() => {
+        openLocationPromptIfNeeded(false);
+      }, 350);
+      return () => window.clearTimeout(timer);
+    }
+  }, [authSession, openLocationPromptIfNeeded]);
 
   // Verify Firestore reachability once on boot (non-blocking)
   useEffect(() => {
@@ -404,6 +443,10 @@ export const App: React.FC = () => {
     if (!config.requireAdminVerification) return profiles;
     return profiles.filter((p) => p.verified !== false || isProfileOwnedBySession(p, authSession));
   }, [profiles, config.requireAdminVerification, authSession]);
+
+  const verifiedProfilesCount = useMemo(() => {
+    return profiles.filter((p) => p.verified !== false).length;
+  }, [profiles]);
 
   const handleUnlockProfile = (id: number | string) => {
     setUnlockedProfiles(prev => {
@@ -696,20 +739,29 @@ export const App: React.FC = () => {
 
       <main className="flex-1 max-w-7xl w-full min-w-0 mx-auto px-3 sm:px-6 lg:px-8 py-5 sm:py-8">
         {currentTab === 'matrimony' && (
-          config.featureMatrimonyEnabled ? (
-            <MatrimonyTab
-              authSession={authSession}
-              profiles={visiblePublicProfiles}
-              unlockedProfiles={unlockedProfiles}
+          <div className="space-y-6">
+            <FoundingOfferCard
+              verifiedCount={verifiedProfilesCount}
               hasRegisteredProfile={hasRegisteredProfile}
-              onUnlockProfile={handleUnlockProfile}
+              authSession={authSession}
               onNavigateTab={navigateToTab}
-              onAddQuickProfile={handleAddQuickProfile}
-              onSelectKundaliProfile={handleSelectKundaliProfile}
             />
-          ) : (
-            renderFeatureDisabledCard('Matrimony Directory', 'वैवाहिक बायोडाटा निर्देशिका')
-          )
+            {config.featureMatrimonyEnabled ? (
+              <MatrimonyTab
+                authSession={authSession}
+                profiles={visiblePublicProfiles}
+                unlockedProfiles={unlockedProfiles}
+                hasRegisteredProfile={hasRegisteredProfile}
+                userLocation={userLocation}
+                onUnlockProfile={handleUnlockProfile}
+                onNavigateTab={navigateToTab}
+                onAddQuickProfile={handleAddQuickProfile}
+                onSelectKundaliProfile={handleSelectKundaliProfile}
+              />
+            ) : (
+              renderFeatureDisabledCard('Matrimony Directory', 'वैवाहिक बायोडाटा निर्देशिका')
+            )}
+          </div>
         )}
 
         {currentTab === 'kundali' && (
@@ -782,6 +834,7 @@ export const App: React.FC = () => {
             onLogin={handleLogin}
             onLogout={handleLogout}
             onNavigateTab={navigateToTab}
+            onSignupComplete={handleSignupComplete}
             hasRegisteredProfile={hasRegisteredProfile}
             unlockedCount={unlockedProfiles.length}
           />
@@ -857,6 +910,25 @@ export const App: React.FC = () => {
         )}
       </main>
 
+      <LocationPermissionModal
+        isOpen={showLocationPermissionModal}
+        location={userLocation}
+        status={locationStatus}
+        errorMessage={locationError}
+        onAllowLocation={() => requestDeviceLocation()}
+        onSelectCity={(city) => {
+          const ok = selectManualCity(city);
+          if (ok) {
+            markAskedOnSignup();
+            setShowLocationPermissionModal(false);
+          }
+          return ok;
+        }}
+        onDismiss={() => {
+          dismissPrompt();
+          setShowLocationPermissionModal(false);
+        }}
+      />
       <OfflineIndicator />
       <WhatsAppShare />
       <Footer onNavigateTab={navigateToTab} />

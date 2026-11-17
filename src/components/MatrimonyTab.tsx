@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { 
   Search, GraduationCap, Briefcase, Eye, Phone, X, ShieldAlert, Sparkles, 
   UserPlus, Lock, ShieldCheck, ArrowRight, Users, Heart, 
-  MessageCircle, Share2, Compass, Crown, CheckCircle2,
+  MessageCircle, Share2, Compass, Crown,
   ChevronLeft, ChevronRight, Camera
 } from 'lucide-react';
 import { MatrimonyProfile, GenderType, TabType, AuthSession, ProfileAdmirer } from '../types';
@@ -10,12 +10,18 @@ import { ChatModal } from './ChatModal';
 import { useLanguage } from '../context/LanguageContext';
 import { useAdminConfig } from '../context/AdminConfigContext';
 import { shareViaWhatsApp } from '../utils/shareAndPrint';
+import { UserLocationData } from '../hooks/useUserLocation';
+import {
+  ProfileWithDistance,
+  rankProfilesByLocation
+} from '../utils/locationMatcher';
 
 interface MatrimonyTabProps {
   authSession: AuthSession | null;
   profiles: MatrimonyProfile[];
   unlockedProfiles: (number | string)[];
   hasRegisteredProfile: boolean;
+  userLocation?: UserLocationData | null;
   onUnlockProfile: (id: number | string) => void;
   onNavigateTab: (tab: TabType) => void;
   onAddQuickProfile: (profile: Partial<MatrimonyProfile>) => void;
@@ -46,6 +52,7 @@ export const MatrimonyTab: React.FC<MatrimonyTabProps> = ({
   profiles,
   unlockedProfiles,
   hasRegisteredProfile,
+  userLocation = null,
   onUnlockProfile,
   onNavigateTab,
   onAddQuickProfile,
@@ -209,8 +216,23 @@ _Powered by Svayaa_`;
 
   const effectiveViewMode = config.featureLikesEnabled ? viewMode : 'all';
 
+  const distanceMap = useMemo(() => {
+    const map = new Map<string, ProfileWithDistance>();
+    if (!userLocation) return map;
+    const ranked = rankProfilesByLocation(
+      profiles,
+      userLocation.coords,
+      userLocation.city,
+      userLocation.state
+    );
+    for (const item of ranked) {
+      map.set(item.profile.id.toString(), item);
+    }
+    return map;
+  }, [profiles, userLocation]);
+
   const filteredProfiles = useMemo(() => {
-    return profiles.filter(p => {
+    const matched = profiles.filter(p => {
       // If user selected "Profiles I Liked", filter by likedProfiles
       if (effectiveViewMode === 'liked_by_me' && !likedProfiles.has(p.id.toString())) {
         return false;
@@ -230,15 +252,39 @@ _Powered by Svayaa_`;
 
       return matchSearch && matchGender && matchGotra && matchCity;
     });
-  }, [profiles, search, genderFilter, gotraFilter, cityFilter, effectiveViewMode, likedProfiles]);
+
+    if (userLocation) {
+      return [...matched].sort((a, b) => {
+        const infoA = distanceMap.get(a.id.toString());
+        const infoB = distanceMap.get(b.id.toString());
+        if (!infoA || !infoB) return 0;
+        if (infoA.isSameCity !== infoB.isSameCity) return infoA.isSameCity ? -1 : 1;
+        if (infoA.distanceKm !== null && infoB.distanceKm !== null) {
+          return infoA.distanceKm - infoB.distanceKm;
+        }
+        if (infoA.distanceKm !== null) return -1;
+        if (infoB.distanceKm !== null) return 1;
+        if (infoA.isSameState !== infoB.isSameState) return infoA.isSameState ? -1 : 1;
+        return 0;
+      });
+    }
+
+    return matched;
+  }, [profiles, search, genderFilter, gotraFilter, cityFilter, effectiveViewMode, likedProfiles, userLocation, distanceMap]);
 
   const activeProfile = useMemo(() => {
     if (selectedProfileId === null) return null;
     return profiles.find(p => p.id === selectedProfileId) || null;
   }, [profiles, selectedProfileId]);
 
+  const verifiedProfilesCount = useMemo(
+    () => profiles.filter((p) => p.verified !== false).length,
+    [profiles]
+  );
+  const isFoundingLifetimeMember = hasRegisteredProfile && verifiedProfilesCount <= 100;
+
   const isAdminUser = authSession?.username === 'AdminAbhi';
-  const hasActivePaidSubscription = Boolean(userSubscription?.active);
+  const hasActivePaidSubscription = Boolean(userSubscription?.active) || isFoundingLifetimeMember;
   const isStrictPaywallActive = config.subscriptionEnabled && config.contactAccessMode === 'subscription_required';
   const isFreeOpenMode =
     isAdminUser ||
@@ -325,10 +371,26 @@ _Powered by Svayaa_`;
 
   const remainingFreeContacts = isStrictPaywallActive ? 0 : Math.max(0, FREE_LIMIT - unlockedProfiles.length);
 
+  const formatDistanceLabel = (info?: ProfileWithDistance): string | null => {
+    if (!info) return null;
+    if (info.isSameCity) {
+      return info.distanceKm !== null && info.distanceKm <= 25
+        ? t(`~${Math.max(1, info.distanceKm)} km · Your Area`, `~${Math.max(1, info.distanceKm)} किमी · आपका क्षेत्र`)
+        : t('In Your City', 'आपके शहर में');
+    }
+    if (info.distanceKm !== null) {
+      return lang === 'hi' ? `लगभग ${info.distanceKm} किमी दूर` : `~${info.distanceKm} km away`;
+    }
+    if (info.isSameState) {
+      return t('Same State', 'समान राज्य');
+    }
+    return null;
+  };
+
   // IF USER IS NOT SIGNED IN: Show gate informing that profiles are visible after signing in
   if (!authSession) {
     return (
-      <div className="space-y-8">
+      <div className="space-y-6">
         {/* SIGN IN REQUIRED HERO CARD */}
         <div className="bg-white rounded-3xl shadow-xl border border-stone-200/90 overflow-hidden">
           <div className="bg-gradient-to-r from-[#24050b] via-[#380812] to-[#24050b] p-8 sm:p-10 text-white flex flex-col md:flex-row justify-between items-center gap-6 border-b border-amber-500/30">
@@ -407,12 +469,12 @@ _Powered by Svayaa_`;
               <Lock className="w-7 h-7 sm:w-8 sm:h-8" />
             </div>
             <h3 className="text-xl sm:text-2xl font-serif font-bold text-white drop-shadow-sm">
-              {t('450+ Verified Samaj Biodatas', '450+ सत्यापित समाज बायोडाटा')}
+              {t('Verified Samaj Biodatas Waiting Inside', 'सत्यापित समाज बायोडाटा देखें')}
             </h3>
             <p className="text-xs sm:text-sm text-stone-200 max-w-md drop-shadow-sm font-light">
               {t(
-                'Sign in with your Google account or mobile number to view verified candidate photos, educational credentials, and direct family contact numbers.',
-                'प्रत्याशियों के फोटो, शैक्षणिक योग्यता और सीधे पारिवारिक संपर्क नंबर देखने के लिए Google या मोबाइल नंबर से साइन इन करें।'
+                'Sign in with your Google account or username to view verified candidate photos, educational credentials, and direct family contact numbers.',
+                'प्रत्याशियों के फोटो, शैक्षणिक योग्यता और सीधे पारिवारिक संपर्क नंबर देखने के लिए Google या यूज़रनेम से साइन इन करें।'
               )}
             </p>
             <button
@@ -445,6 +507,7 @@ _Powered by Svayaa_`;
   // IF USER IS SIGNED IN: Full profiles view
   return (
     <div className="space-y-6">
+
       {/* PRIMARY VIEWS: ALL BIODATAS / PROFILES I LIKED / WHO LIKED MY PROFILE */}
       <div className="flex flex-wrap items-center gap-2 bg-white p-2.5 rounded-2xl border border-stone-200/90 shadow-xs">
         <button
@@ -882,6 +945,12 @@ _Powered by Svayaa_`;
                         {/* ZERO PILL METADATA DISCIPLINE */}
                         <p className="text-xs text-stone-600 font-medium mt-1 break-words">
                           {p.age} {t('Yrs', 'वर्ष')} · {p.height || "5' 6\""} · {p.city}, {p.state || t('India', 'भारत')}
+                          {(() => {
+                            const distLabel = formatDistanceLabel(distanceMap.get(p.id.toString()));
+                            return distLabel ? (
+                              <span className="text-emerald-800 font-semibold"> · {distLabel}</span>
+                            ) : null;
+                          })()}
                         </p>
                       </div>
                     </div>

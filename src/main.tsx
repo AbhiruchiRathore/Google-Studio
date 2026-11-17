@@ -45,9 +45,24 @@ if (typeof window !== 'undefined') {
 
 if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch((err) => {
-      console.warn('Service worker registration failed:', err);
-    });
+    if ('caches' in window) {
+      caches
+        .keys()
+        .then((keys) =>
+          Promise.all(
+            keys
+              .filter((key) => key.startsWith('rathore-rishtey-pwa-') && key !== 'rathore-rishtey-pwa-v2')
+              .map((key) => caches.delete(key))
+          )
+        )
+        .catch(() => undefined);
+    }
+    navigator.serviceWorker
+      .register('/sw.js')
+      .then((reg) => reg.update().catch(() => undefined))
+      .catch((err) => {
+        console.warn('Service worker registration failed:', err);
+      });
   });
 }
 

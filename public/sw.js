@@ -1,4 +1,4 @@
-const CACHE_NAME = 'rathore-rishtey-pwa-v1';
+const CACHE_NAME = 'rathore-rishtey-pwa-v2';
 const OFFLINE_URL = '/offline.html';
 
 const PRECACHE_ASSETS = [
@@ -40,11 +40,18 @@ self.addEventListener('activate', (event) => {
 function shouldBypassCache(url) {
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return true;
   if (url.origin !== self.location.origin) return true;
-  // Never intercept Vite HMR / module dev internals or API calls
+  // Never intercept Vite HMR / dev modules, pre-bundled deps, source files, or API calls
   if (
     url.pathname.startsWith('/@') ||
     url.pathname.startsWith('/api/') ||
-    url.pathname.includes('__vite')
+    url.pathname.startsWith('/node_modules/') ||
+    url.pathname.startsWith('/src/') ||
+    url.pathname.includes('__vite') ||
+    /\.(ts|tsx|jsx|mts|cts)$/i.test(url.pathname) ||
+    url.searchParams.has('v') ||
+    url.searchParams.has('t') ||
+    url.searchParams.has('import') ||
+    url.searchParams.has('direct')
   ) {
     return true;
   }
