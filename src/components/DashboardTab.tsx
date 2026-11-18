@@ -24,6 +24,7 @@ import {
   isAdOwnedBySession,
   isProfileOwnedBySession
 } from '../utils/profileOwnership';
+import { LocationPermissionStatus, UserLocationData } from '../hooks/useUserLocation';
 
 interface DashboardTabProps {
   authSession: AuthSession | null;
@@ -38,6 +39,10 @@ interface DashboardTabProps {
   onNavigateTab: (tab: TabType) => void;
   onLogout: () => void;
   onSelectKundaliProfile?: (id: number | string, gender: 'Male' | 'Female') => void;
+  userLocation?: UserLocationData | null;
+  locationStatus?: LocationPermissionStatus;
+  onOpenLocationModal?: () => void;
+  onClearLocation?: () => void;
 }
 
 type DashboardNavSection = 'overview' | 'profiles' | 'ads' | 'liked_by_me' | 'who_liked_me' | 'chats' | 'media' | 'settings';
@@ -54,7 +59,11 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   onDeleteAd,
   onNavigateTab,
   onLogout,
-  onSelectKundaliProfile
+  onSelectKundaliProfile,
+  userLocation = null,
+  locationStatus = 'prompt',
+  onOpenLocationModal,
+  onClearLocation
 }) => {
   const { lang, t } = useLanguage();
   const { config, userSubscription } = useAdminConfig();
@@ -2824,6 +2833,66 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                         onChange={(e) => setNotifyOnView(e.target.checked)}
                         className="w-4 h-4 shrink-0 text-[#851834] rounded"
                       />
+                    </div>
+                  </div>
+
+                  {/* Location Sharing Permission (Android & Web) */}
+                  <div className="p-4 rounded-2xl border border-stone-200 space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="min-w-0 space-y-1">
+                        <p className="font-bold text-stone-800 font-serif flex items-center gap-1.5">
+                          <MapPin className="w-4 h-4 text-[#851834] shrink-0" />
+                          <span>{t('Device Location Permission (Android & Web)', 'डिवाइस लोकेशन अनुमति (Android और वेब)')}</span>
+                        </p>
+                        <p className="text-[11px] text-stone-500 font-light">
+                          {userLocation ? (
+                            <>
+                              {t('Active:', 'सक्रिय:')}{' '}
+                              <strong className="text-stone-800">
+                                {userLocation.city}, {userLocation.state}
+                              </strong>{' '}
+                              ·{' '}
+                              {userLocation.source === 'manual'
+                                ? t('Manual City', 'मैनुअल शहर')
+                                : userLocation.grantMode === 'once'
+                                  ? t('Only this time', 'केवल इस बार')
+                                  : t('While using the app', 'जब ऐप उपयोग में हो')}
+                            </>
+                          ) : locationStatus === 'denied' ? (
+                            t(
+                              'Permission denied in device or browser settings. Tap Configure Location to retry or choose a city.',
+                              'डिवाइस या ब्राउज़र सेटिंग्स में अनुमति बंद है। पुनः प्रयास करने या शहर चुनने के लिए नीचे क्लिक करें।'
+                            )
+                          ) : (
+                            t(
+                              'Share your location to prioritize nearby Samaj biodatas & local businesses.',
+                              'नजदीकी समाज बायोडाटा और व्यापार पहले देखने के लिए लोकेशन साझा करें।'
+                            )
+                          )}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {onOpenLocationModal && (
+                          <button
+                            type="button"
+                            onClick={onOpenLocationModal}
+                            className="px-3.5 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-300 text-[#380812] font-semibold text-xs cursor-pointer transition-colors"
+                          >
+                            {userLocation
+                              ? t('Manage Permission', 'अनुमति बदलें')
+                              : t('Allow Location', 'लोकेशन अनुमति दें')}
+                          </button>
+                        )}
+                        {userLocation && onClearLocation && (
+                          <button
+                            type="button"
+                            onClick={onClearLocation}
+                            className="px-3 py-2 rounded-xl border border-stone-200 hover:bg-stone-50 text-stone-600 font-medium text-xs cursor-pointer transition-colors"
+                          >
+                            {t('Turn Off', 'बंद करें')}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
 

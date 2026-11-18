@@ -36,7 +36,7 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
 
   const [formData, setFormData] = useState({
     name: authSession?.name || '',
-    gender: 'Male' as 'Male' | 'Female',
+    gender: (authSession?.gender || 'Male') as 'Male' | 'Female',
     dob: '',
     birthTime: '',
     gotra: '',
@@ -62,6 +62,7 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
       setFormData(prev => ({
         ...prev,
         name: prev.name || authSession.name || '',
+        gender: authSession.gender || prev.gender,
         phone: prev.phone || sanitizePhoneInput(authSession.phone || ''),
         photos: prev.photos.length > 0 ? prev.photos : (authSession.photoUrl ? [authSession.photoUrl] : [])
       }));

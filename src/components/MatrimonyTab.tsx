@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { 
   Search, GraduationCap, Briefcase, Eye, Phone, X, ShieldAlert, Sparkles, 
   UserPlus, Lock, ShieldCheck, ArrowRight, Users, Heart, 
-  MessageCircle, Share2, Compass, Crown,
+  MessageCircle, Share2, Compass, Crown, MapPin,
   ChevronLeft, ChevronRight, Camera
 } from 'lucide-react';
 import { MatrimonyProfile, GenderType, TabType, AuthSession, ProfileAdmirer } from '../types';
@@ -15,7 +15,7 @@ import {
   ProfileWithDistance,
   rankProfilesByLocation
 } from '../utils/locationMatcher';
-import { getUserStorageKey } from '../utils/profileOwnership';
+import { getUserStorageKey, isProfileOwnedBySession } from '../utils/profileOwnership';
 import { FOUNDING_PROFILE_LIMIT } from './FoundingOfferCard';
 
 interface MatrimonyTabProps {
@@ -24,6 +24,8 @@ interface MatrimonyTabProps {
   unlockedProfiles: (number | string)[];
   hasRegisteredProfile: boolean;
   userLocation?: UserLocationData | null;
+  onOpenLocationModal?: () => void;
+  onUpdateSessionGender?: (gender: 'Male' | 'Female') => void;
   onUnlockProfile: (id: number | string) => void;
   onNavigateTab: (tab: TabType) => void;
   onAddQuickProfile: (profile: Partial<MatrimonyProfile>) => void;
@@ -55,6 +57,8 @@ export const MatrimonyTab: React.FC<MatrimonyTabProps> = ({
   unlockedProfiles,
   hasRegisteredProfile,
   userLocation = null,
+  onOpenLocationModal,
+  onUpdateSessionGender,
   onUnlockProfile,
   onNavigateTab,
   onAddQuickProfile,
@@ -192,6 +196,57 @@ _Powered by Svayaa_`;
 
   const effectiveViewMode = config.featureLikesEnabled ? viewMode : 'all';
 
+  const isAdminUser = authSession?.username === 'AdminAbhi';
+  const genderPrefStorageKey = getUserStorageKey('samaj_candidate_gender', authSession);
+  const [storedCandidateGender, setStoredCandidateGender] = useState<'Male' | 'Female' | null>(() => {
+    try {
+      const val = localStorage.getItem(genderPrefStorageKey);
+      return val === 'Male' || val === 'Female' ? val : null;
+    } catch {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      const val = localStorage.getItem(genderPrefStorageKey);
+      setStoredCandidateGender(val === 'Male' || val === 'Female' ? val : null);
+    } catch {
+      setStoredCandidateGender(null);
+    }
+  }, [genderPrefStorageKey]);
+
+  const userOwnedProfile = useMemo(() => {
+    if (!authSession) return null;
+    return profiles.find((p) => isProfileOwnedBySession(p, authSession)) || null;
+  }, [profiles, authSession]);
+
+  const candidateGender: 'Male' | 'Female' | null = isAdminUser
+    ? null
+    : userOwnedProfile?.gender || authSession?.gender || storedCandidateGender || null;
+
+  const oppositeGender: 'Male' | 'Female' | null =
+    candidateGender === 'Female'
+      ? 'Male'
+      : candidateGender === 'Male'
+        ? 'Female'
+        : null;
+
+  const handleSelectCandidateGender = (gender: 'Male' | 'Female') => {
+    setStoredCandidateGender(gender);
+    try {
+      localStorage.setItem(genderPrefStorageKey, gender);
+    } catch {
+      // ignore storage errors
+    }
+    onUpdateSessionGender?.(gender);
+  };
+
+  const matchPoolProfiles = useMemo(() => {
+    if (!oppositeGender) return profiles;
+    return profiles.filter((p) => p.gender === oppositeGender);
+  }, [profiles, oppositeGender]);
+
   const distanceMap = useMemo(() => {
     const map = new Map<string, ProfileWithDistance>();
     if (!userLocation) return map;
@@ -208,6 +263,8 @@ _Powered by Svayaa_`;
   }, [profiles, userLocation]);
 
   const filteredProfiles = useMemo(() => {
+    const effectiveGender: GenderType = oppositeGender || genderFilter;
+
     const matched = profiles.filter(p => {
       // If user selected "Profiles I Liked", filter by likedProfiles
       if (effectiveViewMode === 'liked_by_me' && !likedProfiles.has(p.id.toString())) {
@@ -222,7 +279,7 @@ _Powered by Svayaa_`;
         (p.familyDetails && p.familyDetails.toLowerCase().includes(q)) ||
         (p.about && p.about.toLowerCase().includes(q));
 
-      const matchGender = genderFilter === 'all' || p.gender === genderFilter;
+      const matchGender = effectiveGender === 'all' || p.gender === effectiveGender;
       const matchGotra = !gotraFilter.trim() || p.gotra.toLowerCase().includes(gotraFilter.toLowerCase().trim());
       const matchCity = !cityFilter.trim() || p.city.toLowerCase().includes(cityFilter.toLowerCase().trim());
 
@@ -246,7 +303,7 @@ _Powered by Svayaa_`;
     }
 
     return matched;
-  }, [profiles, search, genderFilter, gotraFilter, cityFilter, effectiveViewMode, likedProfiles, userLocation, distanceMap]);
+  }, [profiles, search, genderFilter, oppositeGender, gotraFilter, cityFilter, effectiveViewMode, likedProfiles, userLocation, distanceMap]);
 
   const activeProfile = useMemo(() => {
     if (selectedProfileId === null) return null;
@@ -259,7 +316,6 @@ _Powered by Svayaa_`;
   );
   const isFoundingLifetimeMember = hasRegisteredProfile && verifiedProfilesCount <= FOUNDING_PROFILE_LIMIT;
 
-  const isAdminUser = authSession?.username === 'AdminAbhi';
   const hasActivePaidSubscription = Boolean(userSubscription?.active) || isFoundingLifetimeMember;
   const isStrictPaywallActive = config.subscriptionEnabled && config.contactAccessMode === 'subscription_required';
   const isFreeOpenMode =
@@ -484,7 +540,40 @@ _Powered by Svayaa_`;
   return (
     <div className="space-y-6">
 
-      {/* PRIMARY VIEWS: ALL BIODATAS / PROFILES I LIKED / WHO LIKED MY PROFILE */}
+      {/* QUICK GENDER PROMPT FOR ACCOUNTS WITHOUT GENDER YET (e.g. GOOGLE SIGN-IN BEFORE PROFILE) */}
+      {!isAdminUser && candidateGender === null && (
+        <div className="bg-amber-50/90 border border-amber-300/80 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+          <div>
+            <h4 className="font-serif font-bold text-sm text-[#380812]">
+              {t('Select Your Candidate Gender to View Matches', 'उपयुक्त रिश्ते देखने हेतु प्रत्याशी का लिंग चुनें')}
+            </h4>
+            <p className="text-xs text-stone-600 mt-0.5">
+              {t(
+                'Female candidates are shown verified Male (Groom) profiles, and Male candidates are shown verified Female (Bride) profiles.',
+                'महिला प्रत्याशी को केवल वर (पुरुष) बायोडाटा और पुरुष प्रत्याशी को केवल वधु (महिला) बायोडाटा दिखाए जाते हैं।'
+              )}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 shrink-0 w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={() => handleSelectCandidateGender('Male')}
+              className="flex-1 sm:flex-initial bg-[#380812] hover:bg-[#540e1b] text-amber-200 font-semibold text-xs px-3.5 py-2 rounded-xl transition-colors cursor-pointer"
+            >
+              {t('I am Male (Show Brides)', 'मैं पुरुष हूँ (वधु देखें)')}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSelectCandidateGender('Female')}
+              className="flex-1 sm:flex-initial bg-[#380812] hover:bg-[#540e1b] text-amber-200 font-semibold text-xs px-3.5 py-2 rounded-xl transition-colors cursor-pointer"
+            >
+              {t('I am Female (Show Grooms)', 'मैं महिला हूँ (वर देखें)')}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* PRIMARY VIEWS: ALL MATCHING BIODATAS / PROFILES I LIKED / WHO LIKED MY PROFILE */}
       <div className="flex flex-wrap items-center gap-2 bg-white p-2.5 rounded-2xl border border-stone-200/90 shadow-xs">
         <button
           onClick={() => setViewMode('all')}
@@ -495,7 +584,13 @@ _Powered by Svayaa_`;
           }`}
         >
           <Users className="w-4 h-4" />
-          <span>{t(`All Bios (${profiles.length})`, `सभी बायोडाटा (${profiles.length})`)}</span>
+          <span>
+            {oppositeGender === 'Male'
+              ? t(`Male Profiles (${matchPoolProfiles.length})`, `वर बायोडाटा (${matchPoolProfiles.length})`)
+              : oppositeGender === 'Female'
+                ? t(`Female Profiles (${matchPoolProfiles.length})`, `वधु बायोडाटा (${matchPoolProfiles.length})`)
+                : t(`All Bios (${profiles.length})`, `सभी बायोडाटा (${profiles.length})`)}
+          </span>
         </button>
 
         <button
@@ -529,7 +624,7 @@ _Powered by Svayaa_`;
         <div className="flex flex-col lg:flex-row gap-4 justify-between items-stretch lg:items-center">
           
           {/* Search bar */}
-          <div className="relative w-full lg:w-96">
+          <div className="relative w-full lg:w-88">
             <Search className="absolute left-3.5 top-3 w-4 h-4 text-stone-400" />
             <input
               type="text"
@@ -541,39 +636,58 @@ _Powered by Svayaa_`;
           </div>
 
           <div className="flex flex-wrap gap-2.5 items-center">
-            {/* Gender Segmented Switch */}
-            <div className="flex bg-stone-100 p-1 rounded-xl border border-stone-200/80">
-              <button
-                onClick={() => setGenderFilter('all')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                  genderFilter === 'all'
-                    ? 'bg-[#380812] text-amber-200 shadow-xs'
-                    : 'text-stone-700 hover:text-stone-900'
-                }`}
-              >
-                {t('All', 'समस्त')}
-              </button>
-              <button
-                onClick={() => setGenderFilter('Male')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                  genderFilter === 'Male'
-                    ? 'bg-[#380812] text-amber-200 shadow-xs'
-                    : 'text-stone-700 hover:text-stone-900'
-                }`}
-              >
-                {t('Grooms', 'वर')}
-              </button>
-              <button
-                onClick={() => setGenderFilter('Female')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                  genderFilter === 'Female'
-                    ? 'bg-[#380812] text-amber-200 shadow-xs'
-                    : 'text-stone-700 hover:text-stone-900'
-                }`}
-              >
-                {t('Brides', 'वधु')}
-              </button>
-            </div>
+            {/* Gender Status / Filter: Opposite-gender matched automatically for candidates; Admin keeps All/Grooms/Brides */}
+            {oppositeGender ? (
+              <div className="flex items-center gap-2 bg-rose-50/90 border border-rose-200/80 px-3 py-1.5 rounded-xl text-xs font-semibold text-[#380812]">
+                <span>
+                  {oppositeGender === 'Male'
+                    ? t('Showing Male Profiles (Female Candidate)', 'वर प्रोफ़ाइल (महिला प्रत्याशी हेतु)')
+                    : t('Showing Female Profiles (Male Candidate)', 'वधु प्रोफ़ाइल (पुरुष प्रत्याशी हेतु)')}
+                </span>
+                {!userOwnedProfile && (
+                  <button
+                    type="button"
+                    onClick={() => handleSelectCandidateGender(candidateGender === 'Female' ? 'Male' : 'Female')}
+                    className="text-[11px] font-bold text-[#851834] hover:underline cursor-pointer"
+                  >
+                    {t('Switch', 'बदलें')}
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="flex bg-stone-100 p-1 rounded-xl border border-stone-200/80">
+                <button
+                  onClick={() => setGenderFilter('all')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    genderFilter === 'all'
+                      ? 'bg-[#380812] text-amber-200 shadow-xs'
+                      : 'text-stone-700 hover:text-stone-900'
+                  }`}
+                >
+                  {t('All', 'समस्त')}
+                </button>
+                <button
+                  onClick={() => setGenderFilter('Male')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    genderFilter === 'Male'
+                      ? 'bg-[#380812] text-amber-200 shadow-xs'
+                      : 'text-stone-700 hover:text-stone-900'
+                  }`}
+                >
+                  {t('Grooms', 'वर')}
+                </button>
+                <button
+                  onClick={() => setGenderFilter('Female')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    genderFilter === 'Female'
+                      ? 'bg-[#380812] text-amber-200 shadow-xs'
+                      : 'text-stone-700 hover:text-stone-900'
+                  }`}
+                >
+                  {t('Brides', 'वधु')}
+                </button>
+              </div>
+            )}
 
             {/* Gotra Filter */}
             <input
@@ -592,6 +706,26 @@ _Powered by Svayaa_`;
               placeholder={t('Filter City...', 'शहर फ़िल्टर करें...')}
               className="px-3.5 py-2 rounded-xl border border-stone-200 text-xs flex-1 min-w-[130px] sm:flex-initial sm:w-36 focus:outline-none focus:ring-2 focus:ring-amber-500/50 bg-stone-50/50"
             />
+
+            {/* Compact Standard Location Sharing Trigger */}
+            {onOpenLocationModal && (
+              <button
+                type="button"
+                onClick={onOpenLocationModal}
+                className={`px-3 py-2 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 ${
+                  userLocation
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100/70'
+                    : 'bg-amber-50 border-amber-300/70 text-[#380812] hover:bg-amber-100/70'
+                }`}
+              >
+                <MapPin className={`w-3.5 h-3.5 shrink-0 ${userLocation ? 'text-emerald-600' : 'text-[#6e1628]'}`} />
+                <span>
+                  {userLocation
+                    ? `${userLocation.city}`
+                    : t('Location Permission', 'लोकेशन अनुमति')}
+                </span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -599,9 +733,9 @@ _Powered by Svayaa_`;
         <div className="flex flex-col sm:flex-row justify-between items-center text-xs text-stone-500 pt-3 border-t border-stone-100 gap-2">
           <span className="font-medium text-stone-600">
             {lang === 'hi' ? (
-              <><strong className="text-stone-900">{filteredProfiles.length}</strong> सत्यापित राठौर समाज बायोडाटा दिखाए जा रहे हैं</>
+              <><strong className="text-stone-900">{filteredProfiles.length}</strong> सत्यापित राठौर समाज {oppositeGender === 'Male' ? 'वर ' : oppositeGender === 'Female' ? 'वधु ' : ''}बायोडाटा दिखाए जा रहे हैं</>
             ) : (
-              <>Showing <strong className="text-stone-900">{filteredProfiles.length}</strong> verified Rathore Samaj Biodatas</>
+              <>Showing <strong className="text-stone-900">{filteredProfiles.length}</strong> verified Rathore Samaj {oppositeGender === 'Male' ? 'Male (Groom) ' : oppositeGender === 'Female' ? 'Female (Bride) ' : ''}Biodatas</>
             )}
           </span>
         </div>

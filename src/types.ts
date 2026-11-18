@@ -118,6 +118,7 @@ export interface AuthSession {
   username?: string;
   loggedInAt: string;
   verified?: boolean;
+  gender?: 'Male' | 'Female';
 }
 
 export interface UserAccount {
@@ -128,6 +129,7 @@ export interface UserAccount {
   phone?: string;
   email?: string;
   gotra?: string;
+  gender?: 'Male' | 'Female';
   createdAt: string;
 }
 

@@ -284,23 +284,28 @@ export const App: React.FC = () => {
     location: userLocation,
     status: locationStatus,
     errorMessage: locationError,
-    hasAskedOnSignup,
+    hasAskedForOwner,
     requestDeviceLocation,
     selectManualCity,
     dismissPrompt,
-    markAskedOnSignup
+    markAskedOnSignup,
+    clearLocation
   } = useUserLocation();
   const [showLocationPermissionModal, setShowLocationPermissionModal] = useState(false);
 
-  const openLocationPromptIfNeeded = useCallback((forceNewSignup = false) => {
-    if (userLocation || locationStatus === 'granted') return;
-    if (!forceNewSignup && hasAskedOnSignup) return;
-    markAskedOnSignup();
-    setShowLocationPermissionModal(true);
-  }, [userLocation, locationStatus, hasAskedOnSignup, markAskedOnSignup]);
+  const openLocationPromptIfNeeded = useCallback(
+    (forceNewSignup = false, targetSession?: AuthSession | null) => {
+      if (userLocation || locationStatus === 'granted') return;
+      const ownerKey = getSessionOwnerKey(targetSession ?? authSessionRef.current);
+      if (!forceNewSignup && hasAskedForOwner(ownerKey)) return;
+      markAskedOnSignup(ownerKey);
+      setShowLocationPermissionModal(true);
+    },
+    [userLocation, locationStatus, hasAskedForOwner, markAskedOnSignup]
+  );
 
   const handleSignupComplete = useCallback(() => {
-    openLocationPromptIfNeeded(true);
+    openLocationPromptIfNeeded(true, null);
   }, [openLocationPromptIfNeeded]);
 
   // Ask for device location permission like standard apps when a user signs up / signs in for the first time
@@ -309,7 +314,7 @@ export const App: React.FC = () => {
     prevAuthSessionRef.current = authSession;
     if (!prev && authSession && authSession.username !== 'AdminAbhi' && !hasPasswordResetParams()) {
       const timer = window.setTimeout(() => {
-        openLocationPromptIfNeeded(false);
+        openLocationPromptIfNeeded(false, authSession);
       }, 350);
       return () => window.clearTimeout(timer);
     }
@@ -328,6 +333,7 @@ export const App: React.FC = () => {
     let matchedUsername: string | undefined;
     let matchedFullName: string | undefined;
     let matchedPhone: string | undefined;
+    let matchedGender: 'Male' | 'Female' | undefined;
 
     try {
       const storedSessionRaw = localStorage.getItem('user_auth_session');
@@ -337,6 +343,7 @@ export const App: React.FC = () => {
           matchedUsername = parsedSession.username;
           matchedFullName = parsedSession.name;
           matchedPhone = parsedSession.phone;
+          matchedGender = parsedSession.gender;
         }
       }
 
@@ -347,12 +354,14 @@ export const App: React.FC = () => {
           username?: string;
           fullName?: string;
           phone?: string;
+          gender?: 'Male' | 'Female';
         }>;
         const found = accounts.find((a) => a.email && a.email.toLowerCase() === cleanEmail);
         if (found) {
           matchedUsername = matchedUsername || found.username;
           matchedFullName = matchedFullName || found.fullName;
           matchedPhone = matchedPhone || found.phone;
+          matchedGender = matchedGender || found.gender;
         }
       }
     } catch {
@@ -372,6 +381,7 @@ export const App: React.FC = () => {
       email: user.email || '',
       username: matchedUsername || (!isGoogleProvider && cleanEmail ? cleanEmail.split('@')[0] : undefined),
       phone: matchedPhone || user.phoneNumber || undefined,
+      gender: matchedGender,
       photoUrl: user.photoURL || '',
       loggedInAt: new Date().toISOString(),
       verified: user.emailVerified || !isGoogleProvider
@@ -394,6 +404,7 @@ export const App: React.FC = () => {
       username: session.username,
       fullName: session.name,
       phone: session.phone,
+      gender: session.gender,
       provider: isGoogleProvider ? 'google.com' : 'password'
     });
 
@@ -646,6 +657,19 @@ export const App: React.FC = () => {
     }
   };
 
+  const handleUpdateSessionGender = useCallback((gender: 'Male' | 'Female') => {
+    setAuthSession((prev) => {
+      if (!prev) return prev;
+      const updated: AuthSession = { ...prev, gender };
+      try {
+        localStorage.setItem('user_auth_session', JSON.stringify(updated));
+      } catch {
+        // ignore storage errors
+      }
+      return updated;
+    });
+  }, []);
+
   const handleLogin = (session: AuthSession, redirectTab: TabType = 'dashboard') => {
     setAuthSession(session);
     try {
@@ -767,6 +791,8 @@ export const App: React.FC = () => {
                 unlockedProfiles={unlockedProfiles}
                 hasRegisteredProfile={hasRegisteredProfile}
                 userLocation={userLocation}
+                onOpenLocationModal={() => setShowLocationPermissionModal(true)}
+                onUpdateSessionGender={handleUpdateSessionGender}
                 onUnlockProfile={handleUnlockProfile}
                 onNavigateTab={navigateToTab}
                 onAddQuickProfile={handleAddQuickProfile}
@@ -806,6 +832,10 @@ export const App: React.FC = () => {
             onNavigateTab={navigateToTab}
             onLogout={handleLogout}
             onSelectKundaliProfile={handleSelectKundaliProfile}
+            userLocation={userLocation}
+            locationStatus={locationStatus}
+            onOpenLocationModal={() => setShowLocationPermissionModal(true)}
+            onClearLocation={clearLocation}
           />
         )}
 
@@ -933,17 +963,23 @@ export const App: React.FC = () => {
         location={userLocation}
         status={locationStatus}
         errorMessage={locationError}
-        onAllowLocation={() => requestDeviceLocation()}
+        onAllowLocation={(grantMode, accuracyMode) => {
+          markAskedOnSignup(getSessionOwnerKey(authSession));
+          void requestDeviceLocation({ grantMode, accuracyMode });
+        }}
         onSelectCity={(city) => {
           const ok = selectManualCity(city);
           if (ok) {
-            markAskedOnSignup();
+            markAskedOnSignup(getSessionOwnerKey(authSession));
             setShowLocationPermissionModal(false);
           }
           return ok;
         }}
-        onDismiss={() => {
-          dismissPrompt();
+        onClose={() => {
+          setShowLocationPermissionModal(false);
+        }}
+        onDeny={() => {
+          dismissPrompt(getSessionOwnerKey(authSession));
           setShowLocationPermissionModal(false);
         }}
       />

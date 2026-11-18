@@ -118,6 +118,7 @@ export interface SyncUserProfileInput {
   username?: string;
   fullName?: string;
   phone?: string;
+  gender?: 'Male' | 'Female';
   provider?: string;
   isNewUser?: boolean;
 }
@@ -158,6 +159,7 @@ export async function syncUserProfileToFirestore(
         fullName: displayName,
         ...(cleanUsername ? { username: cleanUsername } : {}),
         ...(extra.phone ? { phone: extra.phone } : {}),
+        ...(extra.gender ? { gender: extra.gender } : {}),
         photoUrl: user.photoURL || '',
         provider: providerId,
         emailVerified: Boolean(user.emailVerified),
@@ -186,6 +188,7 @@ export async function syncUserProfileToFirestore(
           email: cleanEmail,
           fullName: displayName,
           phone: extra.phone || '',
+          ...(extra.gender ? { gender: extra.gender } : {}),
           updatedAt: serverTimestamp()
         },
         { merge: true }
@@ -209,7 +212,7 @@ export async function syncUserProfileToFirestore(
 export async function lookupEmailByUsernameFromFirestore(
   authInstance: Auth,
   username: string
-): Promise<{ email: string; username: string; fullName?: string; phone?: string } | null> {
+): Promise<{ email: string; username: string; fullName?: string; phone?: string; gender?: 'Male' | 'Female' } | null> {
   if (firestoreAvailability === 'unavailable') {
     return null;
   }
@@ -238,7 +241,8 @@ export async function lookupEmailByUsernameFromFirestore(
         email: data.email.trim().toLowerCase(),
         username: clean,
         fullName: typeof data.fullName === 'string' ? data.fullName : undefined,
-        phone: typeof data.phone === 'string' ? data.phone : undefined
+        phone: typeof data.phone === 'string' ? data.phone : undefined,
+        gender: data.gender === 'Male' || data.gender === 'Female' ? data.gender : undefined
       };
     }
   } catch (error) {

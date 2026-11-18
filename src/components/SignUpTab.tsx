@@ -298,6 +298,7 @@ export default function SignUpTab({
 
   // Sign Up Form State
   const [signupFullName, setSignupFullName] = useState('');
+  const [signupGender, setSignupGender] = useState<'Male' | 'Female' | ''>('');
   const [signupUsername, setSignupUsername] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPhone, setSignupPhone] = useState('');
@@ -851,6 +852,16 @@ export default function SignUpTab({
       return;
     }
 
+    if (!signupGender) {
+      setSignupError(
+        t(
+          'Please select candidate gender (Male or Female) so relevant opposite-gender matches are shown.',
+          'कृपया प्रत्याशी का लिंग (पुरुष या महिला) चुनें ताकि उपयुक्त रिश्ते दिखाए जा सकें।'
+        )
+      );
+      return;
+    }
+
     if (!cleanEmail || !EMAIL_REGEX.test(cleanEmail)) {
       setSignupError(
         t(
@@ -962,6 +973,7 @@ export default function SignUpTab({
           username: cleanUsername,
           fullName: cleanFullName,
           phone: phoneCheck.cleaned || '',
+          gender: signupGender,
           provider: 'password',
           isNewUser: true
         });
@@ -1026,6 +1038,7 @@ export default function SignUpTab({
       password: signupPassword,
       email: cleanEmail,
       phone: phoneCheck.cleaned || undefined,
+      gender: signupGender,
       createdAt: new Date().toISOString()
     };
 
@@ -1107,6 +1120,7 @@ export default function SignUpTab({
       let resolvedUsername = matched?.username;
       let resolvedFullName = matched?.fullName;
       let resolvedPhone = matched?.phone || '';
+      let resolvedGender: 'Male' | 'Female' | undefined = matched?.gender;
       let emailCandidate = matched?.email?.trim().toLowerCase() || (EMAIL_REGEX.test(identifier) ? identifier : '');
 
       // Resolve username -> email via Firestore for cross-device Username ID login
@@ -1117,6 +1131,7 @@ export default function SignUpTab({
           resolvedUsername = resolvedUsername || firestoreProfile.username;
           resolvedFullName = resolvedFullName || firestoreProfile.fullName;
           resolvedPhone = resolvedPhone || firestoreProfile.phone || '';
+          resolvedGender = resolvedGender || firestoreProfile.gender;
         }
       }
 
@@ -1135,12 +1150,15 @@ export default function SignUpTab({
             username: finalUsername,
             fullName: displayName,
             phone: resolvedPhone,
+            gender: resolvedGender,
             provider: 'password'
           });
 
           if (matched) {
             const synced = accounts.map((acc) =>
-              acc.id === matched.id ? { ...acc, id: cred.user.uid, password } : acc
+              acc.id === matched.id
+                ? { ...acc, id: cred.user.uid, password, gender: resolvedGender || acc.gender }
+                : acc
             );
             try {
               localStorage.setItem('samaj_user_accounts', JSON.stringify(synced));
@@ -1155,6 +1173,7 @@ export default function SignUpTab({
               password,
               email: emailCandidate,
               phone: resolvedPhone || undefined,
+              gender: resolvedGender,
               createdAt: new Date().toISOString()
             };
             try {
@@ -1170,6 +1189,7 @@ export default function SignUpTab({
             username: finalUsername,
             phone: resolvedPhone,
             email: emailCandidate,
+            gender: resolvedGender,
             loggedInAt: new Date().toISOString(),
             verified: true
           };
@@ -1204,6 +1224,7 @@ export default function SignUpTab({
                   username: matched.username,
                   fullName: displayName,
                   phone: matched.phone || '',
+                  gender: matched.gender,
                   provider: 'password',
                   isNewUser: true
                 });
@@ -1221,6 +1242,7 @@ export default function SignUpTab({
                   username: matched.username,
                   phone: matched.phone || '',
                   email: emailCandidate,
+                  gender: matched.gender,
                   loggedInAt: new Date().toISOString(),
                   verified: true
                 };
@@ -1933,6 +1955,36 @@ export default function SignUpTab({
                   required
                   className="w-full pl-9 pr-3.5 py-2.5 text-sm sm:text-xs rounded-xl border border-stone-300 focus:outline-none focus:ring-2 focus:ring-[#851834] focus:border-transparent bg-white"
                 />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-stone-700 mb-1">
+                {t('Candidate Gender (Match Preference)', 'प्रत्याशी का लिंग (रिश्ते प्राथमिकता हेतु)')}
+              </label>
+              <div className="grid grid-cols-2 gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setSignupGender('Male')}
+                  className={`py-2 px-3 rounded-xl border text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                    signupGender === 'Male'
+                      ? 'bg-[#380812] text-amber-200 border-[#380812] shadow-xs'
+                      : 'bg-white text-stone-700 border-stone-300 hover:bg-stone-50'
+                  }`}
+                >
+                  <span>{t('Male (Groom)', 'पुरुष (वर)')}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSignupGender('Female')}
+                  className={`py-2 px-3 rounded-xl border text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                    signupGender === 'Female'
+                      ? 'bg-[#380812] text-amber-200 border-[#380812] shadow-xs'
+                      : 'bg-white text-stone-700 border-stone-300 hover:bg-stone-50'
+                  }`}
+                >
+                  <span>{t('Female (Bride)', 'महिला (वधु)')}</span>
+                </button>
               </div>
             </div>
 
