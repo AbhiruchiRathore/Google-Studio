@@ -19,6 +19,10 @@
     {
       "source": "/((?!assets/|.*\\..*).*)",
       "destination": "/index.html"
+    },
+    {
+      "source": "/child-safety",
+      "destination": "/child-safety.html"
     }
   ]
 }
