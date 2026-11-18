@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { 
   Search, GraduationCap, Briefcase, Eye, Phone, X, ShieldAlert, Sparkles, 
   UserPlus, Lock, ShieldCheck, ArrowRight, Users, Heart, 
-  MessageCircle, Share2, Compass, Crown, MapPin,
+  MessageCircle, Share2, Compass, Crown, MapPin, Ban,
   ChevronLeft, ChevronRight, Camera
 } from 'lucide-react';
 import { MatrimonyProfile, GenderType, TabType, AuthSession, ProfileAdmirer } from '../types';
@@ -26,6 +26,9 @@ interface MatrimonyTabProps {
   userLocation?: UserLocationData | null;
   onOpenLocationModal?: () => void;
   onUpdateSessionGender?: (gender: 'Male' | 'Female') => void;
+  blockedProfileIds?: Set<string>;
+  onBlockProfile?: (profile: MatrimonyProfile) => void;
+  onUnblockProfile?: (id: number | string) => void;
   onUnlockProfile: (id: number | string) => void;
   onNavigateTab: (tab: TabType) => void;
   onAddQuickProfile: (profile: Partial<MatrimonyProfile>) => void;
@@ -59,6 +62,9 @@ export const MatrimonyTab: React.FC<MatrimonyTabProps> = ({
   userLocation = null,
   onOpenLocationModal,
   onUpdateSessionGender,
+  blockedProfileIds,
+  onBlockProfile,
+  onUnblockProfile,
   onUnlockProfile,
   onNavigateTab,
   onAddQuickProfile,
@@ -74,8 +80,10 @@ export const MatrimonyTab: React.FC<MatrimonyTabProps> = ({
   // View Mode: 'all' | 'liked_by_me' | 'who_liked_me'
   const [viewMode, setViewMode] = useState<'all' | 'liked_by_me' | 'who_liked_me'>('all');
 
-  // Active Chat Profile for interactive messaging
+  // Active Chat Profile & Block confirmation state
   const [activeChatProfile, setActiveChatProfile] = useState<MatrimonyProfile | null>(null);
+  const [pendingBlockProfile, setPendingBlockProfile] = useState<MatrimonyProfile | null>(null);
+  const [recentBlockedNotice, setRecentBlockedNotice] = useState<{ id: number | string; name: string } | null>(null);
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [subscriptionNotice, setSubscriptionNotice] = useState<string | null>(null);
 
@@ -242,16 +250,46 @@ _Powered by Svayaa_`;
     onUpdateSessionGender?.(gender);
   };
 
+  const visibleAdmirers = useMemo(() => {
+    if (!blockedProfileIds || blockedProfileIds.size === 0) return admirers;
+    return admirers.filter((adm) => !blockedProfileIds.has(adm.id.toString()));
+  }, [admirers, blockedProfileIds]);
+
+  const unblockedProfiles = useMemo(() => {
+    if (!blockedProfileIds || blockedProfileIds.size === 0) return profiles;
+    return profiles.filter((p) => !blockedProfileIds.has(p.id.toString()));
+  }, [profiles, blockedProfileIds]);
+
+  const visibleLikedCount = useMemo(() => {
+    return unblockedProfiles.filter((p) => likedProfiles.has(p.id.toString())).length;
+  }, [unblockedProfiles, likedProfiles]);
+
   const matchPoolProfiles = useMemo(() => {
-    if (!oppositeGender) return profiles;
-    return profiles.filter((p) => p.gender === oppositeGender);
-  }, [profiles, oppositeGender]);
+    if (!oppositeGender) return unblockedProfiles;
+    return unblockedProfiles.filter((p) => p.gender === oppositeGender);
+  }, [unblockedProfiles, oppositeGender]);
+
+  const executeBlockProfile = useCallback(
+    (profile: MatrimonyProfile) => {
+      if (!authSession || !onBlockProfile) return;
+      onBlockProfile(profile);
+      setPendingBlockProfile(null);
+      if (selectedProfileId === profile.id) {
+        setSelectedProfileId(null);
+      }
+      if (activeChatProfile?.id === profile.id) {
+        setActiveChatProfile(null);
+      }
+      setRecentBlockedNotice({ id: profile.id, name: profile.name });
+    },
+    [authSession, onBlockProfile, selectedProfileId, activeChatProfile]
+  );
 
   const distanceMap = useMemo(() => {
     const map = new Map<string, ProfileWithDistance>();
     if (!userLocation) return map;
     const ranked = rankProfilesByLocation(
-      profiles,
+      unblockedProfiles,
       userLocation.coords,
       userLocation.city,
       userLocation.state
@@ -260,12 +298,12 @@ _Powered by Svayaa_`;
       map.set(item.profile.id.toString(), item);
     }
     return map;
-  }, [profiles, userLocation]);
+  }, [unblockedProfiles, userLocation]);
 
   const filteredProfiles = useMemo(() => {
     const effectiveGender: GenderType = oppositeGender || genderFilter;
 
-    const matched = profiles.filter(p => {
+    const matched = unblockedProfiles.filter(p => {
       // If user selected "Profiles I Liked", filter by likedProfiles
       if (effectiveViewMode === 'liked_by_me' && !likedProfiles.has(p.id.toString())) {
         return false;
@@ -303,7 +341,7 @@ _Powered by Svayaa_`;
     }
 
     return matched;
-  }, [profiles, search, genderFilter, oppositeGender, gotraFilter, cityFilter, effectiveViewMode, likedProfiles, userLocation, distanceMap]);
+  }, [unblockedProfiles, search, genderFilter, oppositeGender, gotraFilter, cityFilter, effectiveViewMode, likedProfiles, userLocation, distanceMap]);
 
   const activeProfile = useMemo(() => {
     if (selectedProfileId === null) return null;
@@ -589,7 +627,7 @@ _Powered by Svayaa_`;
               ? t(`Male Profiles (${matchPoolProfiles.length})`, `वर बायोडाटा (${matchPoolProfiles.length})`)
               : oppositeGender === 'Female'
                 ? t(`Female Profiles (${matchPoolProfiles.length})`, `वधु बायोडाटा (${matchPoolProfiles.length})`)
-                : t(`All Bios (${profiles.length})`, `सभी बायोडाटा (${profiles.length})`)}
+                : t(`All Bios (${unblockedProfiles.length})`, `सभी बायोडाटा (${unblockedProfiles.length})`)}
           </span>
         </button>
 
@@ -602,7 +640,7 @@ _Powered by Svayaa_`;
           }`}
         >
           <Heart className={`w-4 h-4 ${viewMode === 'liked_by_me' ? 'fill-white text-white' : 'fill-rose-500 text-rose-500'}`} />
-          <span>{t(`Profiles I Liked (${likedProfiles.size})`, `पसंद किए गए (${likedProfiles.size})`)}</span>
+          <span>{t(`Profiles I Liked (${visibleLikedCount})`, `पसंद किए गए (${visibleLikedCount})`)}</span>
         </button>
 
         <button
@@ -614,9 +652,45 @@ _Powered by Svayaa_`;
           }`}
         >
           <Sparkles className="w-4 h-4 text-amber-500" />
-          <span>{t(`Who Liked My Profile (${admirers.length})`, `मेरी प्रोफ़ाइल किसने पसंद की (${admirers.length})`)}</span>
+          <span>{t(`Who Liked My Profile (${visibleAdmirers.length})`, `मेरी प्रोफ़ाइल किसने पसंद की (${visibleAdmirers.length})`)}</span>
         </button>
       </div>
+
+      {/* RECENT BLOCKED CONFIRMATION TOAST WITH UNDO (SIGNED-IN ONLY) */}
+      {authSession && recentBlockedNotice && (
+        <div className="bg-stone-900 text-amber-100 px-4 py-3 rounded-2xl border border-amber-400/30 shadow-md flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="flex items-center gap-2">
+            <Ban className="w-4 h-4 text-rose-400 shrink-0" />
+            <span>
+              {lang === 'hi'
+                ? `${recentBlockedNotice.name} को ब्लॉक किया गया और आपकी सूची से हटाया गया।`
+                : `${recentBlockedNotice.name} has been blocked and hidden from your feed.`}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            {onUnblockProfile && (
+              <button
+                type="button"
+                onClick={() => {
+                  onUnblockProfile(recentBlockedNotice.id);
+                  setRecentBlockedNotice(null);
+                }}
+                className="text-amber-300 font-bold hover:underline cursor-pointer"
+              >
+                {t('Undo', 'वापस लें')}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setRecentBlockedNotice(null)}
+              className="text-stone-400 hover:text-white cursor-pointer"
+              aria-label={t('Dismiss', 'बंद करें')}
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* SEARCH & FILTERS SECTION (WHEN IN ALL OR LIKED VIEW) */}
       {viewMode !== 'who_liked_me' && (
@@ -752,7 +826,7 @@ _Powered by Svayaa_`;
                   {t('Who Liked My Profile', 'प्रोफ़ाइल प्रशंसक एवं रिश्ते प्रस्ताव')}
                 </h3>
                 <span className="text-xs bg-[#380812] text-amber-200 font-bold px-2.5 py-0.5 rounded-full">
-                  {admirers.length} {t('Samaj Families', 'समाज परिवार')}
+                  {visibleAdmirers.length} {t('Samaj Families', 'समाज परिवार')}
                 </span>
               </div>
               <p className="text-xs text-stone-600 mt-1 max-w-2xl leading-relaxed">
@@ -773,7 +847,7 @@ _Powered by Svayaa_`;
             )}
           </div>
 
-          {admirers.length === 0 ? (
+          {visibleAdmirers.length === 0 ? (
             <div className="bg-white rounded-3xl border border-amber-200/80 p-8 sm:p-12 text-center space-y-3 shadow-xs">
               <div className="w-14 h-14 bg-amber-50 rounded-2xl mx-auto flex items-center justify-center border border-amber-200">
                 <Sparkles className="w-7 h-7 text-amber-600" />
@@ -790,7 +864,7 @@ _Powered by Svayaa_`;
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {admirers.map((adm) => {
+              {visibleAdmirers.map((adm) => {
                 const candidateProfile: MatrimonyProfile = {
                   id: adm.id,
                   name: adm.admirerName,
@@ -877,6 +951,18 @@ _Powered by Svayaa_`;
                       >
                         <Phone className="w-3.5 h-3.5 text-emerald-700" />
                       </a>
+
+                      {authSession && onBlockProfile && (
+                        <button
+                          type="button"
+                          onClick={() => setPendingBlockProfile(candidateProfile)}
+                          title={t(`Block ${adm.admirerName}`, `${adm.admirerName} को ब्लॉक करें`)}
+                          aria-label={t(`Block ${adm.admirerName}`, `${adm.admirerName} को ब्लॉक करें`)}
+                          className="p-2.5 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs transition-colors cursor-pointer shrink-0 inline-flex items-center justify-center"
+                        >
+                          <Ban className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -964,7 +1050,8 @@ _Powered by Svayaa_`;
               config.featureChatEnabled ||
               (config.featureKundaliEnabled && !!onSelectKundaliProfile) ||
               config.featureLikesEnabled ||
-              config.featureWhatsAppShareEnabled;
+              config.featureWhatsAppShareEnabled ||
+              Boolean(authSession && onBlockProfile);
 
             return (
               <div 
@@ -1162,6 +1249,22 @@ _Powered by Svayaa_`;
                             <Share2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                             <span>{t('Share', 'शेयर')}</span>
                           </a>
+                        )}
+
+                        {authSession && onBlockProfile && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPendingBlockProfile(p);
+                            }}
+                            title={t(`Block ${p.name}`, `${p.name} को ब्लॉक करें`)}
+                            aria-label={t(`Block ${p.name}`, `${p.name} को ब्लॉक करें`)}
+                            className="bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-[11px] font-semibold py-2 px-2.5 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1 whitespace-nowrap shrink-0"
+                          >
+                            <Ban className="w-3.5 h-3.5 shrink-0" />
+                            <span>{t('Block', 'ब्लॉक')}</span>
+                          </button>
                         )}
                       </div>
                     )}
@@ -1416,6 +1519,18 @@ _Powered by Svayaa_`;
                       >
                         <Phone className="w-3.5 h-3.5" /> {t('Call Family', 'कॉल करें')}
                       </a>
+
+                      {authSession && onBlockProfile && (
+                        <button
+                          type="button"
+                          onClick={() => setPendingBlockProfile(activeProfile)}
+                          className="bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-700 font-semibold px-3 py-2 rounded-lg text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+                          title={t(`Block ${activeProfile.name}`, `${activeProfile.name} को ब्लॉक करें`)}
+                        >
+                          <Ban className="w-3.5 h-3.5" />
+                          <span>{t('Block Profile', 'प्रोफ़ाइल ब्लॉक करें')}</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1591,6 +1706,53 @@ _Powered by Svayaa_`;
         </div>
       )}
 
+      {/* BLOCK PROFILE CONFIRMATION MODAL (SIGNED-IN ONLY) */}
+      {authSession && pendingBlockProfile && onBlockProfile && (
+        <div
+          className="fixed inset-0 z-50 bg-stone-950/70 backdrop-blur-xs flex items-center justify-center px-4 py-6 animate-in fade-in duration-200"
+          onClick={() => setPendingBlockProfile(null)}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-rose-200 space-y-4 text-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-12 h-12 mx-auto rounded-2xl bg-rose-50 border border-rose-200 text-rose-600 flex items-center justify-center">
+              <Ban className="w-6 h-6" />
+            </div>
+            <div className="space-y-1.5">
+              <h3 className="font-serif font-bold text-lg text-stone-900">
+                {t(`Block ${pendingBlockProfile.name}?`, `क्या ${pendingBlockProfile.name} को ब्लॉक करें?`)}
+              </h3>
+              <p className="text-xs text-stone-600 leading-relaxed">
+                {t(
+                  'Once blocked, this profile will no longer appear in your match directory, liked lists, or chat suggestions. You can unblock them anytime from Dashboard Settings.',
+                  'ब्लॉक करने के बाद यह प्रोफ़ाइल आपकी खोज, पसंद सूची और चैट में नहीं दिखेगी। आप डैशबोर्ड सेटिंग्स से कभी भी अनब्लॉक कर सकते हैं।'
+                )}
+              </p>
+            </div>
+            <div className="flex items-center gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={() => setPendingBlockProfile(null)}
+                className="flex-1 py-2.5 px-4 rounded-xl border border-stone-200 text-stone-700 hover:bg-stone-50 text-xs font-semibold cursor-pointer"
+              >
+                {t('Cancel', 'रद्द करें')}
+              </button>
+              <button
+                type="button"
+                onClick={() => executeBlockProfile(pendingBlockProfile)}
+                className="flex-1 py-2.5 px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <Ban className="w-3.5 h-3.5" />
+                <span>{t('Block Profile', 'ब्लॉक करें')}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* INTERACTIVE CHAT MODAL */}
       {activeChatProfile && config.featureChatEnabled && (
         <ChatModal
@@ -1598,6 +1760,9 @@ _Powered by Svayaa_`;
           authSession={authSession}
           onClose={() => setActiveChatProfile(null)}
           onSelectKundaliProfile={config.featureKundaliEnabled ? onSelectKundaliProfile : undefined}
+          isBlocked={blockedProfileIds?.has(activeChatProfile.id.toString()) ?? false}
+          onBlockProfile={authSession && onBlockProfile ? executeBlockProfile : undefined}
+          onUnblockProfile={authSession ? onUnblockProfile : undefined}
         />
       )}
     </div>

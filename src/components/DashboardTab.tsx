@@ -5,10 +5,10 @@ import {
   Eye, Trash2, Globe, Sparkles, Upload, ArrowRight, 
   X, AlertCircle, Phone, FileText, Camera,
   Linkedin, Instagram, Link2, Sliders, Store,
-  Tag, Star, MapPin, Heart, MessageCircle, Compass, Crown
+  Tag, Star, MapPin, Heart, MessageCircle, Compass, Crown, Ban
 } from 'lucide-react';
 import { 
-  MatrimonyProfile, BusinessAd, TabType, AuthSession, 
+  MatrimonyProfile, BusinessAd, TabType, AuthSession, BlockedProfileRecord,
   UserMediaAsset, VisibilitySetting, ProfileStatus, ProfileAdmirer, ChatMessage 
 } from '../types';
 import { ChatModal } from './ChatModal';
@@ -43,6 +43,10 @@ interface DashboardTabProps {
   locationStatus?: LocationPermissionStatus;
   onOpenLocationModal?: () => void;
   onClearLocation?: () => void;
+  blockedProfiles?: BlockedProfileRecord[];
+  blockedProfileIds?: Set<string>;
+  onBlockProfile?: (profile: MatrimonyProfile) => void;
+  onUnblockProfile?: (id: number | string) => void;
 }
 
 type DashboardNavSection = 'overview' | 'profiles' | 'ads' | 'liked_by_me' | 'who_liked_me' | 'chats' | 'media' | 'settings';
@@ -63,7 +67,11 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   userLocation = null,
   locationStatus = 'prompt',
   onOpenLocationModal,
-  onClearLocation
+  onClearLocation,
+  blockedProfiles = [],
+  blockedProfileIds,
+  onBlockProfile,
+  onUnblockProfile
 }) => {
   const { lang, t } = useLanguage();
   const { config, userSubscription } = useAdminConfig();
@@ -91,8 +99,10 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   });
 
   const likedProfileList = useMemo(() => {
-    return profiles.filter(p => likedProfiles.has(p.id.toString()));
-  }, [profiles, likedProfiles]);
+    return profiles.filter(
+      (p) => likedProfiles.has(p.id.toString()) && !blockedProfileIds?.has(p.id.toString())
+    );
+  }, [profiles, likedProfiles, blockedProfileIds]);
 
   const toggleUnlikeProfile = (id: number | string) => {
     const key = id.toString();
@@ -116,6 +126,11 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     }
     return [];
   });
+
+  const visibleAdmirers = useMemo(() => {
+    if (!blockedProfileIds || blockedProfileIds.size === 0) return admirers;
+    return admirers.filter((adm) => !blockedProfileIds.has(adm.id.toString()));
+  }, [admirers, blockedProfileIds]);
 
   // Stored chat messages & Active Chat Profile
   const [activeChatProfile, setActiveChatProfile] = useState<MatrimonyProfile | null>(null);
@@ -911,7 +926,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
                   activeSection === 'who_liked_me' ? 'bg-amber-300 text-[#4c0d1b]' : 'bg-amber-100 text-amber-900'
                 }`}>
-                  {admirers.length}
+                  {visibleAdmirers.length}
                 </span>
               </button>
             )}
@@ -1126,7 +1141,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                       ? 'bg-amber-300 text-[#4c0d1b]'
                       : 'bg-amber-100 text-amber-900'
                   }`}>
-                    {admirers.length}
+                    {visibleAdmirers.length}
                   </span>
                 </button>
               )}
@@ -2123,7 +2138,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 </div>
 
                 <div className="space-y-3 text-xs">
-                  {userProfiles.length === 0 && userAds.length === 0 && likedProfileList.length === 0 && admirers.length === 0 ? (
+                  {userProfiles.length === 0 && userAds.length === 0 && likedProfileList.length === 0 && visibleAdmirers.length === 0 ? (
                     <div className="p-6 rounded-2xl bg-stone-50/80 border border-stone-200/80 text-center space-y-1.5">
                       <p className="font-serif font-bold text-stone-800 text-sm">
                         {t('No Recent Activity Yet', 'अभी कोई हालिया गतिविधि नहीं')}
@@ -2896,6 +2911,75 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                     </div>
                   </div>
 
+                  {/* Blocked Profiles Management (Signed-in Users) */}
+                  {authSession && (
+                    <div className="p-4 rounded-2xl border border-stone-200 space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="font-bold text-stone-800 font-serif flex items-center gap-1.5">
+                            <Ban className="w-4 h-4 text-rose-600 shrink-0" />
+                            <span>
+                              {t(
+                                `Blocked Profiles (${blockedProfiles.length})`,
+                                `ब्लॉक की गई प्रोफ़ाइल (${blockedProfiles.length})`
+                              )}
+                            </span>
+                          </p>
+                          <p className="text-[11px] text-stone-500 font-light mt-0.5">
+                            {t(
+                              'Profiles you blocked after viewing or chatting remain hidden from your directory and chat lists.',
+                              'जिन प्रोफ़ाइल को आपने ब्लॉक किया है वे आपकी खोज और चैट सूची में नहीं दिखेंगी।'
+                            )}
+                          </p>
+                        </div>
+                      </div>
+
+                      {blockedProfiles.length === 0 ? (
+                        <p className="text-[11px] text-stone-500 bg-stone-50 border border-stone-200/80 rounded-xl px-3 py-2.5">
+                          {t('You have not blocked any profiles.', 'आपने अभी तक किसी भी प्रोफ़ाइल को ब्लॉक नहीं किया है।')}
+                        </p>
+                      ) : (
+                        <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                          {blockedProfiles.map((entry) => (
+                            <div
+                              key={entry.id}
+                              className="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-stone-50 border border-stone-200/80"
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <img
+                                  src={
+                                    entry.photo && entry.photo.trim() !== ''
+                                      ? entry.photo
+                                      : entry.gender === 'Female'
+                                        ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80'
+                                        : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80'
+                                  }
+                                  alt={entry.name}
+                                  className="w-9 h-9 rounded-lg object-cover object-top border border-stone-300 shrink-0"
+                                />
+                                <div className="min-w-0">
+                                  <p className="font-semibold text-stone-900 truncate">{entry.name}</p>
+                                  <p className="text-[10px] text-stone-500 truncate">
+                                    {[entry.gotra, entry.city].filter(Boolean).join(' · ')}
+                                  </p>
+                                </div>
+                              </div>
+                              {onUnblockProfile && (
+                                <button
+                                  type="button"
+                                  onClick={() => onUnblockProfile(entry.id)}
+                                  className="px-3 py-1.5 rounded-lg bg-white hover:bg-emerald-50 border border-stone-300 hover:border-emerald-300 text-stone-700 hover:text-emerald-800 text-[11px] font-bold cursor-pointer shrink-0 transition-colors"
+                                >
+                                  {t('Unblock', 'अनब्लॉक')}
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div className="pt-2 flex justify-end">
                     <button
                       onClick={handleSaveSettings}
@@ -3045,11 +3129,11 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                     </p>
                   </div>
                   <span className="text-xs bg-amber-50 text-amber-900 font-bold px-3 py-1 rounded-full border border-amber-300">
-                    {admirers.length} {t('Interested Families', 'इच्छुक परिवार')}
+                    {visibleAdmirers.length} {t('Interested Families', 'इच्छुक परिवार')}
                   </span>
                 </div>
 
-                {admirers.length === 0 ? (
+                {visibleAdmirers.length === 0 ? (
                   <div className="py-12 text-center space-y-3 max-w-sm mx-auto">
                     <div className="w-14 h-14 bg-amber-50 rounded-2xl mx-auto flex items-center justify-center border border-amber-200">
                       <Sparkles className="w-7 h-7 text-amber-500" />
@@ -3066,7 +3150,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                    {admirers.map((adm) => {
+                    {visibleAdmirers.map((adm) => {
                       const candidateProfile: MatrimonyProfile = {
                         id: adm.id,
                         name: adm.admirerName,
@@ -3140,6 +3224,18 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                             >
                               <Phone className="w-3.5 h-3.5 text-emerald-700" />
                             </a>
+
+                            {authSession && onBlockProfile && (
+                              <button
+                                type="button"
+                                onClick={() => onBlockProfile(candidateProfile)}
+                                title={t(`Block ${adm.admirerName}`, `${adm.admirerName} को ब्लॉक करें`)}
+                                aria-label={t(`Block ${adm.admirerName}`, `${adm.admirerName} को ब्लॉक करें`)}
+                                className="p-2 border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg cursor-pointer"
+                              >
+                                <Ban className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                           </div>
                         </div>
                       );
@@ -3175,7 +3271,10 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 </div>
 
                 <div className="space-y-3">
-                  {profiles.slice(0, 6).map((p) => {
+                  {profiles
+                    .filter((p) => !blockedProfileIds?.has(p.id.toString()))
+                    .slice(0, 6)
+                    .map((p) => {
                     const thread = chatThreads[p.id.toString()] || [];
                     const lastMsg = thread.length > 0 ? thread[thread.length - 1] : null;
 
@@ -3211,6 +3310,20 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
 
                         <div className="flex items-center gap-2 shrink-0">
                           <span className="text-[11px] text-stone-400 hidden sm:inline">{lastMsg ? lastMsg.timestamp : t('Recent', 'हाल ही में')}</span>
+                          {authSession && onBlockProfile && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onBlockProfile(p);
+                              }}
+                              title={t(`Block ${p.name}`, `${p.name} को ब्लॉक करें`)}
+                              aria-label={t(`Block ${p.name}`, `${p.name} को ब्लॉक करें`)}
+                              className="p-2 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 cursor-pointer transition-colors"
+                            >
+                              <Ban className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                           <button className="bg-gradient-to-r from-[#6e1628] to-[#851834] text-amber-200 text-xs font-semibold py-2 px-2.5 sm:px-3 rounded-xl flex items-center gap-1 shadow-xs whitespace-nowrap">
                             <MessageCircle className="w-3.5 h-3.5 shrink-0" />
                             <span>{t('Open', 'खोलें')}</span>
@@ -3683,6 +3796,12 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             }
           }}
           onSelectKundaliProfile={onSelectKundaliProfile}
+          isBlocked={blockedProfileIds?.has(activeChatProfile.id.toString()) ?? false}
+          onBlockProfile={authSession && onBlockProfile ? (profile) => {
+            onBlockProfile(profile);
+            setActiveChatProfile(null);
+          } : undefined}
+          onUnblockProfile={authSession ? onUnblockProfile : undefined}
         />
       )}
     </div>

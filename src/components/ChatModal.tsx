@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, Send, Phone, MessageSquare, ShieldCheck, Sparkles, 
-  CheckCheck, Heart, User, Clock, ChevronRight
+  CheckCheck, Heart, User, Clock, ChevronRight, Ban, ShieldAlert
 } from 'lucide-react';
 import { MatrimonyProfile, ChatMessage, AuthSession } from '../types';
 import { useLanguage } from '../context/LanguageContext';
@@ -12,6 +12,9 @@ interface ChatModalProps {
   authSession: AuthSession | null;
   onClose: () => void;
   onSelectKundaliProfile?: (id: number | string, gender: 'Male' | 'Female') => void;
+  isBlocked?: boolean;
+  onBlockProfile?: (profile: MatrimonyProfile) => void;
+  onUnblockProfile?: (id: number | string) => void;
 }
 
 const QUICK_PROMPTS_EN = [
@@ -32,7 +35,10 @@ export const ChatModal: React.FC<ChatModalProps> = ({
   profile,
   authSession,
   onClose,
-  onSelectKundaliProfile
+  onSelectKundaliProfile,
+  isBlocked = false,
+  onBlockProfile,
+  onUnblockProfile
 }) => {
   const { lang, t } = useLanguage();
   const profileKey = profile.id.toString();
@@ -43,6 +49,7 @@ export const ChatModal: React.FC<ChatModalProps> = ({
   const chatStorageKey = getUserStorageKey('samaj_chat_messages', authSession);
 
   const [inputMessage, setInputMessage] = useState('');
+  const [confirmBlock, setConfirmBlock] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     try {
       const stored = localStorage.getItem(chatStorageKey);
@@ -174,8 +181,8 @@ export const ChatModal: React.FC<ChatModalProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            {firstPhone && (
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            {firstPhone && !isBlocked && (
               <a 
                 href={`tel:${firstPhone}`}
                 className="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-emerald-300 transition-colors"
@@ -183,6 +190,23 @@ export const ChatModal: React.FC<ChatModalProps> = ({
               >
                 <Phone className="w-4 h-4" />
               </a>
+            )}
+
+            {authSession && onBlockProfile && !isBlocked && (
+              <button
+                type="button"
+                onClick={() => setConfirmBlock((prev) => !prev)}
+                className={`px-2.5 py-2 rounded-xl transition-colors cursor-pointer flex items-center gap-1 text-xs font-semibold ${
+                  confirmBlock
+                    ? 'bg-rose-600 text-white'
+                    : 'bg-white/10 hover:bg-rose-600/80 text-rose-200 hover:text-white'
+                }`}
+                title={t(`Block ${profile.name}`, `${profile.name} को ब्लॉक करें`)}
+                aria-label={t(`Block ${profile.name}`, `${profile.name} को ब्लॉक करें`)}
+              >
+                <Ban className="w-4 h-4 shrink-0" />
+                <span className="hidden sm:inline">{t('Block', 'ब्लॉक')}</span>
+              </button>
             )}
 
             <button 
@@ -195,13 +219,53 @@ export const ChatModal: React.FC<ChatModalProps> = ({
           </div>
         </div>
 
+        {/* BLOCK CONFIRMATION BANNER (SIGNED-IN ONLY) */}
+        {authSession && confirmBlock && !isBlocked && onBlockProfile && (
+          <div className="bg-rose-50 border-b border-rose-200 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shrink-0 animate-in fade-in">
+            <div className="flex items-start gap-2 text-xs text-rose-950">
+              <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold">
+                  {t(`Block ${profile.name}?`, `क्या ${profile.name} को ब्लॉक करें?`)}
+                </p>
+                <p className="text-[11px] text-rose-800">
+                  {t(
+                    'This profile will be hidden from your matches, likes, and chats. You can unblock anytime in Settings.',
+                    'यह प्रोफ़ाइल आपकी खोज, पसंद और चैट से हट जाएगी। आप सेटिंग्स से कभी भी अनब्लॉक कर सकते हैं।'
+                  )}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0 justify-end">
+              <button
+                type="button"
+                onClick={() => setConfirmBlock(false)}
+                className="px-3 py-1.5 rounded-lg border border-stone-300 bg-white text-stone-700 text-xs font-semibold hover:bg-stone-50 cursor-pointer"
+              >
+                {t('Cancel', 'रद्द करें')}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onBlockProfile(profile);
+                  onClose();
+                }}
+                className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold cursor-pointer shadow-xs flex items-center gap-1"
+              >
+                <Ban className="w-3.5 h-3.5" />
+                <span>{t('Confirm Block', 'ब्लॉक करें')}</span>
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* SUBHEADER NOTICE */}
         <div className="bg-amber-50 px-4 py-2 border-b border-amber-200/70 flex items-center justify-between text-[11px] text-amber-900 shrink-0">
           <div className="flex items-center gap-1.5 font-medium">
             <Sparkles className="w-3.5 h-3.5 text-amber-700 shrink-0" />
             <span>{t('Direct Community Alliance Chat • Keep conversations respectful', 'प्रत्यक्ष समाज रिश्ता चैट • कृपया संवाद मर्यादित एवं सम्मानजनक रखें')}</span>
           </div>
-          {onSelectKundaliProfile && (
+          {onSelectKundaliProfile && !isBlocked && (
             <button
               onClick={() => {
                 onClose();
@@ -261,51 +325,71 @@ export const ChatModal: React.FC<ChatModalProps> = ({
           <div ref={messagesEndRef} />
         </div>
 
-        {/* QUICK ICEBREAKER PROMPTS */}
-        <div className="p-2.5 bg-white border-t border-stone-200 shrink-0 overflow-x-auto">
-          <p className="text-[10px] text-stone-500 font-bold uppercase tracking-wider mb-1.5 px-1 flex items-center gap-1">
-            <Sparkles className="w-3 h-3 text-amber-700" /> {t('Quick Samaj Icebreakers:', 'त्वरित समाज संदेश:')}
-          </p>
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
-            {quickPrompts.map((prompt, idx) => (
+        {/* QUICK ICEBREAKER PROMPTS & COMPOSER (OR BLOCKED STATE) */}
+        {isBlocked ? (
+          <div className="p-4 bg-rose-50 border-t border-rose-200 shrink-0 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-rose-900">
+            <div className="flex items-center gap-2 font-medium">
+              <Ban className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>{t('You blocked this profile. Messaging is disabled.', 'आपने इस प्रोफ़ाइल को ब्लॉक किया है। संदेश बंद हैं।')}</span>
+            </div>
+            {authSession && onUnblockProfile && (
               <button
-                key={idx}
-                onClick={() => handleSendMessage(prompt)}
-                className="shrink-0 text-[11px] bg-stone-100 hover:bg-amber-100 hover:text-amber-950 text-stone-700 font-medium px-2.5 py-1 rounded-lg border border-stone-200 transition-colors cursor-pointer text-left"
+                type="button"
+                onClick={() => onUnblockProfile(profile.id)}
+                className="px-3.5 py-1.5 rounded-lg bg-white border border-rose-300 text-rose-700 hover:bg-rose-100 font-bold text-xs cursor-pointer shrink-0"
               >
-                {prompt}
+                {t('Unblock Profile', 'अनब्लॉक करें')}
               </button>
-            ))}
+            )}
           </div>
-        </div>
+        ) : (
+          <>
+            <div className="p-2.5 bg-white border-t border-stone-200 shrink-0 overflow-x-auto">
+              <p className="text-[10px] text-stone-500 font-bold uppercase tracking-wider mb-1.5 px-1 flex items-center gap-1">
+                <Sparkles className="w-3 h-3 text-amber-700" /> {t('Quick Samaj Icebreakers:', 'त्वरित समाज संदेश:')}
+              </p>
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+                {quickPrompts.map((prompt, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => handleSendMessage(prompt)}
+                    className="shrink-0 text-[11px] bg-stone-100 hover:bg-amber-100 hover:text-amber-950 text-stone-700 font-medium px-2.5 py-1 rounded-lg border border-stone-200 transition-colors cursor-pointer text-left"
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-        {/* INPUT COMPOSER */}
-        <div className="p-3 bg-white border-t border-stone-200 shrink-0">
-          <form 
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleSendMessage();
-            }}
-            className="flex items-center gap-2"
-          >
-            <input 
-              type="text"
-              value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder={t(`Type message to ${profile.name}'s family...`, `${profile.name} के परिवार को संदेश लिखें...`)}
-              className="flex-1 text-xs bg-stone-50 border border-stone-300 rounded-xl px-3.5 py-2.5 focus:outline-hidden focus:border-amber-600 focus:bg-white text-stone-900 transition-all"
-            />
-            <button
-              type="submit"
-              disabled={!inputMessage.trim()}
-              className="bg-gradient-to-r from-[#380812] to-[#540e1b] hover:from-[#24050b] hover:to-[#380812] disabled:opacity-50 text-amber-200 font-bold px-4 py-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer"
-            >
-              <Send className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">{t('Send', 'भेजें')}</span>
-            </button>
-          </form>
-        </div>
+            {/* INPUT COMPOSER */}
+            <div className="p-3 bg-white border-t border-stone-200 shrink-0">
+              <form 
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleSendMessage();
+                }}
+                className="flex items-center gap-2"
+              >
+                <input 
+                  type="text"
+                  value={inputMessage}
+                  onChange={(e) => setInputMessage(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder={t(`Type message to ${profile.name}'s family...`, `${profile.name} के परिवार को संदेश लिखें...`)}
+                  className="flex-1 text-xs bg-stone-50 border border-stone-300 rounded-xl px-3.5 py-2.5 focus:outline-hidden focus:border-amber-600 focus:bg-white text-stone-900 transition-all"
+                />
+                <button
+                  type="submit"
+                  disabled={!inputMessage.trim()}
+                  className="bg-gradient-to-r from-[#380812] to-[#540e1b] hover:from-[#24050b] hover:to-[#380812] disabled:opacity-50 text-amber-200 font-bold px-4 py-2.5 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs cursor-pointer"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">{t('Send', 'भेजें')}</span>
+                </button>
+              </form>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

@@ -157,6 +157,16 @@ export interface ProfileAdmirer {
   message?: string;
 }
 
+export interface BlockedProfileRecord {
+  id: string;
+  name: string;
+  gotra?: string;
+  city?: string;
+  photo?: string;
+  gender?: 'Male' | 'Female';
+  blockedAt: string;
+}
+
 export interface GuestItem {
   id: string;
   name: string;

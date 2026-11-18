@@ -22,6 +22,7 @@ import { OfflineIndicator } from './components/OfflineIndicator';
 import { FoundingOfferCard } from './components/FoundingOfferCard';
 import { LocationPermissionModal } from './components/LocationPermissionModal';
 import { useUserLocation } from './hooks/useUserLocation';
+import { useBlockedProfiles } from './hooks/useBlockedProfiles';
 import { auth, db } from './firebase';
 import { onAuthStateChanged, signOut, getRedirectResult, User } from 'firebase/auth';
 import { Sparkles, Lock } from 'lucide-react';
@@ -291,6 +292,12 @@ export const App: React.FC = () => {
     markAskedOnSignup,
     clearLocation
   } = useUserLocation();
+  const {
+    blockedList: blockedProfiles,
+    blockedIds: blockedProfileIds,
+    blockProfile,
+    unblockProfile
+  } = useBlockedProfiles(authSession);
   const [showLocationPermissionModal, setShowLocationPermissionModal] = useState(false);
 
   const openLocationPromptIfNeeded = useCallback(
@@ -793,6 +800,9 @@ export const App: React.FC = () => {
                 userLocation={userLocation}
                 onOpenLocationModal={() => setShowLocationPermissionModal(true)}
                 onUpdateSessionGender={handleUpdateSessionGender}
+                blockedProfileIds={blockedProfileIds}
+                onBlockProfile={blockProfile}
+                onUnblockProfile={unblockProfile}
                 onUnlockProfile={handleUnlockProfile}
                 onNavigateTab={navigateToTab}
                 onAddQuickProfile={handleAddQuickProfile}
@@ -836,6 +846,10 @@ export const App: React.FC = () => {
             locationStatus={locationStatus}
             onOpenLocationModal={() => setShowLocationPermissionModal(true)}
             onClearLocation={clearLocation}
+            blockedProfiles={blockedProfiles}
+            blockedProfileIds={blockedProfileIds}
+            onBlockProfile={blockProfile}
+            onUnblockProfile={unblockProfile}
           />
         )}
 
