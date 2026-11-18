@@ -6,8 +6,6 @@ export interface WhatsAppSharePayload {
   copied: boolean;
 }
 
-export const WHATSAPP_SHARE_EVENT = 'samaj:whatsapp-share';
-
 export function formatWhatsAppPhone(phone?: string): string {
   if (!phone) return '';
   const digits = phone.replace(/\D/g, '');
@@ -60,88 +58,43 @@ export async function copyTextToClipboard(text: string): Promise<boolean> {
   }
 }
 
-function isMobileOrWebView(): boolean {
-  if (typeof navigator === 'undefined') return false;
-  const ua = navigator.userAgent || '';
-  return (
-    /Android|iPhone|iPad|iPod|Mobile/i.test(ua) ||
-    /\bwv\b|Version\/[0-9.]+/i.test(ua) ||
-    Boolean((window as unknown as { Android?: unknown }).Android)
-  );
-}
-
-function isAndroidWebView(): boolean {
-  if (typeof navigator === 'undefined') return false;
-  const ua = navigator.userAgent || '';
-  return (
-    /\bwv\b/i.test(ua) ||
-    (/Android/i.test(ua) && /Version\/[0-9.]+/i.test(ua)) ||
-    Boolean((window as unknown as { Android?: unknown }).Android)
-  );
-}
-
-function openExternalHttpsLink(url: string): void {
+function triggerWhatsAppRedirect(url: string): boolean {
+  if (typeof document === 'undefined') return false;
   try {
     const link = document.createElement('a');
     link.href = url;
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
+    link.style.display = 'none';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    return true;
   } catch {
-    // Silently handled by the global share assistant fallback UI
+    return false;
   }
 }
 
 /**
- * Reliably triggers WhatsApp / social sharing across Desktop Browsers, Mobile Browsers,
- * AI Studio sandboxed iFrames, and Android APK WebViews without ever using custom `whatsapp://`
- * URI schemes (which trigger `net::ERR_UNKNOWN_URL_SCHEME` in standard Android WebViews).
+ * Standard direct WhatsApp redirect: synchronously opens the WhatsApp share link
+ * on click so browsers, PWAs, mobile devices, and desktop clients immediately
+ * launch WhatsApp with the pre-filled message to select contacts and share.
  */
 export async function shareViaWhatsApp(text: string, phone?: string): Promise<WhatsAppSharePayload> {
   const { waMeUrl, apiUrl } = buildWhatsAppUrls(text, phone);
-  // Start clipboard copy immediately without awaiting before synchronous user-gesture calls
-  const copyPromise = copyTextToClipboard(text);
 
-  let sharedViaNativeSheet = false;
+  // Trigger WhatsApp redirect synchronously inside the user click gesture (no prior awaits)
+  triggerWhatsAppRedirect(apiUrl);
 
-  // On mobile/WebView without a specific target phone, prefer native Web Share sheet when available
-  if (!phone && isMobileOrWebView() && typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
-    try {
-      await navigator.share({
-        title: 'Rathore Rishtey',
-        text
-      });
-      sharedViaNativeSheet = true;
-    } catch (err) {
-      if (err instanceof Error && err.name === 'AbortError') {
-        sharedViaNativeSheet = true;
-      }
-    }
-  }
-
-  // Launch universal HTTPS wa.me link in browsers (skip automatic redirect in bare Android WebViews
-  // where wa.me can redirect internally to whatsapp:// and trigger net::ERR_UNKNOWN_URL_SCHEME;
-  // those users still get immediate clipboard copy + explicit HTTPS buttons in the Share Assistant)
-  if (!sharedViaNativeSheet && !isAndroidWebView()) {
-    openExternalHttpsLink(waMeUrl);
-  }
-
-  const copied = await copyPromise;
-  const payload: WhatsAppSharePayload = {
+  // Best-effort background clipboard copy (does not block redirect)
+  const copied = await copyTextToClipboard(text);
+  return {
     text,
     phone,
     waMeUrl,
     apiUrl,
     copied
   };
-
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent<WhatsAppSharePayload>(WHATSAPP_SHARE_EVENT, { detail: payload }));
-  }
-
-  return payload;
 }
 
 export interface PrintableDocumentOptions {
