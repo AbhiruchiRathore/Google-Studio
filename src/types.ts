@@ -11,7 +11,8 @@ export type TabType =
   | 'advertise-shop'
   | 'family-details'
   | 'admin'
-  | 'privacy-policy';
+  | 'privacy-policy'
+  | 'delete-account';
 
 export type GenderType = 'all' | 'Male' | 'Female';
 

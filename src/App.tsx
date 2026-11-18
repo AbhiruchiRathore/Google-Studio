@@ -18,19 +18,39 @@ import { AdminDashboardTab } from './components/AdminDashboardTab';
 import { WhatsAppShare } from './components/WhatsAppShare';
 import { Footer } from './components/Footer';
 import { PrivacyPolicyTab } from './components/PrivacyPolicyTab';
+import { DeleteAccountTab } from './components/DeleteAccountTab';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { FoundingOfferCard } from './components/FoundingOfferCard';
 import { LocationPermissionModal } from './components/LocationPermissionModal';
 import { useUserLocation } from './hooks/useUserLocation';
 import { useBlockedProfiles } from './hooks/useBlockedProfiles';
 import { auth, db } from './firebase';
-import { onAuthStateChanged, signOut, getRedirectResult, User } from 'firebase/auth';
-import { Sparkles, Lock } from 'lucide-react';
+import {
+  onAuthStateChanged,
+  signOut,
+  getRedirectResult,
+  deleteUser,
+  EmailAuthProvider,
+  GoogleAuthProvider,
+  reauthenticateWithCredential,
+  reauthenticateWithPopup,
+  User
+} from 'firebase/auth';
+import { Sparkles, Lock, CheckCircle2, X } from 'lucide-react';
 import { useLanguage } from './context/LanguageContext';
 import { useAdminConfig, DEFAULT_ADMIN_CONFIG } from './context/AdminConfigContext';
 import { sanitizePhoneInput } from './utils/validation';
-import { getSessionOwnerKey, isProfileOwnedBySession } from './utils/profileOwnership';
-import { syncUserProfileToFirestore, testFirestoreConnection } from './utils/firebaseUserSync';
+import {
+  getSessionOwnerKey,
+  getUserStorageKey,
+  isAdOwnedBySession,
+  isProfileOwnedBySession
+} from './utils/profileOwnership';
+import {
+  syncUserProfileToFirestore,
+  deleteUserDataFromFirestore,
+  testFirestoreConnection
+} from './utils/firebaseUserSync';
 
 const VALID_TABS = new Set<TabType>([
   'matrimony',
@@ -45,7 +65,8 @@ const VALID_TABS = new Set<TabType>([
   'family-details',
   'dashboard',
   'admin',
-  'privacy-policy'
+  'privacy-policy',
+  'delete-account'
 ]);
 
 function hasPasswordResetParams(): boolean {
@@ -69,6 +90,11 @@ function isPrivacyPolicyPathname(): boolean {
   return window.location.pathname.replace(/\/+$/, '') === '/privacy-policy';
 }
 
+function isDeleteAccountPathname(): boolean {
+  if (typeof window === 'undefined') return false;
+  return window.location.pathname.replace(/\/+$/, '') === '/delete-account';
+}
+
 function getInitialTabFromUrl(): TabType {
   if (typeof window === 'undefined') return 'matrimony';
   if (hasPasswordResetParams()) {
@@ -76,6 +102,9 @@ function getInitialTabFromUrl(): TabType {
   }
   if (isPrivacyPolicyPathname()) {
     return 'privacy-policy';
+  }
+  if (isDeleteAccountPathname()) {
+    return 'delete-account';
   }
   const hashTab = window.location.hash.replace('#', '').split('?')[0] as TabType;
   if (VALID_TABS.has(hashTab) && hashTab !== 'admin') {
@@ -88,6 +117,9 @@ function getUrlForTab(tab: TabType, search = ''): string {
   if (tab === 'privacy-policy') {
     return '/privacy-policy';
   }
+  if (tab === 'delete-account') {
+    return '/delete-account';
+  }
   return `/${search}#${tab}`;
 }
 
@@ -99,6 +131,12 @@ export const App: React.FC = () => {
   currentTabRef.current = currentTab;
 
   const [backNotice, setBackNotice] = useState(false);
+  const [accountDeletedNotice, setAccountDeletedNotice] = useState(false);
+  const [dashboardNavRequest, setDashboardNavRequest] = useState<{
+    section: 'overview' | 'profiles' | 'ads' | 'liked_by_me' | 'who_liked_me' | 'chats' | 'media' | 'settings';
+    settingsTab?: 'preferences' | 'account';
+    nonce: number;
+  } | null>(null);
   const [kundaliBoyId, setKundaliBoyId] = useState<number | string | null>(null);
   const [kundaliGirlId, setKundaliGirlId] = useState<number | string | null>(null);
 
@@ -153,9 +191,11 @@ export const App: React.FC = () => {
           ? stateTab
           : isPrivacyPolicyPathname()
             ? 'privacy-policy'
-            : VALID_TABS.has(hashTab)
-              ? hashTab
-              : 'matrimony';
+            : isDeleteAccountPathname()
+              ? 'delete-account'
+              : VALID_TABS.has(hashTab)
+                ? hashTab
+                : 'matrimony';
 
       // Prevent logged-in users from being thrown back onto the signup / sign-out screen on hardware Back
       if (authSessionRef.current && targetTab === 'signup') {
@@ -706,6 +746,171 @@ export const App: React.FC = () => {
     navigateToTab('signup');
   };
 
+  const handleOpenAccountSettings = useCallback(() => {
+    setDashboardNavRequest({
+      section: 'settings',
+      settingsTab: 'account',
+      nonce: Date.now()
+    });
+    navigateToTab('dashboard');
+  }, [navigateToTab]);
+
+  const handleDeleteAccount = useCallback(
+    async (
+      reauthPassword?: string
+    ): Promise<{ ok: boolean; requiresRecentLogin?: boolean; error?: string }> => {
+      const activeSession = authSessionRef.current;
+      if (!activeSession) {
+        return { ok: false, error: 'You must be signed in to delete your account.' };
+      }
+
+      const firebaseUser = auth.currentUser;
+      const cleanUsername = (activeSession.username || '').trim().toLowerCase();
+      const cleanEmail = (activeSession.email || '').trim().toLowerCase();
+
+      // 1. Delete Firebase Auth & Firestore account records if signed in with Firebase
+      if (firebaseUser) {
+        try {
+          if (reauthPassword && firebaseUser.email) {
+            const cred = EmailAuthProvider.credential(firebaseUser.email, reauthPassword);
+            await reauthenticateWithCredential(firebaseUser, cred);
+          }
+          await deleteUserDataFromFirestore(db, auth, firebaseUser, cleanUsername);
+          await deleteUser(firebaseUser);
+        } catch (err: unknown) {
+          const code = (err as { code?: string })?.code || '';
+          if (code === 'auth/requires-recent-login') {
+            if (activeSession.method === 'Google') {
+              try {
+                await reauthenticateWithPopup(firebaseUser, new GoogleAuthProvider());
+                await deleteUserDataFromFirestore(db, auth, firebaseUser, cleanUsername);
+                await deleteUser(firebaseUser);
+              } catch {
+                return {
+                  ok: false,
+                  requiresRecentLogin: true,
+                  error:
+                    'For security reasons, please sign out and sign back in with Google, then click Settings > Account > Delete Account.'
+                };
+              }
+            } else {
+              return {
+                ok: false,
+                requiresRecentLogin: true,
+                error:
+                  'For security verification, please enter your current password below to permanently delete your account.'
+              };
+            }
+          } else if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+            return {
+              ok: false,
+              requiresRecentLogin: true,
+              error: 'Incorrect password. Please check your password and try again.'
+            };
+          } else {
+            return {
+              ok: false,
+              error:
+                err instanceof Error
+                  ? err.message
+                  : 'Unable to delete authentication account. Please try again.'
+            };
+          }
+        }
+      }
+
+      // 2. Remove all matrimonial profiles owned by this user
+      setProfiles((prev) => {
+        const remaining = prev.filter((p) => !isProfileOwnedBySession(p, activeSession));
+        try {
+          const stored = localStorage.getItem('samaj_profiles');
+          if (stored) {
+            const parsed = JSON.parse(stored) as MatrimonyProfile[];
+            localStorage.setItem(
+              'samaj_profiles',
+              JSON.stringify(parsed.filter((p) => !isProfileOwnedBySession(p, activeSession)))
+            );
+          }
+        } catch {
+          // ignore
+        }
+        return remaining;
+      });
+
+      // 3. Remove all business ads owned by this user
+      setAds((prev) => {
+        const remaining = prev.filter((a) => !isAdOwnedBySession(a, activeSession));
+        try {
+          const stored = localStorage.getItem('samaj_ads');
+          if (stored) {
+            const parsed = JSON.parse(stored) as BusinessAd[];
+            localStorage.setItem(
+              'samaj_ads',
+              JSON.stringify(parsed.filter((a) => !isAdOwnedBySession(a, activeSession)))
+            );
+          }
+        } catch {
+          // ignore
+        }
+        return remaining;
+      });
+
+      // 4. Remove all per-user localStorage data (likes, admirers, chats, photos/media, notifications, blocked list, location prompt)
+      const ownerKey = getSessionOwnerKey(activeSession);
+      const userScopedKeys = [
+        getUserStorageKey('samaj_liked_profiles', activeSession),
+        getUserStorageKey('samaj_profile_admirers', activeSession),
+        getUserStorageKey('samaj_chat_messages', activeSession),
+        getUserStorageKey('samaj_media_assets', activeSession),
+        getUserStorageKey('samaj_notifications', activeSession),
+        getUserStorageKey('samaj_blocked_profiles', activeSession),
+        ...(ownerKey ? [`samaj_signup_location_asked_${ownerKey}`] : [])
+      ];
+
+      try {
+        userScopedKeys.forEach((key) => localStorage.removeItem(key));
+
+        // Remove saved account entry from local account directory
+        const storedAccounts = localStorage.getItem('samaj_user_accounts');
+        if (storedAccounts) {
+          const parsedAccounts = JSON.parse(storedAccounts) as Array<{
+            username?: string;
+            email?: string;
+          }>;
+          const remainingAccounts = parsedAccounts.filter((acc) => {
+            const u = (acc.username || '').trim().toLowerCase();
+            const e = (acc.email || '').trim().toLowerCase();
+            if (cleanUsername && u === cleanUsername) return false;
+            if (cleanEmail && e === cleanEmail) return false;
+            return true;
+          });
+          localStorage.setItem('samaj_user_accounts', JSON.stringify(remainingAccounts));
+        }
+
+        const storedGoogleRaw = localStorage.getItem('device_google_account');
+        if (storedGoogleRaw && cleanEmail) {
+          const parsedGoogle = JSON.parse(storedGoogleRaw) as { email?: string };
+          if ((parsedGoogle.email || '').trim().toLowerCase() === cleanEmail) {
+            localStorage.removeItem('device_google_account');
+          }
+        }
+
+        localStorage.removeItem('user_subscription_status');
+        localStorage.removeItem('user_auth_session');
+        sessionStorage.clear();
+      } catch {
+        // ignore storage errors
+      }
+
+      clearLocation();
+      setAuthSession(null);
+      setAccountDeletedNotice(true);
+      navigateToTab('delete-account', { replace: true });
+      return { ok: true };
+    },
+    [clearLocation, navigateToTab]
+  );
+
   // Live broadcast banner from Admin config
   const broadcastMessage = config.isBroadcastActive && config.bannerBroadcastMessage
     ? config.bannerBroadcastMessage
@@ -758,6 +963,29 @@ export const App: React.FC = () => {
       {backNotice && (
         <div className="fixed bottom-[calc(4.75rem+var(--sab))] left-1/2 -translate-x-1/2 z-50 max-w-[calc(100vw-2rem)] bg-stone-900/95 text-amber-100 px-4 py-2 rounded-xl text-xs font-semibold shadow-xl border border-amber-400/30 text-center">
           {t('You are on the Home screen.', 'आप मुख्य पृष्ठ (होम) पर हैं।')}
+        </div>
+      )}
+
+      {accountDeletedNotice && (
+        <div className="bg-emerald-50 border-b border-emerald-200 text-emerald-900 px-4 py-3 text-xs sm:text-sm font-medium">
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>
+                {t(
+                  'Your Rathore Rishtey account and all associated personal data (profile, messages, and photos) have been permanently deleted.',
+                  'आपका राठौड़ रिश्ते खाता और उससे जुड़ा सभी व्यक्तिगत डेटा (प्रोफ़ाइल, संदेश और फोटो) स्थायी रूप से हटा दिया गया है।'
+                )}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setAccountDeletedNotice(false)}
+              className="p-1 rounded-lg hover:bg-emerald-100 text-emerald-700 cursor-pointer shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       )}
 
@@ -850,6 +1078,8 @@ export const App: React.FC = () => {
             blockedProfileIds={blockedProfileIds}
             onBlockProfile={blockProfile}
             onUnblockProfile={unblockProfile}
+            requestedNav={dashboardNavRequest}
+            onDeleteAccount={handleDeleteAccount}
           />
         )}
 
@@ -969,6 +1199,14 @@ export const App: React.FC = () => {
 
         {currentTab === 'privacy-policy' && (
           <PrivacyPolicyTab onNavigateTab={navigateToTab} />
+        )}
+
+        {currentTab === 'delete-account' && (
+          <DeleteAccountTab
+            authSession={authSession}
+            onNavigateTab={navigateToTab}
+            onOpenAccountSettings={handleOpenAccountSettings}
+          />
         )}
       </main>
 

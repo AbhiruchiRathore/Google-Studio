@@ -1,5 +1,6 @@
 import { Auth, User } from 'firebase/auth';
 import {
+  deleteDoc,
   doc,
   Firestore,
   getDoc,
@@ -254,4 +255,52 @@ export async function lookupEmailByUsernameFromFirestore(
     }
   }
   return null;
+}
+
+/**
+ * Deletes the authenticated user's profile and username lookup documents from Firestore.
+ * Bounded by a strict timeout and skips immediately when Firestore is unavailable.
+ */
+export async function deleteUserDataFromFirestore(
+  firestoreDb: Firestore,
+  authInstance: Auth,
+  user: User,
+  username?: string
+): Promise<void> {
+  if (firestoreAvailability === 'unavailable') {
+    return;
+  }
+
+  const deletes: Promise<void>[] = [];
+  const userPath = `users/${user.uid}`;
+  deletes.push(
+    deleteDoc(doc(firestoreDb, 'users', user.uid)).catch((error) => {
+      if (isPermanentFirestoreUnavailableError(error)) {
+        firestoreAvailability = 'unavailable';
+      } else {
+        const info = buildFirestoreErrorInfo(error, authInstance, OperationType.DELETE, userPath);
+        console.warn('Firestore user profile delete skipped:', JSON.stringify(info));
+      }
+    })
+  );
+
+  const cleanUsername = (username || '').trim().toLowerCase();
+  if (cleanUsername && !/[^a-z0-9_]/.test(cleanUsername)) {
+    const lookupPath = `usernames/${cleanUsername}`;
+    deletes.push(
+      deleteDoc(doc(firestoreDb, 'usernames', cleanUsername)).catch((error) => {
+        if (isPermanentFirestoreUnavailableError(error)) {
+          firestoreAvailability = 'unavailable';
+        } else {
+          const info = buildFirestoreErrorInfo(error, authInstance, OperationType.DELETE, lookupPath);
+          console.warn('Firestore username delete skipped:', JSON.stringify(info));
+        }
+      })
+    );
+  }
+
+  const { timedOut } = await raceWithTimeout(Promise.allSettled(deletes), 1500, null);
+  if (timedOut) {
+    firestoreAvailability = 'unavailable';
+  }
 }

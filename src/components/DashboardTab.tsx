@@ -5,7 +5,7 @@ import {
   Eye, Trash2, Globe, Sparkles, Upload, ArrowRight, 
   X, AlertCircle, Phone, FileText, Camera,
   Linkedin, Instagram, Link2, Sliders, Store,
-  Tag, Star, MapPin, Heart, MessageCircle, Compass, Crown, Ban
+  Tag, Star, MapPin, Heart, MessageCircle, Compass, Crown, Ban, UserCheck, RefreshCw
 } from 'lucide-react';
 import { 
   MatrimonyProfile, BusinessAd, TabType, AuthSession, BlockedProfileRecord,
@@ -47,6 +47,8 @@ interface DashboardTabProps {
   blockedProfileIds?: Set<string>;
   onBlockProfile?: (profile: MatrimonyProfile) => void;
   onUnblockProfile?: (id: number | string) => void;
+  requestedNav?: { section: DashboardNavSection; settingsTab?: 'preferences' | 'account'; nonce: number } | null;
+  onDeleteAccount?: (reauthPassword?: string) => Promise<{ ok: boolean; requiresRecentLogin?: boolean; error?: string }>;
 }
 
 type DashboardNavSection = 'overview' | 'profiles' | 'ads' | 'liked_by_me' | 'who_liked_me' | 'chats' | 'media' | 'settings';
@@ -71,7 +73,9 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   blockedProfiles = [],
   blockedProfileIds,
   onBlockProfile,
-  onUnblockProfile
+  onUnblockProfile,
+  requestedNav = null,
+  onDeleteAccount
 }) => {
   const { lang, t } = useLanguage();
   const { config, userSubscription } = useAdminConfig();
@@ -234,11 +238,30 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   const [newMediaUrl, setNewMediaUrl] = useState('');
 
   // User Profile Settings state
+  const [settingsSubTab, setSettingsSubTab] = useState<'preferences' | 'account'>('preferences');
   const [visibilityPreference, setVisibilityPreference] = useState<VisibilitySetting>('public');
   const [whatsappMasking, setWhatsappMasking] = useState(false);
   const [notifyOnView, setNotifyOnView] = useState(true);
   const [settingsSavedToast, setSettingsSavedToast] = useState(false);
   const [profileLimitNotice, setProfileLimitNotice] = useState(false);
+
+  // Account Deletion Modal State
+  const [showDeleteAccountModal, setShowDeleteAccountModal] = useState(false);
+  const [deleteAccountChecked, setDeleteAccountChecked] = useState(false);
+  const [deleteRequiresReauth, setDeleteRequiresReauth] = useState(false);
+  const [deleteReauthPassword, setDeleteReauthPassword] = useState('');
+  const [deleteAccountError, setDeleteAccountError] = useState('');
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+
+  useEffect(() => {
+    if (!requestedNav) return;
+    setActiveSection(requestedNav.section);
+    setIsEditingProfile(false);
+    setIsEditingAd(false);
+    if (requestedNav.settingsTab) {
+      setSettingsSubTab(requestedNav.settingsTab);
+    }
+  }, [requestedNav]);
 
   // Only show matrimonial profiles added by this logged-in account (never all community profiles)
   const userProfiles = useMemo(() => {
@@ -2754,25 +2777,55 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           {!isEditingProfile && !isEditingAd && activeSection === 'settings' && (
             <div className="space-y-6 animate-in fade-in">
               <div className="bg-white rounded-3xl border border-rose-100 p-4 sm:p-8 shadow-sm space-y-6">
-                <div className="border-b border-rose-100 pb-3">
-                  <h3 className="text-lg sm:text-xl font-serif font-bold text-stone-900">
-                    {t('Account & Visibility Settings', 'खाता एवं गोपनीयता सेटिंग्स')}
-                  </h3>
-                  <p className="text-xs text-stone-500 font-light">
-                    {t(
-                      'Control who can view your candidate contact numbers, commercial ads, and profile details in the Rathore Samaj network.',
-                      'राठौर समाज नेटवर्क पर आपके संपर्क नंबर और प्रोफ़ाइल कौन देख सकता है, यह नियंत्रित करें।'
-                    )}
-                  </p>
+                <div className="border-b border-rose-100 pb-4 space-y-4">
+                  <div>
+                    <h3 className="text-lg sm:text-xl font-serif font-bold text-stone-900">
+                      {t('Settings', 'सेटिंग्स')}
+                    </h3>
+                    <p className="text-xs text-stone-500 font-light">
+                      {t(
+                        'Manage your privacy preferences, location sharing, blocked profiles, and account deletion.',
+                        'अपनी गोपनीयता, लोकेशन अनुमति, ब्लॉक सूची और खाता सेटिंग्स प्रबंधित करें।'
+                      )}
+                    </p>
+                  </div>
+
+                  {/* Settings Sub-Tabs: Preferences | Account */}
+                  <div className="inline-flex p-1 rounded-2xl bg-stone-100 border border-stone-200/80 gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setSettingsSubTab('preferences')}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                        settingsSubTab === 'preferences'
+                          ? 'bg-white text-[#6e1628] shadow-xs border border-rose-100'
+                          : 'text-stone-600 hover:text-stone-900'
+                      }`}
+                    >
+                      {t('Privacy & Preferences', 'गोपनीयता एवं प्राथमिकताएं')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSettingsSubTab('account')}
+                      className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                        settingsSubTab === 'account'
+                          ? 'bg-white text-[#6e1628] shadow-xs border border-rose-100'
+                          : 'text-stone-600 hover:text-stone-900'
+                      }`}
+                    >
+                      <UserCheck className="w-3.5 h-3.5" />
+                      <span>{t('Account', 'खाता (Account)')}</span>
+                    </button>
+                  </div>
                 </div>
 
-                {settingsSavedToast && (
+                {settingsSavedToast && settingsSubTab === 'preferences' && (
                   <div className="bg-emerald-50 border border-emerald-300 rounded-2xl p-3 text-xs text-emerald-800 flex items-center gap-2 font-medium">
                     <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                     <span>{t('Your privacy and notification preferences have been saved successfully!', 'आपकी गोपनीयता और सूचना सेटिंग्स सफलतापूर्वक सहेजी गईं!')}</span>
                   </div>
                 )}
 
+                {settingsSubTab === 'preferences' ? (
                 <div className="space-y-5 text-xs">
                   {/* Public Visibility Setting */}
                   <div className="p-4 rounded-2xl border border-rose-100/90 bg-rose-50/20 space-y-2">
@@ -2989,6 +3042,121 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                     </button>
                   </div>
                 </div>
+                ) : (
+                  <div className="space-y-5 text-xs">
+                    {/* Signed-In Account Details */}
+                    <div className="p-4 sm:p-5 rounded-2xl border border-stone-200 bg-stone-50/70 space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <p className="font-bold text-stone-900 font-serif text-sm">
+                            {t('Signed-In Account', 'लॉग इन किया गया खाता')}
+                          </p>
+                          <p className="text-[11px] text-stone-500">
+                            {t('Review your active Rathore Rishtey account details.', 'अपने सक्रिय राठौड़ रिश्ते खाते का विवरण देखें।')}
+                          </p>
+                        </div>
+                        <a
+                          href="/delete-account"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            onNavigateTab('delete-account');
+                          }}
+                          className="text-[11px] font-bold text-[#6e1628] hover:text-[#851834] underline"
+                        >
+                          {t('Data & Deletion Policy', 'डेटा एवं विलोपन नीति')}
+                        </a>
+                      </div>
+
+                      {authSession ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                          <div className="bg-white rounded-xl border border-stone-200/80 px-3.5 py-2.5">
+                            <span className="text-[10px] uppercase tracking-wider text-stone-400 font-bold block">
+                              {t('Name', 'नाम')}
+                            </span>
+                            <span className="font-semibold text-stone-800">{authSession.name || 'Samaj Member'}</span>
+                          </div>
+                          <div className="bg-white rounded-xl border border-stone-200/80 px-3.5 py-2.5">
+                            <span className="text-[10px] uppercase tracking-wider text-stone-400 font-bold block">
+                              {t('Email / Username', 'ईमेल / यूज़रनेम')}
+                            </span>
+                            <span className="font-semibold text-stone-800 break-all">
+                              {authSession.email || (authSession.username ? `@${authSession.username}` : 'Verified Member')}
+                            </span>
+                          </div>
+                          <div className="bg-white rounded-xl border border-stone-200/80 px-3.5 py-2.5">
+                            <span className="text-[10px] uppercase tracking-wider text-stone-400 font-bold block">
+                              {t('Sign-In Method', 'लॉगिन माध्यम')}
+                            </span>
+                            <span className="font-semibold text-stone-800">{authSession.method}</span>
+                          </div>
+                          <div className="bg-white rounded-xl border border-stone-200/80 px-3.5 py-2.5">
+                            <span className="text-[10px] uppercase tracking-wider text-stone-400 font-bold block">
+                              {t('Published Items', 'प्रकाशित विवरण')}
+                            </span>
+                            <span className="font-semibold text-stone-800">
+                              {userProfiles.length} {t('Profile(s)', 'बायोडाटा')} • {userAds.length} {t('Ad(s)', 'विज्ञापन')}
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="bg-white rounded-xl border border-amber-200 p-4 flex flex-wrap items-center justify-between gap-3">
+                          <p className="text-stone-600">
+                            {t('Sign in to manage or permanently delete your account.', 'अपना खाता प्रबंधित करने या हटाने के लिए लॉग इन करें।')}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => onNavigateTab('signup')}
+                            className="px-4 py-2 rounded-xl bg-[#6e1628] text-amber-100 font-bold text-xs cursor-pointer"
+                          >
+                            {t('Sign In', 'लॉग इन करें')}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Delete Account Danger Zone */}
+                    {authSession && onDeleteAccount && (
+                      <div className="p-4 sm:p-5 rounded-2xl border border-red-200 bg-red-50/40 space-y-3">
+                        <div className="flex items-start gap-2.5">
+                          <div className="w-9 h-9 rounded-xl bg-red-100 border border-red-200 text-red-700 flex items-center justify-center shrink-0">
+                            <Trash2 className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0 space-y-1">
+                            <p className="font-bold text-red-950 font-serif text-sm">
+                              {t('Delete Account Permanently', 'खाता स्थायी रूप से हटाएं')}
+                            </p>
+                            <p className="text-[11px] text-red-900/80 leading-relaxed">
+                              {t(
+                                'Instantly and permanently delete your Rathore Rishtey account, published matrimonial biodata, business ads, photos, media assets, likes, and chat messages. This action cannot be undone.',
+                                'अपने राठौड़ रिश्ते खाते, प्रकाशित वैवाहिक बायोडाटा, व्यापार विज्ञापन, फोटो, मीडिया फ़ाइलें, पसंद और चैट संदेशों को तुरंत व स्थायी रूप से हटाएं। यह क्रिया वापस नहीं ली जा सकती।'
+                              )}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="pt-1 flex flex-wrap items-center justify-between gap-3">
+                          <span className="text-[11px] text-stone-500">
+                            {t('Path: Settings > Account > Delete Account', 'पथ: Settings > Account > Delete Account')}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDeleteAccountError('');
+                              setDeleteRequiresReauth(false);
+                              setDeleteReauthPassword('');
+                              setDeleteAccountChecked(false);
+                              setShowDeleteAccountModal(true);
+                            }}
+                            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-xs cursor-pointer transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>{t('Delete Account', 'खाता हटाएं (Delete Account)')}</span>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -3803,6 +3971,130 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           } : undefined}
           onUnblockProfile={authSession ? onUnblockProfile : undefined}
         />
+      )}
+
+      {/* PERMANENT DELETE ACCOUNT CONFIRMATION MODAL */}
+      {showDeleteAccountModal && authSession && onDeleteAccount && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white w-full max-w-md rounded-3xl border border-red-200 shadow-2xl overflow-hidden">
+            <div className="bg-gradient-to-r from-red-700 to-rose-800 px-5 py-4 text-white flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <Trash2 className="w-5 h-5 shrink-0" />
+                <h3 className="font-serif font-bold text-base">
+                  {t('Delete Account Permanently?', 'क्या आप खाता स्थायी रूप से हटाना चाहते हैं?')}
+                </h3>
+              </div>
+              <button
+                type="button"
+                disabled={isDeletingAccount}
+                onClick={() => setShowDeleteAccountModal(false)}
+                className="p-1 rounded-lg hover:bg-white/15 text-white cursor-pointer disabled:opacity-50"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 text-xs text-stone-700">
+              <p className="leading-relaxed">
+                {t(
+                  'This will instantly and permanently remove your account and all data linked to it:',
+                  'इससे आपका खाता और उससे जुड़ा सभी डेटा तुरंत व स्थायी रूप से हट जाएगा:'
+                )}
+              </p>
+
+              <ul className="list-disc pl-5 space-y-1 text-stone-600">
+                <li>{t('Your login credentials and account profile', 'आपका लॉगिन और खाता विवरण')}</li>
+                <li>{t('Published matrimonial biodata & business directory ads', 'प्रकाशित वैवाहिक बायोडाटा और व्यापार विज्ञापन')}</li>
+                <li>{t('All uploaded photos, gallery images, and media files', 'अपलोड किए गए सभी फोटो और मीडिया फ़ाइलें')}</li>
+                <li>{t('Chat messages, likes, admirers, and blocked profiles', 'चैट संदेश, पसंद, प्रशंसक और ब्लॉक सूची')}</li>
+              </ul>
+
+              <label className="flex items-start gap-2.5 p-3 rounded-xl bg-red-50/70 border border-red-200 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={deleteAccountChecked}
+                  onChange={(e) => setDeleteAccountChecked(e.target.checked)}
+                  className="mt-0.5 text-red-600 rounded shrink-0"
+                />
+                <span className="font-semibold text-red-950 leading-snug">
+                  {t(
+                    'I understand this action is permanent and my data cannot be recovered.',
+                    'मैं समझता/समझती हूँ कि यह क्रिया स्थायी है और मेरा डेटा वापस नहीं मिलेगा।'
+                  )}
+                </span>
+              </label>
+
+              {deleteRequiresReauth && authSession.method !== 'Google' && (
+                <div className="space-y-1.5">
+                  <label className="block font-bold text-stone-800">
+                    {t('Enter Current Password to Confirm', 'पुष्टि के लिए वर्तमान पासवर्ड दर्ज करें')}
+                  </label>
+                  <input
+                    type="password"
+                    value={deleteReauthPassword}
+                    onChange={(e) => setDeleteReauthPassword(e.target.value)}
+                    placeholder={t('Your current password', 'आपका वर्तमान पासवर्ड')}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 text-stone-900 focus:outline-none focus:ring-2 focus:ring-red-500"
+                  />
+                </div>
+              )}
+
+              {deleteAccountError && (
+                <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 flex items-start gap-2 font-medium">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{deleteAccountError}</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  disabled={isDeletingAccount}
+                  onClick={() => setShowDeleteAccountModal(false)}
+                  className="px-4 py-2.5 rounded-xl border border-stone-200 bg-white hover:bg-stone-50 text-stone-700 font-bold cursor-pointer disabled:opacity-50"
+                >
+                  {t('Cancel', 'रद्द करें')}
+                </button>
+                <button
+                  type="button"
+                  disabled={!deleteAccountChecked || isDeletingAccount}
+                  onClick={async () => {
+                    if (!deleteAccountChecked || isDeletingAccount) return;
+                    setDeleteAccountError('');
+                    setIsDeletingAccount(true);
+                    try {
+                      const result = await onDeleteAccount(deleteReauthPassword || undefined);
+                      if (result.ok) {
+                        setShowDeleteAccountModal(false);
+                      } else {
+                        if (result.requiresRecentLogin) {
+                          setDeleteRequiresReauth(true);
+                        }
+                        setDeleteAccountError(
+                          result.error ||
+                            t(
+                              'Could not complete deletion. Please verify your credentials and try again.',
+                              'खाता हटाने में समस्या आई। कृपया पुनः प्रयास करें।'
+                            )
+                        );
+                      }
+                    } finally {
+                      setIsDeletingAccount(false);
+                    }
+                  }}
+                  className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 disabled:bg-stone-300 disabled:text-stone-500 text-white font-bold cursor-pointer transition-colors"
+                >
+                  {isDeletingAccount && <RefreshCw className="w-3.5 h-3.5 animate-spin" />}
+                  <span>
+                    {isDeletingAccount
+                      ? t('Deleting Account...', 'खाता हटाया जा रहा है...')
+                      : t('Confirm Delete Account', 'स्थायी रूप से हटाएं')}
+                  </span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -123,10 +123,23 @@ export const PrivacyPolicyTab: React.FC<PrivacyPolicyTabProps> = ({ onNavigateTa
           </h2>
           <p className="text-xs sm:text-sm leading-relaxed text-stone-600">
             {t(
-              'You may edit or delete your matrimonial biodata and business advertisements directly from your Member Dashboard at any time. To request permanent deletion of your Firebase account or stored profile data, please contact us using the email below.',
-              'आप किसी भी समय अपने सदस्य डैशबोर्ड से अपना बायोडाटा या व्यापार विज्ञापन संपादित या हटा सकते हैं। अपना खाता स्थायी रूप से हटाने के लिए नीचे दिए गए ईमेल पर संपर्क करें।'
+              'You may edit or delete your matrimonial biodata and business advertisements directly from your Member Dashboard at any time. To permanently delete your account instantly, log in to the Rathore Rishtey app and go to Settings > Account > Delete Account, or visit our dedicated Account Deletion page.',
+              'आप किसी भी समय अपने सदस्य डैशबोर्ड से अपना बायोडाटा या व्यापार विज्ञापन संपादित या हटा सकते हैं। अपना खाता तुरंत स्थायी रूप से हटाने के लिए ऐप में Settings > Account > Delete Account पर जाएं या हमारे समर्पित खाता विलोपन पृष्ठ को देखें।'
             )}
           </p>
+          <div>
+            <a
+              href="/delete-account"
+              onClick={(e) => {
+                e.preventDefault();
+                onNavigateTab('delete-account');
+              }}
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-[#6e1628] hover:text-[#851834] underline"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>{t('View Account Deletion Instructions & Instant Delete →', 'खाता हटाने के निर्देश एवं त्वरित विकल्प देखें →')}</span>
+            </a>
+          </div>
         </section>
 
         <section className="space-y-2 bg-stone-50 border border-stone-200 rounded-2xl p-5">
