@@ -1,0 +1,24 @@
+{
+  "rewrites": [
+    {
+      "source": "/delete-account",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/delete-account/",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/privacy-policy",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/privacy-policy/",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/((?!assets/|.*\\..*).*)",
+      "destination": "/index.html"
+    }
+  ]
+}
