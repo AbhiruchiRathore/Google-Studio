@@ -56,6 +56,16 @@ const INITIAL_ACCOUNTS: UserAccount[] = [
     email: 'member@rathorerishtey.in',
     gotra: 'Pindoria',
     createdAt: '2026-01-01T00:00:00.000Z'
+  },
+  {
+    id: 'I2soKGvrx3W4Ei8WyJmlATG9i5h2',
+    username: 'playstore_demo',
+    fullName: 'Rathore Demo Member',
+    password: 'PlayDemo@2026',
+    phone: '9893011224',
+    email: 'playstore.demo@rathorerishtey.in',
+    gender: 'Male',
+    createdAt: '2026-11-18T17:42:00.000Z'
   }
 ];
 
@@ -347,14 +357,20 @@ export default function SignUpTab({
 
   const deviceGoogleSession = getExistingDeviceGoogleSession();
 
-  // Load registered accounts
+  // Load registered accounts (always keeping permanent demo/seeded accounts resolvable)
   const getStoredAccounts = (): UserAccount[] => {
     try {
       const stored = localStorage.getItem('samaj_user_accounts');
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          const existingUsernames = new Set(
+            parsed.map((acc: UserAccount) => (acc.username || '').toLowerCase())
+          );
+          const missingDefaults = INITIAL_ACCOUNTS.filter(
+            (def) => !existingUsernames.has(def.username.toLowerCase())
+          );
+          return missingDefaults.length > 0 ? [...parsed, ...missingDefaults] : parsed;
         }
       }
     } catch (e) {
