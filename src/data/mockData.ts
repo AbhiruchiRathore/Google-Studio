@@ -1,4 +1,7 @@
 import { MatrimonyProfile, BusinessAd, SamajEvent } from '../types';
+import { BOOKLET_BRIDES } from './bookletBrides';
+import { BOOKLET_GROOMS } from './bookletGrooms';
+import { BOOKLET_ADS } from './bookletAds';
 
 export const INITIAL_PROFILES: MatrimonyProfile[] = [
   {
@@ -486,7 +489,9 @@ export const INITIAL_PROFILES: MatrimonyProfile[] = [
     native: "Chhatrapati Sambhajinagar, Maharashtra",
     about: "Rashi: Aquarius (Kumbh). Maternal Gotra: Doheriya. Place of Birth: Chhatrapati Sambhajinagar. Address: Railway Station Road, Near Hanuman Mandir, Banewadi, Chhatrapati Sambhajinagar, Maharashtra.",
     createdAt: "2026-11-05T00:00:00.000Z"
-  }
+  },
+  ...BOOKLET_BRIDES,
+  ...BOOKLET_GROOMS
 ];
 
 export const INITIAL_ADS: BusinessAd[] = [
@@ -545,6 +550,7 @@ export const INITIAL_ADS: BusinessAd[] = [
     banner: "/assets/aistudio/image_d976df01.png",
     bannerFit: "cover"
   },
+  ...BOOKLET_ADS,
   {
     id: 1,
     title: "Rathore Saree & Textile Emporium",
@@ -631,24 +637,23 @@ export const INITIAL_EVENTS: SamajEvent[] = [
 export const BOOKLET_PAGES = [
   {
     page: 1,
-    title: "Cover Page - Rathore Samaj Patrika 2026",
-    subtitle: "वार्षिक वैवाहिक स्मारिका एवं व्यापार निर्देशिका",
+    title: "Cover Page - Rathod Samaj Nanded 7th Vadhu-Var Parichay Pustika 2026",
+    subtitle: "राठौड़ समाज 7वाँ राज्यस्तरीय वधु-वर परिचय एवं व्यापार स्मारिका",
     content: [
-      "अखिल भारतीय राठौर समाज - मध्य प्रदेश एवं महाराष्ट्र प्रान्त",
-      "संरक्षक: श्री रामचंद्रजी राठौड़ (अध्यक्ष)",
-      "प्रकाशन वर्ष: 2026-27 | 25वां रजत जयंती संस्करण",
-      "कुल प्रविष्टियां: 450+ विवाह योग्य युवक-युवतियों के बायोडाटा",
-      "विशेष प्रायोजक: स्थानीय राठौर बंधुओं के प्रतिष्ठित व्यापारिक प्रतिष्ठान"
+      "श्री क्षत्रिय राठौड़ समाज, नांदेड — 7वाँ वधु-वर परिचय मेला एवं स्मारिका 2026",
+      "कुल प्रविष्टियां: 223 विवाह योग्य युवक-युवतियों (वधु, वर एवं पुनर्विवाह) के बायोडाटा",
+      "व्यापार निर्देशिका: 82 प्रतिष्ठित स्वजातीय व्यवसाय एवं उद्योग विज्ञापन",
+      "संपूर्ण पुस्तक के सभी सत्यापित बायोडाटा और व्यापार विज्ञापन ऐप में जोड़े जा चुके हैं।"
     ],
-    note: "Digital e-Book copy preserved and synchronized with real-time app listings."
+    note: "Digital e-Book copy preserved and synchronized with all 223 biodatas & 82 business ads."
   },
   {
     page: 2,
     title: "अध्यक्षीय संदेश एवं कार्यकारिणी सूची",
     subtitle: "समाज एकता एवं डिजिटल युग में रिश्तों की सुगमता",
     content: [
-      "परम आदरणीय राठौर समाज बंधुओं,",
-      "जय वीर दुर्गादास राठौड़! समाज के सभी अभिभावकों की सुविधा हेतु इस वर्ष हमने पारंपरिक मुद्रित पुस्तक के साथ-साथ 'राठौर रिश्ते' डिजिटल पोर्टल का शुभारंभ किया है।",
+      "परम आदरणीय राठौड़ समाज बंधुओं,",
+      "जय वीर दुर्गादास राठौड़! समाज के सभी अभिभावकों की सुविधा हेतु इस वर्ष हमने पारंपरिक मुद्रित पुस्तक के साथ-साथ डिजिटल पोर्टल पर समस्त 223 बायोडाटा और 82 व्यापारिक प्रतिष्ठान उपलब्ध कराए हैं।",
       "मुख्य कार्यकारिणी सदस्य:",
       "• श्री मिश्रीलाल राठौड़ (मार्गदर्शक, खरगोन) - 7987882684",
       "• श्री लकी राठौड़ (संयोजक, बामनाला) - 9977093942",
@@ -659,7 +664,7 @@ export const BOOKLET_PAGES = [
   },
   {
     page: 3,
-    title: "योग्य वर सूची (Grooms Section Index)",
+    title: "योग्य वर सूची (Grooms Directory — 160+ Profiles)",
     subtitle: "उच्च शिक्षित, शासकीय सेवा एवं व्यवसाय में कार्यरत युवा",
     content: [
       "1. किरणकुमार राठौर (अकोट) - M.S.E.B. टेक्नीशियन | गोत्र: कदम्मईये | संपर्क: 7875923666",
@@ -667,13 +672,14 @@ export const BOOKLET_PAGES = [
       "3. सिद्धार्थ साहु (बैंगलोर) - B.Tech ECE, वैज्ञानिक अधिकारी DRDO (ग्रुप B) | गोत्र: तेली (साहु)",
       "4. दुर्गेशकुमार राठौर (अकोट) - व्यवसाय एवं कृषि | गोत्र: कदम्मईये",
       "5. शिवम राठौर (बारां) - B.Tech, सॉफ्टवेयर डेवलपर | गोत्र: झालवासिया",
-      "6. जतिन राठौर (खंडवा) - B.Com, अकाउंटिंग कार्य | गोत्र: रोजा"
+      "6. जतिन राठौर (खंडवा) - B.Com, अकाउंटिंग कार्य | गोत्र: रोजा",
+      "• नांदेड 7वीं परिचय पुस्तिका (2026) के सभी 155 नवीन वर बायोडाटा 'Matrimony Bios' में संकलित हैं।"
     ],
     note: "सम्पूर्ण विवरण एवं संपर्क नंबर हेतु 'Matrimony Bios' टैब देखें।"
   },
   {
     page: 4,
-    title: "योग्य वधु सूची (Brides Section Index)",
+    title: "योग्य वधु सूची (Brides Directory — 60+ Profiles)",
     subtitle: "संस्कारी एवं उच्च शिक्षित युवतियों का संक्षिप्त परिचय",
     content: [
       "1. Ishika Jitendra Rathore (Beed, Maharashtra) - B.Com, Income: ₹50,000/mo | Gotra: Sindoriya | Contact: 9881050501",
@@ -685,27 +691,22 @@ export const BOOKLET_PAGES = [
       "7. Ku. Shraddha Suresh Rathore (Jalna, MH) - Fashion Designing (ITI), Income: ₹25,000/mo | Gotra: Bijpuriye | Contact: 7499403745",
       "8. Ku. Shraddha Kishor Rathod (Chh. Sambhajinagar, MH) - B.Sc., Optometry, Income: ₹35,000/mo | Gotra: Magroriya | Contact: 9423710396",
       "9. Ku. Dr. Anjali Rupnarayan Rathore (Indore, MP) - M.S. (Running), Income: ₹6 Lakhs/yr | Gotra: Hatundiya | Contact: 9754162856",
-      "10. Ku. Disha Shivshankar Rathore (Chh. Sambhajinagar, MH) - B.Tech. (ENTC), Income: ₹45,000/mo | Gotra: Karwanjiye | Contact: 7385702071",
-      "11. Ku. Shraddha Nandkishor Rathore (Chh. Sambhajinagar, MH) - B.Tech CS (IIT Delhi), Income: ₹1.5L/mo | Gotra: Shelarpuriye | Contact: 9420379167",
-      "12. Ku. Akanksha Santosh Rathore (Chh. Sambhajinagar, MH) | Gotra: Bhojpuriye | Contact: 9168068713",
-      "13. Ku. Ashwini Vijay Rathore (Chh. Sambhajinagar, MH) - B.C.A., Income: ₹45,000/mo | Gotra: Birgodiya | Contact: 8805878281",
-      "14. Ku. Anjali Vijay Rathod (Chh. Sambhajinagar, MH) - B.Com, Income: ₹45,000/mo | Gotra: Birgodiya | Contact: 8805878281",
-      "15. Ku. Shraddha Satish Rathore (Chh. Sambhajinagar, MH) - B.E. ENTC (COEP), Income: ₹45,000/mo | Gotra: Birgodiya | Contact: 8805878281"
+      "10. नांदेड 7वीं परिचय पुस्तिका (2026) की समस्त 46 नवीन वधु एवं पुनर्विवाह प्रविष्टियां 'Matrimony Bios' में संकलित हैं।"
     ],
     note: "सत्यापित परिवारों के बायोडाटा सीधे ऐप पर सुरक्षित रूप से उपलब्ध हैं।"
   },
   {
     page: 5,
-    title: "राठौर व्यापार निर्देशिका (Business Directory)",
+    title: "राठौर व्यापार निर्देशिका (Business Directory — 82 Businesses)",
     subtitle: "स्वजातीय बंधुओं के स्थानीय व्यापार को प्राथमिकता दें",
     content: [
-      "• Shri Ambika Oil Industries (Nandkishor Rathod: 944941799 | Pradeep Rathod: 9449027659) - Plot No M-25, Industrial Estate, Station Back Road, Vijayapur - 586103, Karnataka",
-      "• श्री राठौर एंटरप्राइजेस (श्री. दिलीप कुमार बाबूलाल राठौर) - गोल बाजार, आकोट, जि. अकोला (अगरबत्ती, पूजा साहित्य, किराणा व डिस्पोजेबल आइटम होलसेल विक्रेता | मो. 8149934323)",
-      "• रामप्रसाद चिवडा (1957 से सुप्रसिद्ध) - 6821, चितले रोड, अहिल्यानगर, महाराष्ट्र (स्पे. पोहा, मका व बटाटा चिवड़ा | संपर्क: 9422234711)",
-      "• राठौर साड़ी एवं टेक्सटाइल एम्पोरियम - राजवाड़ा, इंदौर (10% समाज विशेष छूट)",
-      "• श्री राठौर हार्डवेयर एवं इलेक्ट्रॉनिक्स - फ्रीगंज, उज्जैन (15 किमी तक निःशुल्क डिलीवरी)",
-      "• राठौर ज्वैलर्स एवं सिल्वर पैलेस - सराफा बाजार, खरगोन (सिल्वर मेकिंग चार्ज फ्री)",
-      "• सोलंकी ऑटो पार्ट्स एवं सर्विस सेंटर - महू-नीमच रोड, रतलाम"
+      "• Shri Ambika Oil Industries (Nandkishor Rathod / Pradeep Rathod) - Vijayapur, Karnataka",
+      "• श्री राठौर एंटरप्राइजेस (दिलीप कुमार राठौर) - गोल बाजार, आकोट, जि. अकोला",
+      "• रामप्रसाद चिवडा (1957 से सुप्रसिद्ध) - चितले रोड, अहिल्यानगर",
+      "• मे. सुंदरलाल सदाशिव / विजय एल. राठौड़ (CA) / आनंद टायर्स / न्यू प्रभात बेकर्स - अहिल्यानगर",
+      "• एम.बी.आर. ऑयल / एस.बी.आर. ऑयल / न्यू प्रितम इलेक्ट्रीकल्स / आकाश शूज / मनिष प्लास्टिक - हिंगोली",
+      "• राठौर ब्रदर्स इलेक्ट्रॉनिक्स (1940) / रोहन ट्रेडिंग / वंदना ट्रेडिंग / यशराज ड्रेसेस / होटल राठौर - नांदेड",
+      "• स्मारिका के सभी 76 व्यापार विज्ञापन संबंधित बैनर व संपर्क विवरण सहित 'Business Ads' टैब में उपलब्ध हैं।"
     ],
     note: "अपनी दुकान या प्रतिष्ठान का विज्ञापन प्रकाशित करने हेतु 'Advertise Shop' टैब चुनें।"
   }

@@ -109,15 +109,16 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({
   const shareAdWhatsApp = (ad: BusinessAd, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     const adContacts = getAdContacts(ad);
+    const phoneContacts = adContacts.filter((c) => c.phone?.trim());
     const contactsText =
-      adContacts.length > 1
-        ? adContacts.map((c) => `${c.name}: ${c.phone}`).join(' | ')
-        : adContacts[0]?.phone || ad.phone;
+      phoneContacts.length > 1
+        ? phoneContacts.map((c) => `${c.name}: ${c.phone}`).join(' | ')
+        : phoneContacts[0]?.phone || ad.phone || '';
     const ownersLabel = adContacts.length > 1 ? adContacts.map((c) => c.name).join(' & ') : ad.owner;
 
     const text = lang === 'hi'
-      ? `🛍️ *राठौड़ समाज व्यापार डायरेक्टरी* 🛍️\n\n*${ad.title}*\n*श्रेणी:* ${ad.category}\n*संचालक:* ${ownersLabel} ${ad.city ? `(${ad.city})` : ''}\n${ad.tagline || ad.description ? `*विवरण:* ${ad.tagline || ad.description}\n` : ''}${ad.offer ? `🎁 *विशेष ऑफर:* ${ad.offer}\n` : ''}${ad.address ? `📍 *पता:* ${ad.address}\n` : ''}📞 *संपर्क:* ${contactsText}\n\n✨ *राठौड़ समाज व्यापार डायरेक्टरी से जुड़ें:*\nhttps://svayaa.com/`
-      : `🛍️ *Rathore Samaj Business Directory* 🛍️\n\n*${ad.title}*\n*Category:* ${ad.category}\n*Owner(s):* ${ownersLabel} ${ad.city ? `(${ad.city})` : ''}\n${ad.tagline || ad.description ? `*About:* ${ad.tagline || ad.description}\n` : ''}${ad.offer ? `🎁 *Special Offer:* ${ad.offer}\n` : ''}${ad.address ? `📍 *Address:* ${ad.address}\n` : ''}📞 *Contact:* ${contactsText}\n\n✨ *Connect with Rathore Samaj businesses on our community portal:*\nhttps://svayaa.com/\n_Powered by Svayaa_`;
+      ? `🛍️ *राठौड़ समाज व्यापार डायरेक्टरी* 🛍️\n\n*${ad.title}*\n*श्रेणी:* ${ad.category}\n*संचालक:* ${ownersLabel} ${ad.city ? `(${ad.city})` : ''}\n${ad.tagline || ad.description ? `*विवरण:* ${ad.tagline || ad.description}\n` : ''}${ad.offer ? `🎁 *विशेष ऑफर:* ${ad.offer}\n` : ''}${ad.address ? `📍 *पता:* ${ad.address}\n` : ''}${contactsText ? `📞 *संपर्क:* ${contactsText}\n` : ''}\n✨ *राठौड़ समाज व्यापार डायरेक्टरी से जुड़ें:*\nhttps://svayaa.com/`
+      : `🛍️ *Rathore Samaj Business Directory* 🛍️\n\n*${ad.title}*\n*Category:* ${ad.category}\n*Owner(s):* ${ownersLabel} ${ad.city ? `(${ad.city})` : ''}\n${ad.tagline || ad.description ? `*About:* ${ad.tagline || ad.description}\n` : ''}${ad.offer ? `🎁 *Special Offer:* ${ad.offer}\n` : ''}${ad.address ? `📍 *Address:* ${ad.address}\n` : ''}${contactsText ? `📞 *Contact:* ${contactsText}\n` : ''}\n✨ *Connect with Rathore Samaj businesses on our community portal:*\nhttps://svayaa.com/\n_Powered by Svayaa_`;
 
     shareViaWhatsApp(text);
   };
@@ -418,7 +419,10 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({
                           <span className="font-semibold text-stone-700">
                             {t('Alt. Contact:', 'अतिरिक्त संपर्क:')}
                           </span>{' '}
-                          {extra.name} (<span className="font-mono">{extra.phone}</span>)
+                          {extra.name}
+                          {extra.phone?.trim() ? (
+                            <> (<span className="font-mono">{extra.phone}</span>)</>
+                          ) : null}
                         </p>
                       ))}
                     </div>
@@ -464,12 +468,25 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({
                   </div>
                 )}
 
-                <a 
-                  href={`tel:${ad.phone || adContacts[0]?.phone}`} 
-                  className="w-full bg-gradient-to-r from-[#380812] to-[#540e1b] hover:from-[#24050b] hover:to-[#380812] text-amber-200 font-semibold py-2.5 px-3 rounded-xl text-xs flex flex-wrap items-center justify-center gap-1.5 text-center transition-all shadow-xs border border-amber-500/20 cursor-pointer"
-                >
-                  <Phone className="w-3.5 h-3.5 text-amber-300 shrink-0" /> <span className="whitespace-nowrap">{t('Call Owner', 'कॉल करें')} ({ad.phone || adContacts[0]?.phone})</span>
-                </a>
+                {(() => {
+                  const primaryPhone = ad.phone?.trim() || adContacts.find((c) => c.phone?.trim())?.phone?.trim() || '';
+                  if (!primaryPhone) {
+                    return (
+                      <div className="w-full bg-stone-100 text-stone-700 font-semibold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 text-center border border-stone-200">
+                        <Store className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                        <span className="truncate">{t('Visit Store · Address Listed Above', 'दुकान पर पधारें · पता ऊपर देखें')}</span>
+                      </div>
+                    );
+                  }
+                  return (
+                    <a 
+                      href={`tel:${primaryPhone}`} 
+                      className="w-full bg-gradient-to-r from-[#380812] to-[#540e1b] hover:from-[#24050b] hover:to-[#380812] text-amber-200 font-semibold py-2.5 px-3 rounded-xl text-xs flex flex-wrap items-center justify-center gap-1.5 text-center transition-all shadow-xs border border-amber-500/20 cursor-pointer"
+                    >
+                      <Phone className="w-3.5 h-3.5 text-amber-300 shrink-0" /> <span className="whitespace-nowrap">{t('Call Owner', 'कॉल करें')} ({primaryPhone})</span>
+                    </a>
+                  );
+                })()}
               </div>
             </div>
           );
