@@ -526,11 +526,22 @@ export const App: React.FC = () => {
   };
 
   const handleAddAd = (newAd: BusinessAd) => {
-    setAds(prev => [newAd, ...prev]);
+    const ownerKey = getSessionOwnerKey(authSession);
+    const ownedAd: BusinessAd = {
+      ...newAd,
+      ownerId: newAd.ownerId || ownerKey || undefined,
+      ownerName:
+        newAd.ownerName ||
+        authSession?.name ||
+        authSession?.username ||
+        authSession?.email ||
+        undefined
+    };
+    setAds(prev => [ownedAd, ...prev]);
     try {
       const stored = localStorage.getItem('samaj_ads');
       const userAds = stored ? JSON.parse(stored) : [];
-      userAds.unshift(newAd);
+      userAds.unshift(ownedAd);
       localStorage.setItem('samaj_ads', JSON.stringify(userAds));
     } catch (e) {
       console.error("Error saving ad:", e);
@@ -538,6 +549,7 @@ export const App: React.FC = () => {
   };
 
   const handleAddQuickAd = (partial: Partial<BusinessAd>) => {
+    const ownerKey = getSessionOwnerKey(authSession);
     const newAd: BusinessAd = {
       id: Date.now(),
       title: partial.title || 'New Samaj Business',
@@ -553,6 +565,8 @@ export const App: React.FC = () => {
       adTier: partial.adTier,
       adPricePaid: partial.adPricePaid,
       banner: partial.banner || 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=600&q=80',
+      ownerId: ownerKey || undefined,
+      ownerName: authSession?.name || authSession?.username || authSession?.email || undefined,
       createdAt: new Date().toISOString()
     };
     handleAddAd(newAd);

@@ -2,7 +2,7 @@ import React from 'react';
 import { Share2 } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { useAdminConfig } from '../context/AdminConfigContext';
-import { buildWhatsAppUrls, copyTextToClipboard } from '../utils/shareAndPrint';
+import { getWhatsAppLinkProps } from '../utils/shareAndPrint';
 
 export const WhatsAppShare: React.FC = () => {
   const { t } = useLanguage();
@@ -17,25 +17,20 @@ export const WhatsAppShare: React.FC = () => {
     return null;
   }
 
-  const { apiUrl } = buildWhatsAppUrls(shareText);
+  const linkProps = getWhatsAppLinkProps(shareText);
 
   return (
-    <div className="fixed bottom-[calc(1rem+var(--sab))] right-[calc(0.875rem+var(--sar))] sm:bottom-[calc(1.5rem+var(--sab))] sm:right-[calc(1.5rem+var(--sar))] z-40">
+    <div className="fixed bottom-[calc(1rem+var(--sab))] right-[calc(0.875rem+var(--sar))] sm:bottom-[calc(1.5rem+var(--sab))] sm:right-[calc(1.5rem+var(--sar))] z-[45] pointer-events-auto">
       <a
-        href={apiUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        onClick={() => {
-          void copyTextToClipboard(shareText);
-        }}
+        {...linkProps}
         aria-label={t('Share App on WhatsApp', 'व्हाट्सएप पर ऐप शेयर करें')}
         title={t('Share on WhatsApp', 'व्हाट्सएप पर शेयर करें')}
-        className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold p-3.5 sm:p-4 rounded-full shadow-2xl flex items-center justify-center transition-transform hover:scale-110 border-2 border-white group relative cursor-pointer"
+        className="bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold p-3.5 sm:p-4 rounded-full shadow-2xl flex items-center justify-center transition-transform hover:scale-110 border-2 border-white group relative cursor-pointer touch-manipulation select-none"
       >
         <Share2 className="w-6 h-6" />
 
         {/* Tooltip text on hover for desktop */}
-        <span className="absolute right-16 bg-slate-900 text-white text-[11px] px-3 py-1.5 rounded-lg shadow-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+        <span className="hidden sm:block absolute right-16 bg-slate-900 text-white text-[11px] px-3 py-1.5 rounded-lg shadow-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
           {t('Share on WhatsApp', 'व्हाट्सएप पर शेयर करें')}
         </span>
       </a>

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   LayoutDashboard, Users, Image as ImageIcon, Settings, Plus, Search, 
   Bell, ChevronDown, CheckCircle2, ShieldCheck, ExternalLink, Edit3, 
@@ -18,7 +18,12 @@ import { BrandLogo } from './BrandLogo';
 import { ImageUploadField } from './ImageUploadField';
 import { compressAndReadImageFile } from '../utils/imageUpload';
 import { sanitizePhoneInput, validatePhoneNumber } from '../utils/validation';
-import { isProfileOwnedBySession } from '../utils/profileOwnership';
+import {
+  getSessionOwnerKey,
+  getUserStorageKey,
+  isAdOwnedBySession,
+  isProfileOwnedBySession
+} from '../utils/profileOwnership';
 
 interface DashboardTabProps {
   authSession: AuthSession | null;
@@ -59,10 +64,17 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   // Search filter across dashboard
   const [searchQuery, setSearchQuery] = useState('');
 
+  // User-scoped localStorage keys so new accounts always start cleanly at 0
+  const likedStorageKey = getUserStorageKey('samaj_liked_profiles', authSession);
+  const admirersStorageKey = getUserStorageKey('samaj_profile_admirers', authSession);
+  const chatStorageKey = getUserStorageKey('samaj_chat_messages', authSession);
+  const mediaStorageKey = getUserStorageKey('samaj_media_assets', authSession);
+  const notificationsStorageKey = getUserStorageKey('samaj_notifications', authSession);
+
   // Liked Profiles State
   const [likedProfiles, setLikedProfiles] = useState<Set<string>>(() => {
     try {
-      const stored = localStorage.getItem('samaj_liked_profiles');
+      const stored = localStorage.getItem(likedStorageKey);
       return stored ? new Set(JSON.parse(stored)) : new Set();
     } catch {
       return new Set();
@@ -79,106 +91,44 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     newSet.delete(key);
     setLikedProfiles(newSet);
     try {
-      localStorage.setItem('samaj_liked_profiles', JSON.stringify(Array.from(newSet)));
+      localStorage.setItem(likedStorageKey, JSON.stringify(Array.from(newSet)));
     } catch (e) {
       console.error(e);
     }
   };
 
-  // Who Liked My Profile State
-  const [admirers] = useState<ProfileAdmirer[]>(() => {
+  // Who Liked My Profile State (starts empty / 0 for new users)
+  const [admirers, setAdmirers] = useState<ProfileAdmirer[]>(() => {
     try {
-      const stored = localStorage.getItem('samaj_profile_admirers');
+      const stored = localStorage.getItem(admirersStorageKey);
       if (stored) return JSON.parse(stored);
     } catch (e) {
       console.error(e);
     }
-    return [
-      {
-        id: 'adm-1',
-        admirerName: 'Vikramaditya Singh Rathore',
-        admirerGotra: 'Pindoriya',
-        admirerCity: 'Indore, MP',
-        admirerAge: 28,
-        admirerEducation: 'B.Tech, IIT Bombay',
-        admirerProfession: 'Senior Software Architect',
-        admirerPhoto: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80',
-        admirerPhone: '9826012345',
-        likedAt: '2 hours ago',
-        message: 'Respectful greetings. We liked your family biodata and wish to discuss matrimonial alliance.'
-      },
-      {
-        id: 'adm-2',
-        admirerName: 'Harshwardhan Kishor Rathore',
-        admirerGotra: 'Indruke',
-        admirerCity: 'Nanded, MH',
-        admirerAge: 27,
-        admirerEducation: 'Chartered Accountant (CA)',
-        admirerProfession: 'Financial Consultant',
-        admirerPhoto: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=400&q=80',
-        admirerPhone: '9420348499',
-        likedAt: 'Yesterday',
-        message: 'Family matches our Gotra criteria. Requesting parent-to-parent conversation.'
-      },
-      {
-        id: 'adm-3',
-        admirerName: 'Rajveer Pradeep Rathore',
-        admirerGotra: 'Shekhawat',
-        admirerCity: 'Beed, MH',
-        admirerAge: 29,
-        admirerEducation: 'B.E., M.B.A.',
-        admirerProfession: 'Business Enterprise Partner',
-        admirerPhoto: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=400&q=80',
-        admirerPhone: '9359607476',
-        likedAt: '3 days ago',
-        message: 'Auspicious alliance inquiry. Please connect on chat or phone.'
-      }
-    ];
+    return [];
   });
 
   // Stored chat messages & Active Chat Profile
   const [activeChatProfile, setActiveChatProfile] = useState<MatrimonyProfile | null>(null);
-  const [chatThreads] = useState<Record<string, ChatMessage[]>>(() => {
+  const [chatThreads, setChatThreads] = useState<Record<string, ChatMessage[]>>(() => {
     try {
-      const stored = localStorage.getItem('samaj_chat_messages');
+      const stored = localStorage.getItem(chatStorageKey);
       return stored ? JSON.parse(stored) : {};
     } catch {
       return {};
     }
   });
 
-  // Notifications state
+  // Notifications state (starts empty / 0 for new users)
   const [showNotifications, setShowNotifications] = useState(false);
-  const [notifications, setNotifications] = useState([
-    {
-      id: 1,
-      title: 'Family Contact Requested',
-      description: 'A verified Rathore family from Indore requested contact details for your published profile.',
-      time: '2 hours ago',
-      read: false
-    },
-    {
-      id: 2,
-      title: 'Gotra Verification Approved',
-      description: 'Your family Gotra lineage was verified by the Central Samaj Committee.',
-      time: '1 day ago',
-      read: false
-    },
-    {
-      id: 3,
-      title: 'Business Ad Impression',
-      description: 'Your shop advertisement received 32 new views from community members today.',
-      time: '1 day ago',
-      read: false
-    },
-    {
-      id: 4,
-      title: 'Annual Patrika 2026 Released',
-      description: 'The digital e-booklet has been updated with 450+ candidate biodatas.',
-      time: '2 days ago',
-      read: true
+  const [notifications, setNotifications] = useState<Array<{ id: number; title: string; description: string; time: string; read: boolean }>>(() => {
+    try {
+      const stored = localStorage.getItem(notificationsStorageKey);
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
     }
-  ]);
+  });
 
   // User Profile Dropdown state
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -211,41 +161,48 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   const [confirmDeleteProfileId, setConfirmDeleteProfileId] = useState<number | string | null>(null);
   const [confirmDeleteAdId, setConfirmDeleteAdId] = useState<number | string | null>(null);
 
-  // User's Media Assets State
-  const [mediaAssets, setMediaAssets] = useState<UserMediaAsset[]>([
-    {
-      id: 'media-1',
-      url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=600&q=80',
-      title: 'Primary Portrait Avatar',
-      type: 'avatar',
-      uploadedAt: 'Oct 28, 2026',
-      size: '1.2 MB'
-    },
-    {
-      id: 'media-2',
-      url: 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1200&q=80',
-      title: 'Royal Heritage Cover Photo',
-      type: 'cover',
-      uploadedAt: 'Oct 28, 2026',
-      size: '2.8 MB'
-    },
-    {
-      id: 'media-3',
-      url: 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?auto=format&fit=crop&w=600&q=80',
-      title: 'Shop Showroom Banner',
-      type: 'cover',
-      uploadedAt: 'Oct 29, 2026',
-      size: '2.4 MB'
-    },
-    {
-      id: 'media-4',
-      url: 'https://images.unsplash.com/photo-1511285560929-80b456fea0bc?auto=format&fit=crop&w=600&q=80',
-      title: 'Family Gathering Photo',
-      type: 'gallery',
-      uploadedAt: 'Oct 30, 2026',
-      size: '1.8 MB'
+  // User's Media Assets State (starts empty / 0 for new users, persisted per login)
+  const [mediaAssets, setMediaAssets] = useState<UserMediaAsset[]>(() => {
+    try {
+      const stored = localStorage.getItem(mediaStorageKey);
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
     }
-  ]);
+  });
+
+  useEffect(() => {
+    try {
+      const storedLikes = localStorage.getItem(likedStorageKey);
+      setLikedProfiles(storedLikes ? new Set(JSON.parse(storedLikes)) : new Set());
+    } catch {
+      setLikedProfiles(new Set());
+    }
+    try {
+      const storedAdmirers = localStorage.getItem(admirersStorageKey);
+      setAdmirers(storedAdmirers ? JSON.parse(storedAdmirers) : []);
+    } catch {
+      setAdmirers([]);
+    }
+    try {
+      const storedChats = localStorage.getItem(chatStorageKey);
+      setChatThreads(storedChats ? JSON.parse(storedChats) : {});
+    } catch {
+      setChatThreads({});
+    }
+    try {
+      const storedMedia = localStorage.getItem(mediaStorageKey);
+      setMediaAssets(storedMedia ? JSON.parse(storedMedia) : []);
+    } catch {
+      setMediaAssets([]);
+    }
+    try {
+      const storedNotifications = localStorage.getItem(notificationsStorageKey);
+      setNotifications(storedNotifications ? JSON.parse(storedNotifications) : []);
+    } catch {
+      setNotifications([]);
+    }
+  }, [likedStorageKey, admirersStorageKey, chatStorageKey, mediaStorageKey, notificationsStorageKey]);
 
   // New Media Upload Form state
   const [newMediaTitle, setNewMediaTitle] = useState('');
@@ -292,15 +249,17 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     });
   }, [userProfiles, searchQuery, profileStatusFilter]);
 
-  // Processed Business Ads
+  // Only show Business Ads added by this logged-in account (never all community directory ads)
   const userAds = useMemo(() => {
-    return ads.map((ad, idx) => ({
-      ...ad,
-      status: ad.status || (idx % 2 === 0 ? 'active' : 'draft'),
-      viewsCount: ad.viewsCount || (120 + idx * 37),
-      inquiriesCount: ad.inquiriesCount || (14 + idx * 5)
-    }));
-  }, [ads]);
+    return ads
+      .filter((ad) => isAdOwnedBySession(ad, authSession))
+      .map((ad) => ({
+        ...ad,
+        status: ad.status || 'active',
+        viewsCount: ad.viewsCount ?? 0,
+        inquiriesCount: ad.inquiriesCount ?? 0
+      }));
+  }, [ads, authSession]);
 
   const filteredUserAds = useMemo(() => {
     return userAds.filter(ad => {
@@ -453,6 +412,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   // Handler: Create New Business Ad
   const handleStartCreateNewAd = () => {
     setAdFormError('');
+    const ownerKey = getSessionOwnerKey(authSession);
     const blankAd: BusinessAd = {
       id: Date.now(),
       title: '',
@@ -468,8 +428,10 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
       status: 'active',
       banner: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=600&q=80',
       description: 'Quality goods and services for community families.',
-      viewsCount: 1,
+      viewsCount: 0,
       inquiriesCount: 0,
+      ownerId: ownerKey || undefined,
+      ownerName: authSession?.name || authSession?.username || authSession?.email || undefined,
       createdAt: new Date().toISOString()
     };
     setEditingAd(blankAd);
@@ -555,14 +517,30 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
       size: '2.4 MB'
     };
 
-    setMediaAssets(prev => [newAsset, ...prev]);
+    setMediaAssets(prev => {
+      const next = [newAsset, ...prev];
+      try {
+        localStorage.setItem(mediaStorageKey, JSON.stringify(next));
+      } catch (err) {
+        console.error(err);
+      }
+      return next;
+    });
     setNewMediaTitle('');
     setNewMediaUrl('');
   };
 
   // Handler: Delete Media Asset
   const handleDeleteMediaAsset = (id: string) => {
-    setMediaAssets(prev => prev.filter(m => m.id !== id));
+    setMediaAssets(prev => {
+      const next = prev.filter(m => m.id !== id);
+      try {
+        localStorage.setItem(mediaStorageKey, JSON.stringify(next));
+      } catch (err) {
+        console.error(err);
+      }
+      return next;
+    });
   };
 
   // Handler: Save General Settings
@@ -573,7 +551,15 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
 
   // Handler: Mark all notifications read
   const handleMarkAllNotificationsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    setNotifications(prev => {
+      const next = prev.map(n => ({ ...n, read: true }));
+      try {
+        localStorage.setItem(notificationsStorageKey, JSON.stringify(next));
+      } catch (err) {
+        console.error(err);
+      }
+      return next;
+    });
   };
 
   return (
@@ -679,24 +665,30 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 </div>
 
                 <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                  {notifications.map((n) => (
-                    <div 
-                      key={n.id} 
-                      className={`p-3 rounded-2xl border transition-all text-xs space-y-1 ${
-                        n.read 
-                          ? 'bg-stone-50/60 border-stone-100 text-stone-600' 
-                          : 'bg-rose-50/50 border-rose-200/70 text-stone-900 shadow-xs'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <strong className="font-serif font-bold">{n.title}</strong>
-                        <span className="text-[10px] text-stone-400 shrink-0">{n.time}</span>
-                      </div>
-                      <p className="text-[11px] text-stone-600 font-light leading-relaxed">
-                        {n.description}
-                      </p>
+                  {notifications.length === 0 ? (
+                    <div className="py-6 text-center text-xs text-stone-400">
+                      {t('No new notifications yet.', 'अभी कोई नई सूचना नहीं है।')}
                     </div>
-                  ))}
+                  ) : (
+                    notifications.map((n) => (
+                      <div 
+                        key={n.id} 
+                        className={`p-3 rounded-2xl border transition-all text-xs space-y-1 ${
+                          n.read 
+                            ? 'bg-stone-50/60 border-stone-100 text-stone-600' 
+                            : 'bg-rose-50/50 border-rose-200/70 text-stone-900 shadow-xs'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <strong className="font-serif font-bold">{n.title}</strong>
+                          <span className="text-[10px] text-stone-400 shrink-0">{n.time}</span>
+                        </div>
+                        <p className="text-[11px] text-stone-600 font-light leading-relaxed">
+                          {n.description}
+                        </p>
+                      </div>
+                    ))
+                  )}
                 </div>
 
                 <div className="pt-1 text-center">
@@ -2122,38 +2114,61 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 </div>
 
                 <div className="space-y-3 text-xs">
-                  <div className="flex items-start gap-3 p-3 rounded-2xl bg-rose-50/40 border border-rose-100">
-                    <div className="w-8 h-8 rounded-xl bg-rose-100 text-[#851834] flex items-center justify-center font-bold shrink-0">
-                      👁️
+                  {userProfiles.length === 0 && userAds.length === 0 && likedProfileList.length === 0 && admirers.length === 0 ? (
+                    <div className="p-6 rounded-2xl bg-stone-50/80 border border-stone-200/80 text-center space-y-1.5">
+                      <p className="font-serif font-bold text-stone-800 text-sm">
+                        {t('No Recent Activity Yet', 'अभी कोई हालिया गतिविधि नहीं')}
+                      </p>
+                      <p className="text-stone-500 font-light max-w-md mx-auto">
+                        {t(
+                          'Publish your matrimonial biodata, post a business ad, or explore community profiles to start seeing activity here.',
+                          'यहाँ गतिविधि देखने के लिए अपना वैवाहिक बायोडाटा प्रकाशित करें, व्यापार विज्ञापन जोड़ें या डायरेक्टरी देखें।'
+                        )}
+                      </p>
                     </div>
-                    <div>
-                      <p className="font-bold text-stone-800">Biodata View Registered</p>
-                      <p className="text-stone-500 font-light">A verified family from Indore viewed the candidate biodata.</p>
-                      <span className="text-[10px] text-stone-400">2 hours ago</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-3 p-3 rounded-2xl bg-emerald-50/50 border border-emerald-100">
-                    <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold shrink-0">
-                      🏬
-                    </div>
-                    <div>
-                      <p className="font-bold text-stone-800">Business Inquiry Received</p>
-                      <p className="text-stone-500 font-light">A customer clicked on your store phone number from the Business Directory.</p>
-                      <span className="text-[10px] text-stone-400">5 hours ago</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start gap-3 p-3 rounded-2xl bg-stone-50/80 border border-stone-100">
-                    <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-900 flex items-center justify-center font-bold shrink-0">
-                      💍
-                    </div>
-                    <div>
-                      <p className="font-bold text-stone-800">Gotra Match Notification</p>
-                      <p className="text-stone-500 font-light">14 new compatible profiles matching your criteria were listed in the directory.</p>
-                      <span className="text-[10px] text-stone-400">Yesterday</span>
-                    </div>
-                  </div>
+                  ) : (
+                    <>
+                      {userProfiles.length > 0 && (
+                        <div className="flex items-start gap-3 p-3 rounded-2xl bg-rose-50/40 border border-rose-100">
+                          <div className="w-8 h-8 rounded-xl bg-rose-100 text-[#851834] flex items-center justify-center font-bold shrink-0">
+                            💍
+                          </div>
+                          <div>
+                            <p className="font-bold text-stone-800">{t('Matrimonial Biodata Published', 'वैवाहिक बायोडाटा प्रकाशित')}</p>
+                            <p className="text-stone-500 font-light">
+                              {t(`${userProfiles[0].name} is active in the Samaj directory.`, `${userProfiles[0].name} का बायोडाटा समाज डायरेक्टरी में सक्रिय है।`)}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                      {userAds.length > 0 && (
+                        <div className="flex items-start gap-3 p-3 rounded-2xl bg-emerald-50/50 border border-emerald-100">
+                          <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold shrink-0">
+                            🏬
+                          </div>
+                          <div>
+                            <p className="font-bold text-stone-800">{t('Business Ads Active', 'व्यापार विज्ञापन सक्रिय')}</p>
+                            <p className="text-stone-500 font-light">
+                              {t(`You have ${userAds.length} published business listing(s) in the Samaj directory.`, `समाज डायरेक्टरी में आपके ${userAds.length} व्यापार विज्ञापन प्रकाशित हैं।`)}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                      {likedProfileList.length > 0 && (
+                        <div className="flex items-start gap-3 p-3 rounded-2xl bg-stone-50/80 border border-stone-100">
+                          <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-900 flex items-center justify-center font-bold shrink-0">
+                            ❤️
+                          </div>
+                          <div>
+                            <p className="font-bold text-stone-800">{t('Saved Profiles', 'सहेजे गए बायोडाटा')}</p>
+                            <p className="text-stone-500 font-light">
+                              {t(`You have bookmarked ${likedProfileList.length} matrimonial profile(s).`, `आपने ${likedProfileList.length} वैवाहिक बायोडाटा पसंद किए हैं।`)}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -2544,10 +2559,10 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                           {/* Engagement Metrics Pill */}
                           <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-[11px] text-stone-500 pt-1">
                             <span className="bg-stone-50 px-2 py-0.5 rounded-md border border-stone-200 whitespace-nowrap">
-                              👁️ {ad.viewsCount || 124} {t('Views', 'व्यूज')}
+                              👁️ {ad.viewsCount ?? 0} {t('Views', 'व्यूज')}
                             </span>
                             <span className="bg-stone-50 px-2 py-0.5 rounded-md border border-stone-200 whitespace-nowrap">
-                              📞 {ad.inquiriesCount || 18} {t('Calls', 'कॉल')}
+                              📞 {ad.inquiriesCount ?? 0} {t('Calls', 'कॉल')}
                             </span>
                           </div>
                         </div>
@@ -2661,36 +2676,50 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 </form>
 
                 {/* Media Assets Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-2">
-                  {mediaAssets.map((asset) => (
-                    <div 
-                      key={asset.id}
-                      className="rounded-2xl border border-stone-200 overflow-hidden bg-white shadow-2xs group flex flex-col justify-between"
-                    >
-                      <div className="relative h-36 bg-stone-100 overflow-hidden">
-                        <img src={asset.url} alt={asset.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                        <span className="absolute top-2 left-2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-md font-medium capitalize backdrop-blur-xs">
-                          {asset.type}
-                        </span>
-                        <button
-                          onClick={() => handleDeleteMediaAsset(asset.id)}
-                          className="absolute top-2 right-2 bg-black/65 hover:bg-red-700 text-white p-1.5 rounded-lg opacity-95 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity cursor-pointer"
-                          title="Delete asset"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                {mediaAssets.length === 0 ? (
+                  <div className="py-10 text-center space-y-2 rounded-2xl border border-dashed border-stone-200 bg-stone-50/60">
+                    <div className="w-12 h-12 bg-rose-50 rounded-2xl mx-auto flex items-center justify-center border border-rose-200">
+                      <ImageIcon className="w-6 h-6 text-[#851834]" />
+                    </div>
+                    <h4 className="font-serif font-bold text-sm text-stone-800">
+                      {t('No Media Assets Uploaded Yet', 'अभी कोई मीडिया फ़ाइल अपलोड नहीं की गई है')}
+                    </h4>
+                    <p className="text-xs text-stone-500 max-w-sm mx-auto">
+                      {t('Use the upload form above to save portrait photos, shop banners, or Kundali documents.', 'फ़ोटो, दुकान बैनर या कुंडली दस्तावेज़ सहेजने के लिए ऊपर दिए फॉर्म का उपयोग करें।')}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-2">
+                    {mediaAssets.map((asset) => (
+                      <div 
+                        key={asset.id}
+                        className="rounded-2xl border border-stone-200 overflow-hidden bg-white shadow-2xs group flex flex-col justify-between"
+                      >
+                        <div className="relative h-36 bg-stone-100 overflow-hidden">
+                          <img src={asset.url} alt={asset.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                          <span className="absolute top-2 left-2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-md font-medium capitalize backdrop-blur-xs">
+                            {asset.type}
+                          </span>
+                          <button
+                            onClick={() => handleDeleteMediaAsset(asset.id)}
+                            className="absolute top-2 right-2 bg-black/65 hover:bg-red-700 text-white p-1.5 rounded-lg opacity-95 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity cursor-pointer"
+                            title="Delete asset"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
 
-                      <div className="p-3 text-xs space-y-1">
-                        <p className="font-bold text-stone-800 truncate">{asset.title}</p>
-                        <div className="flex justify-between text-[10px] text-stone-400">
-                          <span>{asset.uploadedAt}</span>
-                          <span>{asset.size || '1.5 MB'}</span>
+                        <div className="p-3 text-xs space-y-1">
+                          <p className="font-bold text-stone-800 truncate">{asset.title}</p>
+                          <div className="flex justify-between text-[10px] text-stone-400">
+                            <span>{asset.uploadedAt}</span>
+                            <span>{asset.size || '1.5 MB'}</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -2951,86 +2980,103 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                   </span>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                  {admirers.map((adm) => {
-                    const candidateProfile: MatrimonyProfile = {
-                      id: adm.id,
-                      name: adm.admirerName,
-                      age: adm.admirerAge,
-                      gender: 'Male',
-                      gotra: adm.admirerGotra,
-                      city: adm.admirerCity,
-                      education: adm.admirerEducation,
-                      profession: adm.admirerProfession || 'Professional',
-                      contact: adm.admirerPhone,
-                      photo: adm.admirerPhoto,
-                      familyDetails: `Respected Rathore family from ${adm.admirerCity}`
-                    };
+                {admirers.length === 0 ? (
+                  <div className="py-12 text-center space-y-3 max-w-sm mx-auto">
+                    <div className="w-14 h-14 bg-amber-50 rounded-2xl mx-auto flex items-center justify-center border border-amber-200">
+                      <Sparkles className="w-7 h-7 text-amber-500" />
+                    </div>
+                    <h4 className="font-serif font-bold text-base text-stone-800">
+                      {t('No Admirers Yet', 'अभी तक कोई प्रशंसक नहीं')}
+                    </h4>
+                    <p className="text-xs text-stone-500 leading-relaxed">
+                      {t(
+                        'When Rathore community families express interest in your published profile, their requests will show up here.',
+                        'जब राठौर समाज के परिवार आपकी प्रकाशित प्रोफ़ाइल पसंद करेंगे, तो उनके प्रस्ताव यहाँ दिखाई देंगे।'
+                      )}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                    {admirers.map((adm) => {
+                      const candidateProfile: MatrimonyProfile = {
+                        id: adm.id,
+                        name: adm.admirerName,
+                        age: adm.admirerAge,
+                        gender: 'Male',
+                        gotra: adm.admirerGotra,
+                        city: adm.admirerCity,
+                        education: adm.admirerEducation,
+                        profession: adm.admirerProfession || 'Professional',
+                        contact: adm.admirerPhone,
+                        photo: adm.admirerPhoto,
+                        familyDetails: `Respected Rathore family from ${adm.admirerCity}`
+                      };
 
-                    return (
-                      <div 
-                        key={adm.id}
-                        className="bg-white rounded-2xl border border-amber-200/90 hover:border-amber-400 p-4 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between space-y-3"
-                      >
-                        <div className="space-y-2">
-                          <div className="flex items-center gap-3">
-                            <img 
-                              src={adm.admirerPhoto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80"}
-                              alt={adm.admirerName}
-                              className="w-12 h-12 rounded-xl object-cover object-top border border-amber-300 shrink-0"
-                            />
-                            <div className="min-w-0">
-                              <h4 className="font-serif font-bold text-stone-900 text-sm truncate">
-                                {adm.admirerName}
-                              </h4>
-                              <p className="text-xs text-stone-600">
-                                {t('Gotra:', 'गोत्र:')} {adm.admirerGotra} · {adm.admirerCity}
-                              </p>
-                              <span className="text-[10px] text-rose-600 font-semibold flex items-center gap-1 mt-0.5">
-                                <Heart className="w-2.5 h-2.5 fill-rose-500 text-rose-500" /> {adm.likedAt}
-                              </span>
+                      return (
+                        <div 
+                          key={adm.id}
+                          className="bg-white rounded-2xl border border-amber-200/90 hover:border-amber-400 p-4 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between space-y-3"
+                        >
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-3">
+                              <img 
+                                src={adm.admirerPhoto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80"}
+                                alt={adm.admirerName}
+                                className="w-12 h-12 rounded-xl object-cover object-top border border-amber-300 shrink-0"
+                              />
+                              <div className="min-w-0">
+                                <h4 className="font-serif font-bold text-stone-900 text-sm truncate">
+                                  {adm.admirerName}
+                                </h4>
+                                <p className="text-xs text-stone-600">
+                                  {t('Gotra:', 'गोत्र:')} {adm.admirerGotra} · {adm.admirerCity}
+                                </p>
+                                <span className="text-[10px] text-rose-600 font-semibold flex items-center gap-1 mt-0.5">
+                                  <Heart className="w-2.5 h-2.5 fill-rose-500 text-rose-500" /> {adm.likedAt}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="bg-stone-50 p-2.5 rounded-xl border border-stone-200 text-[11px] text-stone-700 space-y-0.5">
+                              <p><strong>{t('Edu:', 'शिक्षा:')}</strong> {adm.admirerEducation}</p>
+                              {adm.admirerProfession && <p><strong>{t('Prof:', 'व्यवसाय:')}</strong> {adm.admirerProfession}</p>}
+                              {adm.message && <p className="italic text-amber-900 pt-1 text-[10px]">&quot;{adm.message}&quot;</p>}
                             </div>
                           </div>
 
-                          <div className="bg-stone-50 p-2.5 rounded-xl border border-stone-200 text-[11px] text-stone-700 space-y-0.5">
-                            <p><strong>{t('Edu:', 'शिक्षा:')}</strong> {adm.admirerEducation}</p>
-                            {adm.admirerProfession && <p><strong>{t('Prof:', 'व्यवसाय:')}</strong> {adm.admirerProfession}</p>}
-                            {adm.message && <p className="italic text-amber-900 pt-1 text-[10px]">&quot;{adm.message}&quot;</p>}
+                          <div className="pt-2 border-t border-stone-100 flex flex-wrap items-center gap-1.5">
+                            {config.featureChatEnabled && (
+                              <button
+                                onClick={() => setActiveChatProfile(candidateProfile)}
+                                className="flex-1 min-w-[90px] bg-gradient-to-r from-[#6e1628] to-[#851834] text-amber-200 text-xs font-semibold py-2 px-2.5 rounded-lg flex items-center justify-center gap-1 cursor-pointer shadow-xs"
+                              >
+                                <MessageCircle className="w-3 h-3 text-amber-300" /> {t('Chat', 'चैट')}
+                              </button>
+                            )}
+
+                            {config.featureKundaliEnabled && onSelectKundaliProfile && (
+                              <button
+                                onClick={() => onSelectKundaliProfile(candidateProfile.id, candidateProfile.gender)}
+                                title={t('Milan', 'मिलान')}
+                                className="bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-semibold py-2 px-2.5 rounded-lg flex items-center gap-1 cursor-pointer"
+                              >
+                                <Compass className="w-3 h-3 text-amber-700" /> {t('Milan', 'मिलान')}
+                              </button>
+                            )}
+
+                            <a
+                              href={`tel:${adm.admirerPhone}`}
+                              title={`${t('Call', 'कॉल करें')} ${adm.admirerPhone}`}
+                              className="p-2 border border-stone-200 bg-stone-50 hover:bg-stone-100 text-stone-700 rounded-lg cursor-pointer"
+                            >
+                              <Phone className="w-3.5 h-3.5 text-emerald-700" />
+                            </a>
                           </div>
                         </div>
-
-                        <div className="pt-2 border-t border-stone-100 flex flex-wrap items-center gap-1.5">
-                          {config.featureChatEnabled && (
-                            <button
-                              onClick={() => setActiveChatProfile(candidateProfile)}
-                              className="flex-1 min-w-[90px] bg-gradient-to-r from-[#6e1628] to-[#851834] text-amber-200 text-xs font-semibold py-2 px-2.5 rounded-lg flex items-center justify-center gap-1 cursor-pointer shadow-xs"
-                            >
-                              <MessageCircle className="w-3 h-3 text-amber-300" /> {t('Chat', 'चैट')}
-                            </button>
-                          )}
-
-                          {config.featureKundaliEnabled && onSelectKundaliProfile && (
-                            <button
-                              onClick={() => onSelectKundaliProfile(candidateProfile.id, candidateProfile.gender)}
-                              title={t('Milan', 'मिलान')}
-                              className="bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-semibold py-2 px-2.5 rounded-lg flex items-center gap-1 cursor-pointer"
-                            >
-                              <Compass className="w-3 h-3 text-amber-700" /> {t('Milan', 'मिलान')}
-                            </button>
-                          )}
-
-                          <a
-                            href={`tel:${adm.admirerPhone}`}
-                            title={`${t('Call', 'कॉल करें')} ${adm.admirerPhone}`}
-                            className="p-2 border border-stone-200 bg-stone-50 hover:bg-stone-100 text-stone-700 rounded-lg cursor-pointer"
-                          >
-                            <Phone className="w-3.5 h-3.5 text-emerald-700" />
-                          </a>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -3558,7 +3604,15 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
         <ChatModal
           profile={activeChatProfile}
           authSession={authSession}
-          onClose={() => setActiveChatProfile(null)}
+          onClose={() => {
+            setActiveChatProfile(null);
+            try {
+              const stored = localStorage.getItem(chatStorageKey);
+              setChatThreads(stored ? JSON.parse(stored) : {});
+            } catch {
+              setChatThreads({});
+            }
+          }}
           onSelectKundaliProfile={onSelectKundaliProfile}
         />
       )}

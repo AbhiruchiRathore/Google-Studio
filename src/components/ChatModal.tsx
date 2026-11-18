@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { MatrimonyProfile, ChatMessage, AuthSession } from '../types';
 import { useLanguage } from '../context/LanguageContext';
+import { getUserStorageKey } from '../utils/profileOwnership';
 
 interface ChatModalProps {
   profile: MatrimonyProfile;
@@ -39,10 +40,12 @@ export const ChatModal: React.FC<ChatModalProps> = ({
 
   const quickPrompts = lang === 'hi' ? QUICK_PROMPTS_HI : QUICK_PROMPTS_EN;
 
+  const chatStorageKey = getUserStorageKey('samaj_chat_messages', authSession);
+
   const [inputMessage, setInputMessage] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     try {
-      const stored = localStorage.getItem('samaj_chat_messages');
+      const stored = localStorage.getItem(chatStorageKey);
       if (stored) {
         const parsed: Record<string, ChatMessage[]> = JSON.parse(stored);
         if (parsed[profileKey] && Array.isArray(parsed[profileKey])) {
@@ -80,10 +83,10 @@ export const ChatModal: React.FC<ChatModalProps> = ({
   const saveMessages = (newMessages: ChatMessage[]) => {
     setMessages(newMessages);
     try {
-      const stored = localStorage.getItem('samaj_chat_messages');
+      const stored = localStorage.getItem(chatStorageKey);
       const parsed: Record<string, ChatMessage[]> = stored ? JSON.parse(stored) : {};
       parsed[profileKey] = newMessages;
-      localStorage.setItem('samaj_chat_messages', JSON.stringify(parsed));
+      localStorage.setItem(chatStorageKey, JSON.stringify(parsed));
     } catch (e) {
       console.error("Error saving chat messages:", e);
     }

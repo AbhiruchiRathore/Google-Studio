@@ -9,12 +9,13 @@ import { MatrimonyProfile, GenderType, TabType, AuthSession, ProfileAdmirer } fr
 import { ChatModal } from './ChatModal';
 import { useLanguage } from '../context/LanguageContext';
 import { useAdminConfig } from '../context/AdminConfigContext';
-import { shareViaWhatsApp } from '../utils/shareAndPrint';
+import { getWhatsAppLinkProps } from '../utils/shareAndPrint';
 import { UserLocationData } from '../hooks/useUserLocation';
 import {
   ProfileWithDistance,
   rankProfilesByLocation
 } from '../utils/locationMatcher';
+import { getUserStorageKey } from '../utils/profileOwnership';
 
 interface MatrimonyTabProps {
   authSession: AuthSession | null;
@@ -73,66 +74,44 @@ export const MatrimonyTab: React.FC<MatrimonyTabProps> = ({
   const [showSubscriptionModal, setShowSubscriptionModal] = useState(false);
   const [subscriptionNotice, setSubscriptionNotice] = useState<string | null>(null);
 
-  // Admirers: Who Liked My Profile
-  const [admirers] = useState<ProfileAdmirer[]>(() => {
+  const admirersStorageKey = getUserStorageKey('samaj_profile_admirers', authSession);
+  const likedStorageKey = getUserStorageKey('samaj_liked_profiles', authSession);
+
+  // Admirers: Who Liked My Profile (starts at 0 for new users)
+  const [admirers, setAdmirers] = useState<ProfileAdmirer[]>(() => {
     try {
-      const stored = localStorage.getItem('samaj_profile_admirers');
+      const stored = localStorage.getItem(admirersStorageKey);
       if (stored) return JSON.parse(stored);
     } catch (e) {
       console.error(e);
     }
-    return [
-      {
-        id: 'adm-1',
-        admirerName: 'Vikramaditya Singh Rathore',
-        admirerGotra: 'Pindoriya',
-        admirerCity: 'Indore, MP',
-        admirerAge: 28,
-        admirerEducation: 'B.Tech, IIT Bombay',
-        admirerProfession: 'Senior Software Architect',
-        admirerPhoto: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80',
-        admirerPhone: '9826012345',
-        likedAt: '2 hours ago',
-        message: 'Respectful greetings. We liked your family biodata and wish to discuss matrimonial alliance.'
-      },
-      {
-        id: 'adm-2',
-        admirerName: 'Harshwardhan Kishor Rathore',
-        admirerGotra: 'Indruke',
-        admirerCity: 'Nanded, MH',
-        admirerAge: 27,
-        admirerEducation: 'Chartered Accountant (CA)',
-        admirerProfession: 'Financial Consultant',
-        admirerPhoto: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=400&q=80',
-        admirerPhone: '9420348499',
-        likedAt: 'Yesterday',
-        message: 'Family matches our Gotra criteria. Requesting parent-to-parent conversation.'
-      },
-      {
-        id: 'adm-3',
-        admirerName: 'Rajveer Pradeep Rathore',
-        admirerGotra: 'Shekhawat',
-        admirerCity: 'Beed, MH',
-        admirerAge: 29,
-        admirerEducation: 'B.E., M.B.A.',
-        admirerProfession: 'Business Enterprise Partner',
-        admirerPhoto: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=400&q=80',
-        admirerPhone: '9359607476',
-        likedAt: '3 days ago',
-        message: 'Auspicious alliance inquiry. Please connect on chat or phone.'
-      }
-    ];
+    return [];
   });
 
-  // Persistent Likes State (works for existing and future profiles)
+  // Persistent Likes State (scoped per user login so new users start with 0)
   const [likedProfiles, setLikedProfiles] = useState<Set<string>>(() => {
     try {
-      const stored = localStorage.getItem('samaj_liked_profiles');
+      const stored = localStorage.getItem(likedStorageKey);
       return stored ? new Set(JSON.parse(stored)) : new Set();
     } catch {
       return new Set();
     }
   });
+
+  useEffect(() => {
+    try {
+      const storedAdmirers = localStorage.getItem(admirersStorageKey);
+      setAdmirers(storedAdmirers ? JSON.parse(storedAdmirers) : []);
+    } catch {
+      setAdmirers([]);
+    }
+    try {
+      const storedLikes = localStorage.getItem(likedStorageKey);
+      setLikedProfiles(storedLikes ? new Set(JSON.parse(storedLikes)) : new Set());
+    } catch {
+      setLikedProfiles(new Set());
+    }
+  }, [admirersStorageKey, likedStorageKey]);
 
   const [likeCounts, setLikeCounts] = useState<Record<string, number>>(() => {
     try {
@@ -169,16 +148,15 @@ export const MatrimonyTab: React.FC<MatrimonyTabProps> = ({
     setLikedProfiles(newSet);
     setLikeCounts(newCounts);
     try {
-      localStorage.setItem('samaj_liked_profiles', JSON.stringify(Array.from(newSet)));
+      localStorage.setItem(likedStorageKey, JSON.stringify(Array.from(newSet)));
       localStorage.setItem('samaj_profile_likes_counts', JSON.stringify(newCounts));
     } catch (err) {
       console.error(err);
     }
   };
 
-  const shareProfileWhatsApp = (p: MatrimonyProfile, e?: React.MouseEvent) => {
-    if (e) e.stopPropagation();
-    const text = lang === 'hi'
+  const buildProfileShareText = (p: MatrimonyProfile) =>
+    lang === 'hi'
       ? `🚩 *राठौर रिश्ते - वैवाहिक बायोडाटा* 🚩
 
 *प्रत्याशी:* ${p.name}
@@ -205,9 +183,6 @@ ${p.about ? `*About:* ${p.about}\n` : ''}*Contact:* ${p.contact}
 ✨ *View full profile & Kundali Milan on Rathore Rishtey Portal:*
 https://svayaa.com/
 _Powered by Svayaa_`;
-
-    shareViaWhatsApp(text);
-  };
 
   // Selected Profile for Biodata Modal
   const [selectedProfileId, setSelectedProfileId] = useState<number | string | null>(null);
@@ -671,99 +646,116 @@ _Powered by Svayaa_`;
             )}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {admirers.map((adm) => {
-              const candidateProfile: MatrimonyProfile = {
-                id: adm.id,
-                name: adm.admirerName,
-                age: adm.admirerAge,
-                gender: 'Male',
-                gotra: adm.admirerGotra,
-                city: adm.admirerCity,
-                education: adm.admirerEducation,
-                profession: adm.admirerProfession || 'Professional',
-                contact: adm.admirerPhone,
-                photo: adm.admirerPhoto,
-                familyDetails: `Respected Rathore family from ${adm.admirerCity}`
-              };
+          {admirers.length === 0 ? (
+            <div className="bg-white rounded-3xl border border-amber-200/80 p-8 sm:p-12 text-center space-y-3 shadow-xs">
+              <div className="w-14 h-14 bg-amber-50 rounded-2xl mx-auto flex items-center justify-center border border-amber-200">
+                <Sparkles className="w-7 h-7 text-amber-600" />
+              </div>
+              <h4 className="font-serif font-bold text-base sm:text-lg text-stone-900">
+                {t('No Admirers Yet', 'अभी तक कोई प्रशंसक नहीं')}
+              </h4>
+              <p className="text-xs text-stone-500 max-w-md mx-auto leading-relaxed">
+                {t(
+                  'When verified Rathore Samaj families like your published profile, their alliance requests will appear here.',
+                  'जब सत्यापित राठौर समाज परिवार आपका प्रकाशित प्रोफ़ाइल पसंद करेंगे, तो उनके रिश्ते प्रस्ताव यहाँ दिखाई देंगे।'
+                )}
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {admirers.map((adm) => {
+                const candidateProfile: MatrimonyProfile = {
+                  id: adm.id,
+                  name: adm.admirerName,
+                  age: adm.admirerAge,
+                  gender: 'Male',
+                  gotra: adm.admirerGotra,
+                  city: adm.admirerCity,
+                  education: adm.admirerEducation,
+                  profession: adm.admirerProfession || 'Professional',
+                  contact: adm.admirerPhone,
+                  photo: adm.admirerPhoto,
+                  familyDetails: `Respected Rathore family from ${adm.admirerCity}`
+                };
 
-              return (
-                <div 
-                  key={adm.id}
-                  className="bg-white rounded-3xl border border-amber-200/90 hover:border-amber-400 p-5 shadow-xs hover:shadow-xl transition-all duration-300 flex flex-col justify-between space-y-4 group"
-                >
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-3.5">
-                      <img 
-                        src={adm.admirerPhoto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80"}
-                        alt={adm.admirerName}
-                        className="w-14 h-14 rounded-2xl object-cover object-top border-2 border-amber-300 shadow-xs shrink-0"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5">
-                          <h4 className="font-serif font-bold text-stone-900 text-base truncate group-hover:text-[#380812] transition-colors">
-                            {adm.admirerName}
-                          </h4>
-                          <ShieldCheck className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                return (
+                  <div 
+                    key={adm.id}
+                    className="bg-white rounded-3xl border border-amber-200/90 hover:border-amber-400 p-5 shadow-xs hover:shadow-xl transition-all duration-300 flex flex-col justify-between space-y-4 group"
+                  >
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-3.5">
+                        <img 
+                          src={adm.admirerPhoto || "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80"}
+                          alt={adm.admirerName}
+                          className="w-14 h-14 rounded-2xl object-cover object-top border-2 border-amber-300 shadow-xs shrink-0"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <h4 className="font-serif font-bold text-stone-900 text-base truncate group-hover:text-[#380812] transition-colors">
+                              {adm.admirerName}
+                            </h4>
+                            <ShieldCheck className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                          </div>
+                          <p className="text-xs text-stone-600 font-medium break-words">
+                            {t('Gotra:', 'गोत्र:')} {adm.admirerGotra} · {adm.admirerCity}
+                          </p>
+                          <span className="text-[10px] text-rose-600 font-bold flex items-center gap-1 mt-0.5">
+                            <Heart className="w-3 h-3 fill-rose-500 text-rose-500 shrink-0" /> <span className="truncate">{t(`Liked your profile ${adm.likedAt}`, `प्रोफ़ाइल पसंद किया (${adm.likedAt})`)}</span>
+                          </span>
                         </div>
-                        <p className="text-xs text-stone-600 font-medium break-words">
-                          {t('Gotra:', 'गोत्र:')} {adm.admirerGotra} · {adm.admirerCity}
+                      </div>
+
+                      <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200/80 text-xs space-y-1">
+                        <p className="text-stone-700 font-medium break-words">
+                          <strong>{t('Qualification:', 'योग्यता:')}</strong> {adm.admirerEducation}
                         </p>
-                        <span className="text-[10px] text-rose-600 font-bold flex items-center gap-1 mt-0.5">
-                          <Heart className="w-3 h-3 fill-rose-500 text-rose-500 shrink-0" /> <span className="truncate">{t(`Liked your profile ${adm.likedAt}`, `प्रोफ़ाइल पसंद किया (${adm.likedAt})`)}</span>
-                        </span>
+                        {adm.admirerProfession && (
+                          <p className="text-stone-700 font-medium break-words">
+                            <strong>{t('Profession:', 'व्यवसाय:')}</strong> {adm.admirerProfession}
+                          </p>
+                        )}
+                        {adm.message && (
+                          <div className="mt-2 pt-2 border-t border-stone-200/70 text-[11px] text-amber-950 bg-amber-50/70 p-2.5 rounded-xl italic break-words">
+                            &quot;{adm.message}&quot;
+                          </div>
+                        )}
                       </div>
                     </div>
 
-                    <div className="bg-stone-50 p-3.5 rounded-2xl border border-stone-200/80 text-xs space-y-1">
-                      <p className="text-stone-700 font-medium break-words">
-                        <strong>{t('Qualification:', 'योग्यता:')}</strong> {adm.admirerEducation}
-                      </p>
-                      {adm.admirerProfession && (
-                        <p className="text-stone-700 font-medium break-words">
-                          <strong>{t('Profession:', 'व्यवसाय:')}</strong> {adm.admirerProfession}
-                        </p>
+                    <div className="pt-2.5 border-t border-stone-100 flex flex-wrap items-center gap-2">
+                      <button
+                        onClick={() => setActiveChatProfile(candidateProfile)}
+                        className="flex-1 min-w-[140px] bg-gradient-to-r from-[#380812] to-[#540e1b] hover:from-[#24050b] hover:to-[#380812] text-amber-200 text-xs font-semibold py-2.5 px-3 rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer border border-amber-500/20 whitespace-nowrap"
+                      >
+                        <MessageCircle className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+                        <span>{t('Chat with Family', 'परिवार से चैट करें')}</span>
+                      </button>
+
+                      {onSelectKundaliProfile && (
+                        <button
+                          onClick={() => onSelectKundaliProfile(candidateProfile.id, candidateProfile.gender)}
+                          title={t('Kundali Milan (36 Gun)', 'कुंडली मिलान (३६ गुण)')}
+                          className="bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300/80 text-xs font-semibold py-2.5 px-3 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1 shrink-0 whitespace-nowrap"
+                        >
+                          <Compass className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                          <span>{t('Milan', 'मिलान')}</span>
+                        </button>
                       )}
-                      {adm.message && (
-                        <div className="mt-2 pt-2 border-t border-stone-200/70 text-[11px] text-amber-950 bg-amber-50/70 p-2.5 rounded-xl italic break-words">
-                          &quot;{adm.message}&quot;
-                        </div>
-                      )}
+
+                      <a
+                        href={`tel:${adm.admirerPhone}`}
+                        title={`${t('Call', 'कॉल करें')} ${adm.admirerName} (${adm.admirerPhone})`}
+                        className="p-2.5 rounded-xl border border-stone-200 bg-stone-50 hover:bg-stone-100 text-stone-700 text-xs transition-colors cursor-pointer shrink-0 inline-flex items-center justify-center"
+                      >
+                        <Phone className="w-3.5 h-3.5 text-emerald-700" />
+                      </a>
                     </div>
                   </div>
-
-                  <div className="pt-2.5 border-t border-stone-100 flex flex-wrap items-center gap-2">
-                    <button
-                      onClick={() => setActiveChatProfile(candidateProfile)}
-                      className="flex-1 min-w-[140px] bg-gradient-to-r from-[#380812] to-[#540e1b] hover:from-[#24050b] hover:to-[#380812] text-amber-200 text-xs font-semibold py-2.5 px-3 rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer border border-amber-500/20 whitespace-nowrap"
-                    >
-                      <MessageCircle className="w-3.5 h-3.5 text-amber-300 shrink-0" />
-                      <span>{t('Chat with Family', 'परिवार से चैट करें')}</span>
-                    </button>
-
-                    {onSelectKundaliProfile && (
-                      <button
-                        onClick={() => onSelectKundaliProfile(candidateProfile.id, candidateProfile.gender)}
-                        title={t('Kundali Milan (36 Gun)', 'कुंडली मिलान (३६ गुण)')}
-                        className="bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300/80 text-xs font-semibold py-2.5 px-3 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1 shrink-0 whitespace-nowrap"
-                      >
-                        <Compass className="w-3.5 h-3.5 text-amber-700 shrink-0" />
-                        <span>{t('Milan', 'मिलान')}</span>
-                      </button>
-                    )}
-
-                    <a
-                      href={`tel:${adm.admirerPhone}`}
-                      title={`${t('Call', 'कॉल करें')} ${adm.admirerName} (${adm.admirerPhone})`}
-                      className="p-2.5 rounded-xl border border-stone-200 bg-stone-50 hover:bg-stone-100 text-stone-700 text-xs transition-colors cursor-pointer shrink-0 inline-flex items-center justify-center"
-                    >
-                      <Phone className="w-3.5 h-3.5 text-emerald-700" />
-                    </a>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -1034,14 +1026,15 @@ _Powered by Svayaa_`;
                         )}
 
                         {config.featureWhatsAppShareEnabled && (
-                          <button
-                            onClick={(e) => shareProfileWhatsApp(p, e)}
+                          <a
+                            {...getWhatsAppLinkProps(buildProfileShareText(p))}
+                            onClick={(e) => e.stopPropagation()}
                             title={t('Share biodata on WhatsApp', 'व्हाट्सएप पर शेयर करें')}
-                            className="flex-1 min-w-[68px] bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 text-[11px] font-semibold py-2 px-2 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1 whitespace-nowrap"
+                            className="flex-1 min-w-[68px] bg-emerald-50 hover:bg-emerald-100 active:scale-95 border border-emerald-300 text-emerald-800 text-[11px] font-semibold py-2 px-2 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1 whitespace-nowrap touch-manipulation select-none"
                           >
                             <Share2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                             <span>{t('Share', 'शेयर')}</span>
-                          </button>
+                          </a>
                         )}
                       </div>
                     )}
@@ -1279,14 +1272,15 @@ _Powered by Svayaa_`;
                       )}
 
                       {config.featureWhatsAppShareEnabled && (
-                        <button
-                          onClick={(e) => shareProfileWhatsApp(activeProfile, e)}
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-3 py-2 rounded-lg text-xs flex items-center justify-center gap-1.5 shadow-xs cursor-pointer transition-colors"
+                        <a
+                          {...getWhatsAppLinkProps(buildProfileShareText(activeProfile))}
+                          onClick={(e) => e.stopPropagation()}
+                          className="bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-semibold px-3 py-2 rounded-lg text-xs flex items-center justify-center gap-1.5 shadow-xs cursor-pointer transition-colors touch-manipulation select-none"
                           title={t('Share on WhatsApp', 'व्हाट्सएप पर शेयर करें')}
                         >
                           <Share2 className="w-3.5 h-3.5" />
                           <span>{t('WhatsApp', 'व्हाट्सएप')}</span>
-                        </button>
+                        </a>
                       )}
 
                       <a 

@@ -58,17 +58,64 @@ export async function copyTextToClipboard(text: string): Promise<boolean> {
   }
 }
 
-function triggerWhatsAppRedirect(url: string): boolean {
-  if (typeof document === 'undefined') return false;
+function isEmbeddedFrame(): boolean {
+  if (typeof window === 'undefined') return false;
   try {
+    return window.self !== window.top;
+  } catch {
+    return true;
+  }
+}
+
+export function getWhatsAppLinkProps(text: string, phone?: string): {
+  href: string;
+  target?: '_blank';
+  rel?: string;
+} {
+  const { apiUrl } = buildWhatsAppUrls(text, phone);
+  if (isEmbeddedFrame()) {
+    return {
+      href: apiUrl,
+      target: '_blank',
+      rel: 'noopener noreferrer'
+    };
+  }
+  return {
+    href: apiUrl,
+    rel: 'noopener noreferrer'
+  };
+}
+
+function triggerWhatsAppRedirect(url: string): boolean {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return false;
+  try {
+    // Top-level (deployed site, PWA, Android WebView APK): same-frame navigation avoids
+    // Android WebView dropping target="_blank" links and triggers native App Links / Intent.
+    if (!isEmbeddedFrame()) {
+      window.location.assign(url);
+      return true;
+    }
+
+    // Inside an iframe (e.g. preview shell): use a rendered 1x1 anchor (never display:none)
+    // with target="_blank" so Chrome/Safari/Android can escape the frame cleanly.
     const link = document.createElement('a');
     link.href = url;
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
-    link.style.display = 'none';
+    link.style.position = 'fixed';
+    link.style.left = '0';
+    link.style.top = '0';
+    link.style.width = '1px';
+    link.style.height = '1px';
+    link.style.opacity = '0.01';
+    link.style.pointerEvents = 'none';
     document.body.appendChild(link);
     link.click();
-    document.body.removeChild(link);
+    setTimeout(() => {
+      if (link.parentNode) {
+        link.parentNode.removeChild(link);
+      }
+    }, 500);
     return true;
   } catch {
     return false;
@@ -77,17 +124,26 @@ function triggerWhatsAppRedirect(url: string): boolean {
 
 /**
  * Standard direct WhatsApp redirect: synchronously opens the WhatsApp share link
- * on click so browsers, PWAs, mobile devices, and desktop clients immediately
- * launch WhatsApp with the pre-filled message to select contacts and share.
+ * on click so browsers, Android WebViews, PWAs, mobile devices, and desktop clients
+ * immediately launch WhatsApp with the pre-filled message to select contacts and share.
  */
 export async function shareViaWhatsApp(text: string, phone?: string): Promise<WhatsAppSharePayload> {
   const { waMeUrl, apiUrl } = buildWhatsAppUrls(text, phone);
 
-  // Trigger WhatsApp redirect synchronously inside the user click gesture (no prior awaits)
+  // Trigger WhatsApp redirect synchronously inside the user click gesture (no prior awaits or focus changes)
   triggerWhatsAppRedirect(apiUrl);
 
-  // Best-effort background clipboard copy (does not block redirect)
-  const copied = await copyTextToClipboard(text);
+  // Best-effort non-intrusive async clipboard copy (never touches DOM focus mid-gesture)
+  let copied = false;
+  try {
+    if (typeof navigator !== 'undefined' && navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      copied = true;
+    }
+  } catch {
+    copied = false;
+  }
+
   return {
     text,
     phone,

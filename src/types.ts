@@ -90,6 +90,8 @@ export interface BusinessAd {
   banner?: string;
   bannerFit?: 'cover' | 'contain';
   description?: string;
+  ownerId?: string;
+  ownerName?: string;
   createdAt?: string;
   updatedAt?: string;
 }
