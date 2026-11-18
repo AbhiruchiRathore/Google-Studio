@@ -1,29 +1,58 @@
 import React, { useState } from 'react';
-import { BookOpen, FileText, Search, ChevronLeft, ChevronRight, CheckCircle2, Lock } from 'lucide-react';
-import { TabType } from '../types';
-import { BOOKLET_PAGES } from '../data/mockData';
+import { BookOpen, FileText, Search, ChevronLeft, ChevronRight, CheckCircle2, Lock, AlertCircle } from 'lucide-react';
+import { BusinessAd, MatrimonyProfile, TabType } from '../types';
+import { BOOKLET_PAGES, INITIAL_ADS, INITIAL_PROFILES } from '../data/mockData';
 import { useLanguage } from '../context/LanguageContext';
 import { useAdminConfig } from '../context/AdminConfigContext';
+import { generateAndDownloadBookletPdf } from '../utils/bookletPdfGenerator';
 
 interface BookletTabProps {
   onNavigateTab: (tab: TabType) => void;
+  profiles?: MatrimonyProfile[];
+  ads?: BusinessAd[];
 }
 
-export const BookletTab: React.FC<BookletTabProps> = ({ onNavigateTab }) => {
+export const BookletTab: React.FC<BookletTabProps> = ({
+  onNavigateTab,
+  profiles = INITIAL_PROFILES,
+  ads = INITIAL_ADS
+}) => {
   const { t } = useLanguage();
   const { config } = useAdminConfig();
   const [currentPage, setCurrentPage] = useState(0);
   const [downloading, setDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState(0);
   const [downloadSuccess, setDownloadSuccess] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
-  const handleDownloadPDF = () => {
-    if (!config.allowGuestDownloads) return;
+  const handleDownloadPDF = async () => {
+    if (!config.allowGuestDownloads || downloading) return;
     setDownloading(true);
-    setTimeout(() => {
-      setDownloading(false);
+    setDownloadProgress(5);
+    setDownloadError(null);
+    setDownloadSuccess(false);
+
+    try {
+      await generateAndDownloadBookletPdf({
+        bookletPages: BOOKLET_PAGES,
+        profiles,
+        ads,
+        onProgress: (pct) => setDownloadProgress(pct)
+      });
       setDownloadSuccess(true);
-      setTimeout(() => setDownloadSuccess(false), 4000);
-    }, 1200);
+      window.setTimeout(() => setDownloadSuccess(false), 4500);
+    } catch (err) {
+      console.error('PDF generation failed:', err);
+      setDownloadError(
+        t(
+          'Could not generate the PDF right now. Please try again.',
+          'अभी PDF तैयार नहीं हो सकी। कृपया पुनः प्रयास करें।'
+        )
+      );
+    } finally {
+      setDownloading(false);
+      setDownloadProgress(0);
+    }
   };
 
   const pageData = BOOKLET_PAGES[currentPage];
@@ -58,8 +87,8 @@ export const BookletTab: React.FC<BookletTabProps> = ({ onNavigateTab }) => {
             </h4>
             <p className="text-xs text-stone-300 font-light">
               {t(
-                'Contains 450+ Matrimonial Profiles & 120 Local Business Sponsor Ads',
-                '450+ वैवाहिक बायोडाटा एवं 120 स्थानीय समाज व्यापार विज्ञापन सम्मिलित'
+                `Contains ${profiles.length} Matrimonial Profiles & ${ads.length} Local Business Sponsor Ads`,
+                `${profiles.length} वैवाहिक बायोडाटा एवं ${ads.length} स्थानीय समाज व्यापार विज्ञापन सम्मिलित`
               )}
             </p>
           </div>
@@ -67,6 +96,7 @@ export const BookletTab: React.FC<BookletTabProps> = ({ onNavigateTab }) => {
           <div className="flex flex-wrap gap-3 justify-center pt-2">
             {config.allowGuestDownloads ? (
               <button 
+                type="button"
                 onClick={handleDownloadPDF}
                 disabled={downloading}
                 className="bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500 hover:from-amber-300 hover:to-amber-400 disabled:opacity-60 text-stone-950 text-xs font-bold px-5 py-2.5 rounded-xl shadow transition-all flex items-center gap-2 cursor-pointer"
@@ -74,7 +104,10 @@ export const BookletTab: React.FC<BookletTabProps> = ({ onNavigateTab }) => {
                 {downloading ? (
                   <>
                     <div className="w-4 h-4 border-2 border-stone-950 border-t-transparent rounded-full animate-spin" />
-                    {t('Generating PDF (45 MB)...', 'PDF तैयार हो रही है (45 MB)...')}
+                    {t(
+                      `Generating PDF (${downloadProgress}%)...`,
+                      `PDF तैयार हो रही है (${downloadProgress}%)...`
+                    )}
                   </>
                 ) : downloadSuccess ? (
                   <>
@@ -102,6 +135,13 @@ export const BookletTab: React.FC<BookletTabProps> = ({ onNavigateTab }) => {
               <Search className="w-4 h-4 text-amber-400" /> {t('Search Digitized Records', 'डिजिटल बायोडाटा खोजें')}
             </button>
           </div>
+
+          {downloadError && (
+            <div className="bg-rose-950/80 border border-rose-400/50 text-rose-100 text-xs px-4 py-2.5 rounded-xl flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-300 shrink-0" />
+              <span>{downloadError}</span>
+            </div>
+          )}
         </div>
 
         {/* INTERACTIVE BOOKLET READER VIEWPORT */}

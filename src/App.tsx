@@ -810,7 +810,11 @@ export const App: React.FC = () => {
 
         {currentTab === 'booklet' && (
           config.featureBookletEnabled ? (
-            <BookletTab onNavigateTab={navigateToTab} />
+            <BookletTab
+              onNavigateTab={navigateToTab}
+              profiles={visiblePublicProfiles}
+              ads={ads}
+            />
           ) : (
             renderFeatureDisabledCard('Digital E-Booklet', 'डिजिटल ई-पत्रिका')
           )

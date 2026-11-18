@@ -320,7 +320,7 @@ export function downloadPrintableHtml(options: PrintableDocumentOptions): void {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
 export function downloadCsvFile(filename: string, headers: string[], rows: (string | number)[][]): void {
@@ -345,5 +345,5 @@ export function downloadCsvFile(filename: string, headers: string[], rows: (stri
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
 }

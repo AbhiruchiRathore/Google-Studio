@@ -913,9 +913,29 @@ export default function SignUpTab({
     signupLockRef.current = true;
     setIsCreatingAccount(true);
 
+    const withAuthTimeout = <T,>(promise: Promise<T>, timeoutMs = 15000): Promise<T> => {
+      return new Promise<T>((resolve, reject) => {
+        const timer = window.setTimeout(() => {
+          const timeoutErr = new Error('Network request timed out') as Error & { code?: string };
+          timeoutErr.code = 'auth/network-request-failed';
+          reject(timeoutErr);
+        }, timeoutMs);
+        promise.then(
+          (val) => {
+            window.clearTimeout(timer);
+            resolve(val);
+          },
+          (err) => {
+            window.clearTimeout(timer);
+            reject(err);
+          }
+        );
+      });
+    };
+
     let firebaseUid = `user_${Date.now()}`;
     try {
-      // Check if username already exists in Firestore directory across devices
+      // Check if username already exists in Firestore directory across devices (bounded timeout)
       const existingRemoteUsername = await lookupEmailByUsernameFromFirestore(secondaryAuth, cleanUsername);
       if (existingRemoteUsername && existingRemoteUsername.email !== cleanEmail) {
         setSignupError(
@@ -928,10 +948,16 @@ export default function SignUpTab({
       }
 
       // Create user in Firebase Authentication (appears in Firebase Console -> Authentication -> Users)
-      const cred = await createUserWithEmailAndPassword(secondaryAuth, cleanEmail, signupPassword);
+      const cred = await withAuthTimeout(
+        createUserWithEmailAndPassword(secondaryAuth, cleanEmail, signupPassword),
+        15000
+      );
       if (cred.user) {
         firebaseUid = cred.user.uid;
-        await updateProfile(cred.user, { displayName: cleanFullName }).catch(() => {});
+        await Promise.race([
+          updateProfile(cred.user, { displayName: cleanFullName }).catch(() => {}),
+          new Promise<void>((resolve) => window.setTimeout(resolve, 2000))
+        ]);
         await syncUserProfileToFirestore(secondaryDb, secondaryAuth, cred.user, {
           username: cleanUsername,
           fullName: cleanFullName,
@@ -939,7 +965,10 @@ export default function SignUpTab({
           provider: 'password',
           isNewUser: true
         });
-        await signOut(secondaryAuth).catch(() => {});
+        await Promise.race([
+          signOut(secondaryAuth).catch(() => {}),
+          new Promise<void>((resolve) => window.setTimeout(resolve, 1000))
+        ]);
       }
     } catch (err: any) {
       const code = err?.code || '';

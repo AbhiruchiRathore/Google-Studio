@@ -35,6 +35,41 @@ export interface FirestoreErrorInfo {
   };
 }
 
+let firestoreAvailability: 'unknown' | 'available' | 'unavailable' = 'unknown';
+
+function isPermanentFirestoreUnavailableError(error: unknown): boolean {
+  const code = (error as { code?: string })?.code || '';
+  const msg = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  return (
+    code === 'not-found' ||
+    code === 'failed-precondition' ||
+    code === 'unavailable' ||
+    code === 'permission-denied' ||
+    msg.includes('does not exist') ||
+    msg.includes('client is offline') ||
+    msg.includes('backend didn\'t respond')
+  );
+}
+
+async function raceWithTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<{ timedOut: boolean; value: T }> {
+  let timerId: ReturnType<typeof setTimeout> | undefined;
+  const timeoutPromise = new Promise<{ timedOut: boolean; value: T }>((resolve) => {
+    timerId = setTimeout(() => resolve({ timedOut: true, value: fallback }), timeoutMs);
+  });
+
+  try {
+    const result = await Promise.race([
+      promise.then((value) => ({ timedOut: false, value })),
+      timeoutPromise
+    ]);
+    return result;
+  } finally {
+    if (timerId !== undefined) {
+      clearTimeout(timerId);
+    }
+  }
+}
+
 export function buildFirestoreErrorInfo(
   error: unknown,
   authInstance: Auth,
@@ -62,10 +97,19 @@ export function buildFirestoreErrorInfo(
 
 export async function testFirestoreConnection(): Promise<void> {
   try {
-    await getDocFromServer(doc(db, 'test', 'connection'));
+    const { timedOut } = await raceWithTimeout(
+      getDocFromServer(doc(db, 'test', 'connection')),
+      2000,
+      null
+    );
+    if (timedOut) {
+      firestoreAvailability = 'unavailable';
+    } else {
+      firestoreAvailability = 'available';
+    }
   } catch (error) {
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.warn('Firestore check: client is offline or Firestore is not yet enabled.');
+    if (isPermanentFirestoreUnavailableError(error)) {
+      firestoreAvailability = 'unavailable';
     }
   }
 }
@@ -80,7 +124,8 @@ export interface SyncUserProfileInput {
 
 /**
  * Syncs authenticated user profile data (Google OR Username/Password) to Firestore
- * without storing raw passwords. Uses non-blocking error reporting if Firestore rules/DB aren't configured.
+ * without storing raw passwords. Bounded by strict timeouts and short-circuits
+ * immediately when Firestore is not provisioned on the Firebase project so auth flows never hang.
  */
 export async function syncUserProfileToFirestore(
   firestoreDb: Firestore,
@@ -88,6 +133,10 @@ export async function syncUserProfileToFirestore(
   user: User,
   extra: SyncUserProfileInput = {}
 ): Promise<void> {
+  if (firestoreAvailability === 'unavailable') {
+    return;
+  }
+
   const providerId =
     extra.provider ||
     user.providerData?.[0]?.providerId ||
@@ -97,16 +146,18 @@ export async function syncUserProfileToFirestore(
   const cleanUsername = (extra.username || '').trim().toLowerCase();
   const displayName = (extra.fullName || user.displayName || cleanUsername || cleanEmail.split('@')[0] || 'Member').trim();
 
+  const writes: Promise<void>[] = [];
+
   const userPath = `users/${user.uid}`;
-  try {
-    await setDoc(
+  writes.push(
+    setDoc(
       doc(firestoreDb, 'users', user.uid),
       {
         uid: user.uid,
         email: cleanEmail,
         fullName: displayName,
-        username: cleanUsername || undefined,
-        phone: extra.phone || undefined,
+        ...(cleanUsername ? { username: cleanUsername } : {}),
+        ...(extra.phone ? { phone: extra.phone } : {}),
         photoUrl: user.photoURL || '',
         provider: providerId,
         emailVerified: Boolean(user.emailVerified),
@@ -114,16 +165,20 @@ export async function syncUserProfileToFirestore(
         lastSignedInAt: serverTimestamp()
       },
       { merge: true }
-    );
-  } catch (error) {
-    const info = buildFirestoreErrorInfo(error, authInstance, OperationType.WRITE, userPath);
-    console.warn('Firestore user profile sync skipped:', JSON.stringify(info));
-  }
+    ).catch((error) => {
+      if (isPermanentFirestoreUnavailableError(error)) {
+        firestoreAvailability = 'unavailable';
+      } else {
+        const info = buildFirestoreErrorInfo(error, authInstance, OperationType.WRITE, userPath);
+        console.warn('Firestore user profile sync skipped:', JSON.stringify(info));
+      }
+    })
+  );
 
   if (cleanUsername && cleanEmail) {
     const lookupPath = `usernames/${cleanUsername}`;
-    try {
-      await setDoc(
+    writes.push(
+      setDoc(
         doc(firestoreDb, 'usernames', cleanUsername),
         {
           uid: user.uid,
@@ -134,11 +189,20 @@ export async function syncUserProfileToFirestore(
           updatedAt: serverTimestamp()
         },
         { merge: true }
-      );
-    } catch (error) {
-      const info = buildFirestoreErrorInfo(error, authInstance, OperationType.WRITE, lookupPath);
-      console.warn('Firestore username lookup sync skipped:', JSON.stringify(info));
-    }
+      ).catch((error) => {
+        if (isPermanentFirestoreUnavailableError(error)) {
+          firestoreAvailability = 'unavailable';
+        } else {
+          const info = buildFirestoreErrorInfo(error, authInstance, OperationType.WRITE, lookupPath);
+          console.warn('Firestore username lookup sync skipped:', JSON.stringify(info));
+        }
+      })
+    );
+  }
+
+  const { timedOut } = await raceWithTimeout(Promise.allSettled(writes), 1500, null);
+  if (timedOut) {
+    firestoreAvailability = 'unavailable';
   }
 }
 
@@ -146,6 +210,10 @@ export async function lookupEmailByUsernameFromFirestore(
   authInstance: Auth,
   username: string
 ): Promise<{ email: string; username: string; fullName?: string; phone?: string } | null> {
+  if (firestoreAvailability === 'unavailable') {
+    return null;
+  }
+
   const clean = username.trim().toLowerCase();
   if (!clean || clean.includes('@') || /[^a-z0-9_]/.test(clean)) {
     return null;
@@ -153,7 +221,16 @@ export async function lookupEmailByUsernameFromFirestore(
 
   const lookupPath = `usernames/${clean}`;
   try {
-    const snap = await getDoc(doc(db, 'usernames', clean));
+    const { timedOut, value: snap } = await raceWithTimeout(
+      getDoc(doc(db, 'usernames', clean)),
+      1500,
+      null
+    );
+    if (timedOut || !snap) {
+      if (timedOut) firestoreAvailability = 'unavailable';
+      return null;
+    }
+    firestoreAvailability = 'available';
     if (!snap.exists()) return null;
     const data = snap.data();
     if (typeof data?.email === 'string' && data.email.trim()) {
@@ -165,8 +242,12 @@ export async function lookupEmailByUsernameFromFirestore(
       };
     }
   } catch (error) {
-    const info = buildFirestoreErrorInfo(error, authInstance, OperationType.GET, lookupPath);
-    console.warn('Firestore username lookup unavailable:', JSON.stringify(info));
+    if (isPermanentFirestoreUnavailableError(error)) {
+      firestoreAvailability = 'unavailable';
+    } else {
+      const info = buildFirestoreErrorInfo(error, authInstance, OperationType.GET, lookupPath);
+      console.warn('Firestore username lookup unavailable:', JSON.stringify(info));
+    }
   }
   return null;
 }
