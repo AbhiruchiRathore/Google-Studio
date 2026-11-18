@@ -11,7 +11,7 @@ interface FoundingOfferCardProps {
   onNavigateTab: (tab: TabType) => void;
 }
 
-const FOUNDING_LIMIT = 100;
+export const FOUNDING_PROFILE_LIMIT = 500;
 
 export const FoundingOfferCard: React.FC<FoundingOfferCardProps> = ({
   verifiedCount,
@@ -22,11 +22,11 @@ export const FoundingOfferCard: React.FC<FoundingOfferCardProps> = ({
   const { lang, t } = useLanguage();
   const { config } = useAdminConfig();
 
-  const claimedCount = Math.min(FOUNDING_LIMIT, Math.max(0, verifiedCount));
-  const remainingSpots = Math.max(0, FOUNDING_LIMIT - claimedCount);
-  const progressPercent = Math.min(100, Math.max(6, Math.round((claimedCount / FOUNDING_LIMIT) * 100)));
+  const claimedCount = Math.min(FOUNDING_PROFILE_LIMIT, Math.max(0, verifiedCount));
+  const remainingSpots = Math.max(0, FOUNDING_PROFILE_LIMIT - claimedCount);
+  const progressPercent = Math.min(100, Math.max(6, Math.round((claimedCount / FOUNDING_PROFILE_LIMIT) * 100)));
   const isOfferActive = remainingSpots > 0;
-  const userQualified = hasRegisteredProfile && claimedCount <= FOUNDING_LIMIT;
+  const userQualified = hasRegisteredProfile && verifiedCount <= FOUNDING_PROFILE_LIMIT;
 
   const handleClaimClick = () => {
     if (!authSession) {
@@ -38,7 +38,7 @@ export const FoundingOfferCard: React.FC<FoundingOfferCardProps> = ({
 
   return (
     <section
-      aria-label={t('Founding 100 Lifetime Premium Offer', 'प्रथम १०० सत्यापित प्रोफ़ाइल हेतु आजीवन प्रीमियम ऑफर')}
+      aria-label={t('First 500 Verified Profiles Lifetime Premium Offer', 'प्रथम ५०० सत्यापित प्रोफ़ाइल हेतु आजीवन प्रीमियम ऑफर')}
       className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#28060d] via-[#3d0a16] to-[#1e0308] text-white border border-amber-400/40 shadow-lg"
     >
       <div className="absolute -top-20 -right-16 w-72 h-72 rounded-full bg-amber-400/12 blur-3xl pointer-events-none" />
@@ -51,23 +51,23 @@ export const FoundingOfferCard: React.FC<FoundingOfferCardProps> = ({
             <Crown className="w-4 h-4 text-amber-300 shrink-0" />
             <span>
               {t(
-                'Founding Launch Offer · First 100 Verified Profiles',
-                'स्थापना विशेष ऑफर · प्रथम १०० सत्यापित बायोडाटा'
+                'Community Milestone Offer · First 500 Verified Profiles',
+                'समुदाय विशेष ऑफर · प्रथम ५०० सत्यापित बायोडाटा'
               )}
             </span>
           </div>
 
           <h3 className="text-2xl sm:text-3xl font-serif font-bold text-amber-50 leading-tight text-balance">
             {t(
-              'First 100 Verified Profiles Get Free Lifetime Premium Access',
-              'पहले १०० सत्यापित प्रोफ़ाइल को मिलेगा आजीवन निःशुल्क प्रीमियम एक्सेस'
+              'First 500 Verified Profiles Get Free Lifetime Premium Access',
+              'पहले ५०० सत्यापित प्रोफ़ाइल को मिलेगा आजीवन निःशुल्क प्रीमियम एक्सेस'
             )}
           </h3>
 
           <p className="text-xs sm:text-sm text-stone-300 leading-relaxed max-w-2xl">
             {t(
-              'Our community directory is newly launched and growing across every city. Publish and verify your biodata early to receive permanent premium membership with zero renewal fees as the network expands.',
-              'हमारा समाज पोर्टल नया है और सभी शहरों में तेजी से बढ़ रहा है। अभी अपना बायोडाटा सत्यापित करें और बिना किसी वार्षिक शुल्क के हमेशा के लिए प्रीमियम सदस्यता प्राप्त करें।'
+              'Over 220+ verified community profiles are already live across cities. Publish and verify your biodata before all 500 milestone spots fill up to receive permanent premium membership with zero renewal fees.',
+              'हमारे समाज पोर्टल पर २२०+ सत्यापित बायोडाटा पहले ही जुड़ चुके हैं। ५०० स्थान पूरे होने से पहले अपना बायोडाटा प्रकाशित व सत्यापित करें और बिना किसी वार्षिक शुल्क के हमेशा के लिए प्रीमियम सदस्यता प्राप्त करें।'
             )}
           </p>
 
@@ -114,8 +114,8 @@ export const FoundingOfferCard: React.FC<FoundingOfferCardProps> = ({
             <div className="flex items-center justify-between text-xs tabular-nums">
               <span className="font-semibold text-amber-100">
                 {lang === 'hi'
-                  ? `${claimedCount} / ${FOUNDING_LIMIT} सत्यापित स्थान भरे`
-                  : `${claimedCount} of ${FOUNDING_LIMIT} spots claimed`}
+                  ? `${claimedCount} / ${FOUNDING_PROFILE_LIMIT} सत्यापित स्थान भरे`
+                  : `${claimedCount} of ${FOUNDING_PROFILE_LIMIT} spots claimed`}
               </span>
               <span className="font-bold text-emerald-300">
                 {isOfferActive

@@ -16,6 +16,7 @@ import {
   rankProfilesByLocation
 } from '../utils/locationMatcher';
 import { getUserStorageKey } from '../utils/profileOwnership';
+import { FOUNDING_PROFILE_LIMIT } from './FoundingOfferCard';
 
 interface MatrimonyTabProps {
   authSession: AuthSession | null;
@@ -256,7 +257,7 @@ _Powered by Svayaa_`;
     () => profiles.filter((p) => p.verified !== false).length,
     [profiles]
   );
-  const isFoundingLifetimeMember = hasRegisteredProfile && verifiedProfilesCount <= 100;
+  const isFoundingLifetimeMember = hasRegisteredProfile && verifiedProfilesCount <= FOUNDING_PROFILE_LIMIT;
 
   const isAdminUser = authSession?.username === 'AdminAbhi';
   const hasActivePaidSubscription = Boolean(userSubscription?.active) || isFoundingLifetimeMember;
@@ -594,7 +595,7 @@ _Powered by Svayaa_`;
           </div>
         </div>
 
-        {/* Counter & Action - CLICK TO GO TO SEPARATE ADD FAMILY DETAILS PAGE */}
+        {/* Counter */}
         <div className="flex flex-col sm:flex-row justify-between items-center text-xs text-stone-500 pt-3 border-t border-stone-100 gap-2">
           <span className="font-medium text-stone-600">
             {lang === 'hi' ? (
@@ -603,14 +604,6 @@ _Powered by Svayaa_`;
               <>Showing <strong className="text-stone-900">{filteredProfiles.length}</strong> verified Rathore Samaj Biodatas</>
             )}
           </span>
-          <button 
-            type="button"
-            className="text-[#380812] hover:text-[#540e1b] font-semibold cursor-pointer flex items-center gap-1.5 bg-amber-50 hover:bg-amber-100/70 px-3.5 py-1.5 rounded-xl border border-amber-300/60 transition-colors"
-            onClick={() => onNavigateTab('family-details')}
-          >
-            <Users className="w-3.5 h-3.5 text-amber-800" />
-            <span>{t('+ Register family details', '+ पारिवारिक विवरण दर्ज करें')}</span>
-          </button>
         </div>
       </div>
       )}
