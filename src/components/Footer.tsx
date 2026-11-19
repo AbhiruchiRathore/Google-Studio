@@ -125,6 +125,17 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateTab }) => {
             >
               {t('Delete Account', 'खाता हटाएं')}
             </a>
+            <a
+              href="/child-safety"
+              onClick={(e) => {
+                e.preventDefault();
+                onNavigateTab('child-safety');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className="hover:text-amber-300 cursor-pointer transition-colors"
+            >
+              {t('Child Safety', 'बाल सुरक्षा मानक')}
+            </a>
           </div>
         </div>
 
@@ -158,6 +169,17 @@ export const Footer: React.FC<FooterProps> = ({ onNavigateTab }) => {
               className="text-stone-400 hover:text-amber-300 underline transition-colors"
             >
               {t('Delete Account', 'खाता हटाएं')}
+            </a>
+            <a
+              href="/child-safety"
+              onClick={(e) => {
+                e.preventDefault();
+                onNavigateTab('child-safety');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className="text-stone-400 hover:text-amber-300 underline transition-colors"
+            >
+              {t('Child Safety', 'बाल सुरक्षा')}
             </a>
           </div>
           <div>

@@ -12,7 +12,8 @@ export type TabType =
   | 'family-details'
   | 'admin'
   | 'privacy-policy'
-  | 'delete-account';
+  | 'delete-account'
+  | 'child-safety';
 
 export type GenderType = 'all' | 'Male' | 'Female';
 

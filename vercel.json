@@ -17,6 +17,22 @@
       "destination": "/index.html"
     },
     {
+      "source": "/child-safety",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/child-safety/",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/child-safety-standards",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/child-safety-standards/",
+      "destination": "/index.html"
+    },
+    {
       "source": "/((?!assets/|.*\\..*).*)",
       "destination": "/index.html"
     }

@@ -34,6 +34,22 @@ function emitStaticRouteHtmlPlugin(): Plugin {
           description:
             'Privacy Policy for Rathore Rishtey digital matrimony biodata directory and community portal.',
           noscriptHtml: ''
+        },
+        {
+          slug: 'child-safety',
+          title: 'Child Safety Standards Policy - Rathore Rishtey',
+          description:
+            'Rathore Rishtey Child Safety Standards & CSAE/CSAM prevention policy, 18+ age eligibility, in-app blocking and reporting, and designated child safety contact abhiruchirathore97@gmail.com.',
+          noscriptHtml:
+            '<noscript><main style="max-width:720px;margin:40px auto;font-family:sans-serif;padding:0 16px;line-height:1.6"><h1>Rathore Rishtey — Child Safety Standards &amp; CSAE Prevention Policy</h1><p>Rathore Rishtey maintains a strict zero-tolerance policy against Child Sexual Abuse and Exploitation (CSAE) and Child Sexual Abuse Material (CSAM).</p><h2>1. Zero-Tolerance Policy Against CSAE &amp; CSAM</h2><p>Any content, profile, message, image, or solicitation involving the exploitation, grooming, or endangerment of minors is strictly prohibited and results in immediate account termination and reporting to authorities.</p><h2>2. Adults 18+ Only &amp; Anti-Child Marriage</h2><p>Rathore Rishtey is strictly for adults aged 18 years and older (legal marriageable age: 18+ for brides, 21+ for grooms). Minors under 18 are not permitted on the platform.</p><h2>3. Reporting, Blocking &amp; Moderation</h2><p>Users can block profiles in-app and report suspected underage accounts or CSAE/CSAM violations. Verified violations are reported to I4C (cybercrime.gov.in), NCPCR, NCMEC, and law enforcement under the POCSO Act and IT Act.</p><h2>4. Child Safety Point of Contact</h2><p>Email: abhiruchirathore97@gmail.com (Subject: Urgent: Child Safety / CSAE Report - Rathore Rishtey)</p></main></noscript>'
+        },
+        {
+          slug: 'child-safety-standards',
+          title: 'Child Safety Standards Policy - Rathore Rishtey',
+          description:
+            'Rathore Rishtey Child Safety Standards & CSAE/CSAM prevention policy, 18+ age eligibility, in-app blocking and reporting, and designated child safety contact abhiruchirathore97@gmail.com.',
+          noscriptHtml:
+            '<noscript><main style="max-width:720px;margin:40px auto;font-family:sans-serif;padding:0 16px;line-height:1.6"><h1>Rathore Rishtey — Child Safety Standards &amp; CSAE Prevention Policy</h1><p>Rathore Rishtey maintains a strict zero-tolerance policy against Child Sexual Abuse and Exploitation (CSAE) and Child Sexual Abuse Material (CSAM).</p><h2>1. Zero-Tolerance Policy Against CSAE &amp; CSAM</h2><p>Any content, profile, message, image, or solicitation involving the exploitation, grooming, or endangerment of minors is strictly prohibited and results in immediate account termination and reporting to authorities.</p><h2>2. Adults 18+ Only &amp; Anti-Child Marriage</h2><p>Rathore Rishtey is strictly for adults aged 18 years and older (legal marriageable age: 18+ for brides, 21+ for grooms). Minors under 18 are not permitted on the platform.</p><h2>3. Reporting, Blocking &amp; Moderation</h2><p>Users can block profiles in-app and report suspected underage accounts or CSAE/CSAM violations. Verified violations are reported to I4C (cybercrime.gov.in), NCPCR, NCMEC, and law enforcement under the POCSO Act and IT Act.</p><h2>4. Child Safety Point of Contact</h2><p>Email: abhiruchirathore97@gmail.com (Subject: Urgent: Child Safety / CSAE Report - Rathore Rishtey)</p></main></noscript>'
         }
       ];
 

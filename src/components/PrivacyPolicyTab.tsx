@@ -159,6 +159,18 @@ export const PrivacyPolicyTab: React.FC<PrivacyPolicyTabProps> = ({ onNavigateTa
               abhiruchirathore97@gmail.com
             </a>
           </p>
+          <div className="pt-2 flex flex-wrap gap-4 text-xs">
+            <a
+              href="/child-safety"
+              onClick={(e) => {
+                e.preventDefault();
+                onNavigateTab('child-safety');
+              }}
+              className="font-bold text-[#6e1628] hover:text-[#851834] underline"
+            >
+              {t('Child Safety Standards Policy (CSAE) →', 'बाल सुरक्षा मानक नीति (CSAE) →')}
+            </a>
+          </div>
         </section>
       </article>
     </div>

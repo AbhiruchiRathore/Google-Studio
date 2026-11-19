@@ -19,6 +19,7 @@ import { WhatsAppShare } from './components/WhatsAppShare';
 import { Footer } from './components/Footer';
 import { PrivacyPolicyTab } from './components/PrivacyPolicyTab';
 import { DeleteAccountTab } from './components/DeleteAccountTab';
+import { ChildSafetyTab } from './components/ChildSafetyTab';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { FoundingOfferCard } from './components/FoundingOfferCard';
 import { LocationPermissionModal } from './components/LocationPermissionModal';
@@ -66,7 +67,8 @@ const VALID_TABS = new Set<TabType>([
   'dashboard',
   'admin',
   'privacy-policy',
-  'delete-account'
+  'delete-account',
+  'child-safety'
 ]);
 
 function hasPasswordResetParams(): boolean {
@@ -95,6 +97,12 @@ function isDeleteAccountPathname(): boolean {
   return window.location.pathname.replace(/\/+$/, '') === '/delete-account';
 }
 
+function isChildSafetyPathname(): boolean {
+  if (typeof window === 'undefined') return false;
+  const clean = window.location.pathname.replace(/\/+$/, '');
+  return clean === '/child-safety' || clean === '/child-safety-standards';
+}
+
 function getInitialTabFromUrl(): TabType {
   if (typeof window === 'undefined') return 'matrimony';
   if (hasPasswordResetParams()) {
@@ -105,6 +113,9 @@ function getInitialTabFromUrl(): TabType {
   }
   if (isDeleteAccountPathname()) {
     return 'delete-account';
+  }
+  if (isChildSafetyPathname()) {
+    return 'child-safety';
   }
   const hashTab = window.location.hash.replace('#', '').split('?')[0] as TabType;
   if (VALID_TABS.has(hashTab) && hashTab !== 'admin') {
@@ -119,6 +130,9 @@ function getUrlForTab(tab: TabType, search = ''): string {
   }
   if (tab === 'delete-account') {
     return '/delete-account';
+  }
+  if (tab === 'child-safety') {
+    return '/child-safety';
   }
   return `/${search}#${tab}`;
 }
@@ -193,9 +207,11 @@ export const App: React.FC = () => {
             ? 'privacy-policy'
             : isDeleteAccountPathname()
               ? 'delete-account'
-              : VALID_TABS.has(hashTab)
-                ? hashTab
-                : 'matrimony';
+              : isChildSafetyPathname()
+                ? 'child-safety'
+                : VALID_TABS.has(hashTab)
+                  ? hashTab
+                  : 'matrimony';
 
       // Prevent logged-in users from being thrown back onto the signup / sign-out screen on hardware Back
       if (authSessionRef.current && targetTab === 'signup') {
@@ -1207,6 +1223,10 @@ export const App: React.FC = () => {
             onNavigateTab={navigateToTab}
             onOpenAccountSettings={handleOpenAccountSettings}
           />
+        )}
+
+        {currentTab === 'child-safety' && (
+          <ChildSafetyTab onNavigateTab={navigateToTab} />
         )}
       </main>
 
