@@ -576,7 +576,7 @@ _Powered by Svayaa_`;
 
   // IF USER IS SIGNED IN: Full profiles view
   return (
-    <div className="space-y-6">
+    <div id="biodatas-section" className="space-y-6 scroll-mt-20">
 
       {/* QUICK GENDER PROMPT FOR ACCOUNTS WITHOUT GENDER YET (e.g. GOOGLE SIGN-IN BEFORE PROFILE) */}
       {!isAdminUser && candidateGender === null && (

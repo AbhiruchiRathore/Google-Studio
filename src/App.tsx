@@ -154,26 +154,47 @@ export const App: React.FC = () => {
   const [kundaliBoyId, setKundaliBoyId] = useState<number | string | null>(null);
   const [kundaliGirlId, setKundaliGirlId] = useState<number | string | null>(null);
 
-  const navigateToTab = useCallback((nextTab: TabType, options?: { replace?: boolean }) => {
-    setCurrentTab((prev) => {
-      if (prev !== nextTab && typeof window !== 'undefined') {
-        try {
-          const targetUrl = getUrlForTab(nextTab);
-          if (options?.replace) {
-            window.history.replaceState({ tab: nextTab }, '', targetUrl);
-          } else {
-            window.history.pushState({ tab: nextTab }, '', targetUrl);
+  const navigateToTab = useCallback(
+    (nextTab: TabType, options?: { replace?: boolean; scrollToId?: string }) => {
+      setCurrentTab((prev) => {
+        if (prev !== nextTab && typeof window !== 'undefined') {
+          try {
+            const targetUrl = getUrlForTab(nextTab);
+            if (options?.replace) {
+              window.history.replaceState({ tab: nextTab }, '', targetUrl);
+            } else {
+              window.history.pushState({ tab: nextTab }, '', targetUrl);
+            }
+          } catch {
+            // Ignore history errors in restricted environments
           }
-        } catch {
-          // Ignore history errors in restricted environments
+        }
+        return nextTab;
+      });
+
+      if (typeof window !== 'undefined') {
+        if (options?.scrollToId) {
+          const targetId = options.scrollToId;
+          const performScroll = () => {
+            const el = document.getElementById(targetId);
+            if (el) {
+              el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              return true;
+            }
+            return false;
+          };
+          window.requestAnimationFrame(() => {
+            if (!performScroll()) {
+              window.setTimeout(performScroll, 120);
+            }
+          });
+        } else {
+          window.scrollTo({ top: 0, behavior: 'smooth' });
         }
       }
-      return nextTab;
-    });
-    if (typeof window !== 'undefined') {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-  }, []);
+    },
+    []
+  );
 
   // Initialize history stack and handle hardware/browser Back button cleanly
   useEffect(() => {

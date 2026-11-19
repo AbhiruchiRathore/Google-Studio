@@ -29,7 +29,7 @@ interface SignUpTabProps {
   authSession: AuthSession | null;
   onLogin: (session: AuthSession, redirectTab?: TabType) => void;
   onLogout: () => void;
-  onNavigateTab: (tab: TabType) => void;
+  onNavigateTab: (tab: TabType, options?: { replace?: boolean; scrollToId?: string }) => void;
   onSignupComplete?: () => void;
   hasRegisteredProfile?: boolean;
   unlockedCount?: number;
@@ -1386,7 +1386,7 @@ export default function SignUpTab({
               {t('Member Dashboard', 'सदस्य डैशबोर्ड')}
             </button>
             <button
-              onClick={() => onNavigateTab('matrimony')}
+              onClick={() => onNavigateTab('matrimony', { scrollToId: 'biodatas-section' })}
               className="bg-[#6e1628] hover:bg-[#851834] text-amber-100 font-bold py-2.5 px-3 rounded-xl text-xs shadow-xs cursor-pointer"
             >
               {t('Browse Biodatas', 'बायोडाटा देखें')}

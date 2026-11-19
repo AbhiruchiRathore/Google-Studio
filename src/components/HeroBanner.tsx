@@ -6,7 +6,7 @@ import { useAdminConfig } from '../context/AdminConfigContext';
 import { FOUNDING_PROFILE_LIMIT } from './FoundingOfferCard';
 
 interface HeroBannerProps {
-  onNavigateTab?: (tab: TabType) => void;
+  onNavigateTab?: (tab: TabType, options?: { replace?: boolean; scrollToId?: string }) => void;
   authSession?: AuthSession | null;
 }
 
@@ -62,7 +62,14 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ onNavigateTab, authSessi
           <div className="pt-2 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center justify-center gap-2.5 sm:gap-3">
             {config.featureMatrimonyEnabled && (
               <button
-                onClick={() => onNavigateTab && onNavigateTab(targetActionTab('matrimony'))}
+                onClick={() => {
+                  if (!onNavigateTab) return;
+                  if (authSession) {
+                    onNavigateTab('matrimony', { scrollToId: 'biodatas-section' });
+                  } else {
+                    onNavigateTab('signup');
+                  }
+                }}
                 className="w-full sm:w-auto bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-stone-950 font-bold px-6 py-2.5 rounded-xl text-xs sm:text-sm shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer hover:scale-102"
               >
                 <Users className="w-4 h-4 text-stone-950" />
