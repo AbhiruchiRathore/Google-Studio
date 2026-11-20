@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import { LanguageProvider } from './context/LanguageContext';
 import { AdminConfigProvider } from './context/AdminConfigContext';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import './index.css';
 
 function syncAndroidEdgeInsets() {
@@ -71,11 +72,13 @@ const rootElement = document.getElementById('root');
 if (rootElement) {
   ReactDOM.createRoot(rootElement).render(
     <React.StrictMode>
-      <LanguageProvider>
-        <AdminConfigProvider>
-          <App />
-        </AdminConfigProvider>
-      </LanguageProvider>
+      <ErrorBoundary>
+        <LanguageProvider>
+          <AdminConfigProvider>
+            <App />
+          </AdminConfigProvider>
+        </LanguageProvider>
+      </ErrorBoundary>
     </React.StrictMode>
   );
 }

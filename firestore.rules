@@ -1,0 +1,405 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // =========================================================================
+    // PILLAR 1: GLOBAL SAFETY NET (Default Deny Catch-All)
+    // =========================================================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // =========================================================================
+    // PRIMITIVE HELPERS
+    // =========================================================================
+    function isSignedIn() {
+      return request.auth != null && request.auth.uid != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (request.auth.token.email == 'abhiruchirathore97@gmail.com' && request.auth.token.email_verified == true)
+      );
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidUsername(username) {
+      return username is string && username.size() >= 3 && username.size() <= 40 && username.matches('^[a-z0-9_]+$');
+    }
+
+    function optionalString(data, key, maxLen) {
+      return !(key in data) || (data[key] is string && data[key].size() <= maxLen);
+    }
+
+    function optionalGender(data) {
+      return !('gender' in data) || (data.gender is string && data.gender in ['Male', 'Female']);
+    }
+
+    // =========================================================================
+    // ENTITY VALIDATION BLUEPRINTS
+    // =========================================================================
+    function isValidUserDoc(data, userId) {
+      return data.keys().hasAll(['uid', 'email', 'fullName', 'provider', 'emailVerified', 'lastSignedInAt']) &&
+        data.keys().hasOnly([
+          'uid', 'email', 'fullName', 'username', 'phone', 'gender',
+          'photoUrl', 'provider', 'emailVerified', 'createdAt', 'lastSignedInAt'
+        ]) &&
+        data.uid is string && data.uid == userId &&
+        data.email is string && data.email.size() <= 200 &&
+        data.fullName is string && data.fullName.size() >= 1 && data.fullName.size() <= 120 &&
+        (!('username' in data) || isValidUsername(data.username)) &&
+        optionalString(data, 'phone', 20) &&
+        optionalGender(data) &&
+        optionalString(data, 'photoUrl', 2000) &&
+        data.provider is string && data.provider.size() >= 1 && data.provider.size() <= 40 &&
+        data.emailVerified is bool &&
+        data.lastSignedInAt == request.time;
+    }
+
+    function isValidUsernameDoc(data, username) {
+      return data.keys().hasAll(['uid', 'username', 'email', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'username', 'email', 'fullName', 'phone', 'gender', 'updatedAt']) &&
+        data.uid is string && isValidId(data.uid) &&
+        data.username is string && data.username == username &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 200 &&
+        optionalString(data, 'fullName', 120) &&
+        optionalString(data, 'phone', 20) &&
+        optionalGender(data) &&
+        data.updatedAt == request.time;
+    }
+
+    function isValidMatrimonyProfile(data, profileId) {
+      return data.keys().hasAll([
+          'id', 'ownerUid', 'ownerId', 'name', 'age', 'gender',
+          'gotra', 'city', 'education', 'profession', 'status', 'verified', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'ownerUid', 'ownerId', 'ownerName', 'name', 'age', 'gender',
+          'gotra', 'city', 'state', 'native', 'location', 'education', 'profession',
+          'income', 'height', 'dob', 'birthTime', 'familyDetails', 'about',
+          'photo', 'coverPhoto', 'gallery', 'socialLinks', 'status', 'visibility', 'verified',
+          'createdAtIso', 'createdAt', 'updatedAt'
+        ]) &&
+        data.id is string && data.id == profileId &&
+        data.ownerUid is string && isValidId(data.ownerUid) &&
+        data.ownerId is string && data.ownerId.size() >= 1 && data.ownerId.size() <= 160 &&
+        optionalString(data, 'ownerName', 120) &&
+        data.name is string && data.name.size() >= 1 && data.name.size() <= 120 &&
+        data.age is number && data.age >= 18 && data.age <= 99 &&
+        data.gender is string && data.gender in ['Male', 'Female'] &&
+        data.gotra is string && data.gotra.size() >= 1 && data.gotra.size() <= 80 &&
+        data.city is string && data.city.size() >= 1 && data.city.size() <= 100 &&
+        optionalString(data, 'state', 100) &&
+        optionalString(data, 'native', 120) &&
+        optionalString(data, 'location', 180) &&
+        data.education is string && data.education.size() >= 1 && data.education.size() <= 200 &&
+        data.profession is string && data.profession.size() >= 1 && data.profession.size() <= 200 &&
+        optionalString(data, 'income', 100) &&
+        optionalString(data, 'height', 40) &&
+        optionalString(data, 'dob', 40) &&
+        optionalString(data, 'birthTime', 40) &&
+        optionalString(data, 'familyDetails', 2000) &&
+        optionalString(data, 'about', 2000) &&
+        optionalString(data, 'photo', 350000) &&
+        optionalString(data, 'coverPhoto', 350000) &&
+        (!('gallery' in data) || (
+          data.gallery is list &&
+          data.gallery.size() <= 5 &&
+          (data.gallery.size() == 0 || (data.gallery[0] is string && data.gallery[0].size() <= 350000))
+        )) &&
+        (!('socialLinks' in data) || (
+          data.socialLinks is map &&
+          data.socialLinks.keys().hasOnly(['linkedin', 'instagram', 'website']) &&
+          optionalString(data.socialLinks, 'linkedin', 300) &&
+          optionalString(data.socialLinks, 'instagram', 120) &&
+          optionalString(data.socialLinks, 'website', 300)
+        )) &&
+        data.status is string && data.status in ['active', 'draft', 'archived'] &&
+        (!('visibility' in data) || (data.visibility is string && data.visibility in ['public', 'verified_only', 'private'])) &&
+        data.verified is bool &&
+        optionalString(data, 'createdAtIso', 64) &&
+        data.createdAt is timestamp &&
+        data.updatedAt == request.time;
+    }
+
+    function isValidPrivateContact(data) {
+      return data.keys().hasAll(['ownerUid', 'phone', 'contact', 'updatedAt']) &&
+        data.keys().hasOnly(['ownerUid', 'phone', 'contact', 'updatedAt']) &&
+        data.ownerUid is string && isValidId(data.ownerUid) &&
+        data.phone is string && data.phone.size() >= 5 && data.phone.size() <= 30 &&
+        data.contact is string && data.contact.size() >= 5 && data.contact.size() <= 30 &&
+        data.updatedAt == request.time;
+    }
+
+    function isValidUnlock(data, userId) {
+      return data.keys().hasAll(['uid', 'unlockedAt']) &&
+        data.keys().hasOnly(['uid', 'unlockedAt']) &&
+        data.uid is string && data.uid == userId &&
+        data.unlockedAt == request.time;
+    }
+
+    function isValidAd(data, adId) {
+      return data.keys().hasAll([
+          'id', 'ownerUid', 'ownerId', 'title', 'owner', 'category',
+          'address', 'status', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'ownerUid', 'ownerId', 'ownerName', 'title', 'owner', 'category',
+          'city', 'address', 'phone', 'contacts', 'tagline', 'offer', 'description',
+          'rating', 'isFeatured', 'adTier', 'adPricePaid', 'status',
+          'banner', 'bannerFit', 'createdAtIso', 'createdAt', 'updatedAt'
+        ]) &&
+        data.id is string && data.id == adId &&
+        data.ownerUid is string && isValidId(data.ownerUid) &&
+        data.ownerId is string && data.ownerId.size() >= 1 && data.ownerId.size() <= 160 &&
+        optionalString(data, 'ownerName', 120) &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 160 &&
+        data.owner is string && data.owner.size() >= 1 && data.owner.size() <= 120 &&
+        data.category is string && data.category.size() >= 1 && data.category.size() <= 100 &&
+        optionalString(data, 'city', 100) &&
+        data.address is string && data.address.size() >= 1 && data.address.size() <= 300 &&
+        optionalString(data, 'phone', 40) &&
+        (!('contacts' in data) || (
+          data.contacts is list &&
+          data.contacts.size() <= 5 &&
+          (data.contacts.size() == 0 || (
+            data.contacts[0] is map &&
+            data.contacts[0].keys().hasAll(['name', 'phone']) &&
+            data.contacts[0].keys().hasOnly(['name', 'phone']) &&
+            data.contacts[0].name is string && data.contacts[0].name.size() <= 120 &&
+            data.contacts[0].phone is string && data.contacts[0].phone.size() <= 30
+          ))
+        )) &&
+        optionalString(data, 'tagline', 240) &&
+        optionalString(data, 'offer', 200) &&
+        optionalString(data, 'description', 2000) &&
+        optionalString(data, 'rating', 30) &&
+        (!('isFeatured' in data) || data.isFeatured is bool) &&
+        (!('adTier' in data) || (data.adTier is string && data.adTier in ['standard', 'featured', 'spotlight'])) &&
+        (!('adPricePaid' in data) || data.adPricePaid is number) &&
+        data.status is string && data.status in ['active', 'draft', 'paused'] &&
+        optionalString(data, 'banner', 350000) &&
+        (!('bannerFit' in data) || (data.bannerFit is string && data.bannerFit in ['cover', 'contain'])) &&
+        optionalString(data, 'createdAtIso', 64) &&
+        data.createdAt is timestamp &&
+        data.updatedAt == request.time;
+    }
+
+    function isValidEvent(data, eventId) {
+      return data.keys().hasAll(['id', 'ownerUid', 'title', 'date', 'location', 'description', 'status', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly([
+          'id', 'ownerUid', 'title', 'date', 'time', 'location',
+          'venue', 'organizedBy', 'description', 'badge', 'status', 'createdAt', 'updatedAt'
+        ]) &&
+        data.id is string && data.id == eventId &&
+        data.ownerUid is string && isValidId(data.ownerUid) &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 180 &&
+        data.date is string && data.date.size() >= 1 && data.date.size() <= 80 &&
+        optionalString(data, 'time', 60) &&
+        data.location is string && data.location.size() >= 1 && data.location.size() <= 200 &&
+        optionalString(data, 'venue', 200) &&
+        optionalString(data, 'organizedBy', 160) &&
+        data.description is string && data.description.size() >= 1 && data.description.size() <= 2000 &&
+        optionalString(data, 'badge', 60) &&
+        data.status is string && data.status in ['active', 'archived'] &&
+        data.createdAt is timestamp &&
+        data.updatedAt == request.time;
+    }
+
+    // =========================================================================
+    // COLLECTION RULES
+    // =========================================================================
+
+    match /test/connection {
+      allow get: if true;
+    }
+
+    match /admins/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if false;
+      allow write: if false;
+    }
+
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && isValidId(userId) && isOwner(userId) &&
+        isValidUserDoc(incoming(), userId) &&
+        incoming().createdAt == request.time;
+      allow update: if isSignedIn() && isValidId(userId) && (isOwner(userId) || isAdmin()) &&
+        isValidUserDoc(incoming(), userId) &&
+        incoming().uid == existing().uid &&
+        (!('createdAt' in existing()) || incoming().createdAt == existing().createdAt) &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'fullName', 'username', 'phone', 'gender', 'photoUrl', 'emailVerified', 'lastSignedInAt'
+        ]);
+      allow delete: if isSignedIn() && isValidId(userId) && (isOwner(userId) || isAdmin());
+    }
+
+    match /usernames/{username} {
+      allow get: if isValidUsername(username);
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && isValidUsername(username) &&
+        isValidUsernameDoc(incoming(), username) &&
+        incoming().uid == request.auth.uid;
+      allow update: if isSignedIn() && isValidUsername(username) &&
+        isValidUsernameDoc(incoming(), username) &&
+        existing().uid == request.auth.uid &&
+        incoming().uid == existing().uid &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'email', 'fullName', 'phone', 'gender', 'updatedAt'
+        ]);
+      allow delete: if isSignedIn() && isValidUsername(username) &&
+        (existing().uid == request.auth.uid || isAdmin());
+    }
+
+    match /profiles/{profileId} {
+      allow get: if isValidId(profileId) && (
+        (existing().status == 'active' && existing().verified == true) ||
+        (isSignedIn() && existing().ownerUid == request.auth.uid) ||
+        isAdmin()
+      );
+      allow list: if (resource.data.status == 'active' && resource.data.verified == true) ||
+        (isSignedIn() && resource.data.ownerUid == request.auth.uid) ||
+        isAdmin();
+
+      allow create: if isSignedIn() && isValidId(profileId) &&
+        isValidMatrimonyProfile(incoming(), profileId) &&
+        incoming().ownerUid == request.auth.uid &&
+        incoming().createdAt == request.time;
+
+      allow update: if isSignedIn() && isValidId(profileId) &&
+        isValidMatrimonyProfile(incoming(), profileId) &&
+        incoming().ownerUid == existing().ownerUid &&
+        incoming().id == existing().id &&
+        incoming().createdAt == existing().createdAt && (
+          isAdmin() ||
+          (
+            existing().ownerUid == request.auth.uid &&
+            incoming().verified == existing().verified &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'name', 'age', 'gender', 'gotra', 'city', 'state', 'native', 'location',
+              'education', 'profession', 'income', 'height', 'dob', 'birthTime',
+              'familyDetails', 'about', 'photo', 'coverPhoto', 'gallery', 'socialLinks',
+              'status', 'visibility', 'ownerName', 'updatedAt'
+            ])
+          )
+        );
+
+      allow delete: if isSignedIn() && isValidId(profileId) &&
+        (existing().ownerUid == request.auth.uid || isAdmin());
+
+      match /private/{docId} {
+        allow get: if isValidId(profileId) && docId == 'contact' && (
+          isAdmin() ||
+          (isSignedIn() && (
+            get(/databases/$(database)/documents/profiles/$(profileId)).data.ownerUid == request.auth.uid ||
+            exists(/databases/$(database)/documents/profiles/$(profileId)/unlocks/$(request.auth.uid))
+          ))
+        );
+        allow list: if isAdmin();
+        allow create, update: if isSignedIn() && isValidId(profileId) && docId == 'contact' &&
+          isValidPrivateContact(incoming()) &&
+          getAfter(/databases/$(database)/documents/profiles/$(profileId)).data.ownerUid == request.auth.uid &&
+          incoming().ownerUid == request.auth.uid;
+        allow delete: if isSignedIn() && isValidId(profileId) && docId == 'contact' && (
+          isAdmin() ||
+          !exists(/databases/$(database)/documents/profiles/$(profileId)) ||
+          get(/databases/$(database)/documents/profiles/$(profileId)).data.ownerUid == request.auth.uid
+        );
+      }
+
+      match /unlocks/{userId} {
+        allow get: if isValidId(profileId) && isValidId(userId) && (isOwner(userId) || isAdmin());
+        allow list: if isAdmin();
+        allow create: if isSignedIn() && isValidId(profileId) && isValidId(userId) &&
+          isOwner(userId) &&
+          exists(/databases/$(database)/documents/profiles/$(profileId)) &&
+          isValidUnlock(incoming(), userId);
+        allow update, delete: if isAdmin() || (isSignedIn() && isValidId(profileId) && isValidId(userId) && isOwner(userId));
+      }
+    }
+
+    match /ads/{adId} {
+      allow get: if isValidId(adId) && (
+        existing().status == 'active' ||
+        (isSignedIn() && existing().ownerUid == request.auth.uid) ||
+        isAdmin()
+      );
+      allow list: if resource.data.status == 'active' ||
+        (isSignedIn() && resource.data.ownerUid == request.auth.uid) ||
+        isAdmin();
+
+      allow create: if isSignedIn() && isValidId(adId) &&
+        isValidAd(incoming(), adId) &&
+        incoming().ownerUid == request.auth.uid &&
+        incoming().createdAt == request.time;
+
+      allow update: if isSignedIn() && isValidId(adId) &&
+        isValidAd(incoming(), adId) &&
+        incoming().ownerUid == existing().ownerUid &&
+        incoming().id == existing().id &&
+        incoming().createdAt == existing().createdAt && (
+          isAdmin() ||
+          (
+            existing().ownerUid == request.auth.uid &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'title', 'owner', 'category', 'city', 'address', 'phone', 'contacts',
+              'tagline', 'offer', 'description', 'isFeatured', 'adTier',
+              'adPricePaid', 'status', 'banner', 'bannerFit', 'ownerName', 'updatedAt'
+            ])
+          )
+        );
+
+      allow delete: if isSignedIn() && isValidId(adId) &&
+        (existing().ownerUid == request.auth.uid || isAdmin());
+    }
+
+    match /events/{eventId} {
+      allow get: if isValidId(eventId) && (
+        existing().status == 'active' ||
+        (isSignedIn() && existing().ownerUid == request.auth.uid) ||
+        isAdmin()
+      );
+      allow list: if resource.data.status == 'active' ||
+        (isSignedIn() && resource.data.ownerUid == request.auth.uid) ||
+        isAdmin();
+
+      allow create: if isSignedIn() && isValidId(eventId) &&
+        isValidEvent(incoming(), eventId) &&
+        incoming().ownerUid == request.auth.uid &&
+        incoming().createdAt == request.time;
+
+      allow update: if isSignedIn() && isValidId(eventId) &&
+        isValidEvent(incoming(), eventId) &&
+        incoming().ownerUid == existing().ownerUid &&
+        incoming().id == existing().id &&
+        incoming().createdAt == existing().createdAt &&
+        (existing().ownerUid == request.auth.uid || isAdmin()) &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'title', 'date', 'time', 'location', 'venue',
+          'organizedBy', 'description', 'badge', 'status', 'updatedAt'
+        ]);
+
+      allow delete: if isSignedIn() && isValidId(eventId) &&
+        (existing().ownerUid == request.auth.uid || isAdmin());
+    }
+  }
+}

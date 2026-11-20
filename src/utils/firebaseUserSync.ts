@@ -6,9 +6,10 @@ import {
   getDoc,
   getDocFromServer,
   serverTimestamp,
-  setDoc
+  setDoc,
+  updateDoc
 } from 'firebase/firestore';
-import { db } from '../firebase';
+import { auth, db } from '../firebase';
 
 export enum OperationType {
   CREATE = 'create',
@@ -36,41 +37,6 @@ export interface FirestoreErrorInfo {
   };
 }
 
-let firestoreAvailability: 'unknown' | 'available' | 'unavailable' = 'unknown';
-
-function isPermanentFirestoreUnavailableError(error: unknown): boolean {
-  const code = (error as { code?: string })?.code || '';
-  const msg = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
-  return (
-    code === 'not-found' ||
-    code === 'failed-precondition' ||
-    code === 'unavailable' ||
-    code === 'permission-denied' ||
-    msg.includes('does not exist') ||
-    msg.includes('client is offline') ||
-    msg.includes('backend didn\'t respond')
-  );
-}
-
-async function raceWithTimeout<T>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<{ timedOut: boolean; value: T }> {
-  let timerId: ReturnType<typeof setTimeout> | undefined;
-  const timeoutPromise = new Promise<{ timedOut: boolean; value: T }>((resolve) => {
-    timerId = setTimeout(() => resolve({ timedOut: true, value: fallback }), timeoutMs);
-  });
-
-  try {
-    const result = await Promise.race([
-      promise.then((value) => ({ timedOut: false, value })),
-      timeoutPromise
-    ]);
-    return result;
-  } finally {
-    if (timerId !== undefined) {
-      clearTimeout(timerId);
-    }
-  }
-}
-
 export function buildFirestoreErrorInfo(
   error: unknown,
   authInstance: Auth,
@@ -96,21 +62,23 @@ export function buildFirestoreErrorInfo(
   };
 }
 
+export function handleFirestoreError(
+  error: unknown,
+  operationType: OperationType,
+  path: string | null,
+  authInstance: Auth = auth
+): never {
+  const errInfo = buildFirestoreErrorInfo(error, authInstance, operationType, path);
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
+
 export async function testFirestoreConnection(): Promise<void> {
   try {
-    const { timedOut } = await raceWithTimeout(
-      getDocFromServer(doc(db, 'test', 'connection')),
-      2000,
-      null
-    );
-    if (timedOut) {
-      firestoreAvailability = 'unavailable';
-    } else {
-      firestoreAvailability = 'available';
-    }
+    await getDocFromServer(doc(db, 'test', 'connection'));
   } catch (error) {
-    if (isPermanentFirestoreUnavailableError(error)) {
-      firestoreAvailability = 'unavailable';
+    if (error instanceof Error && error.message.includes('the client is offline')) {
+      console.error('Please check your Firebase configuration.');
     }
   }
 }
@@ -124,10 +92,16 @@ export interface SyncUserProfileInput {
   isNewUser?: boolean;
 }
 
+const VALID_USERNAME_REGEX = /^[a-z0-9_]{3,40}$/;
+
+function sanitizeValidUsername(raw?: string): string {
+  const clean = (raw || '').trim().toLowerCase();
+  return VALID_USERNAME_REGEX.test(clean) ? clean : '';
+}
+
 /**
  * Syncs authenticated user profile data (Google OR Username/Password) to Firestore
- * without storing raw passwords. Bounded by strict timeouts and short-circuits
- * immediately when Firestore is not provisioned on the Firebase project so auth flows never hang.
+ * without storing raw passwords, matching strict create-vs-update security rules.
  */
 export async function syncUserProfileToFirestore(
   firestoreDb: Firestore,
@@ -135,106 +109,130 @@ export async function syncUserProfileToFirestore(
   user: User,
   extra: SyncUserProfileInput = {}
 ): Promise<void> {
-  if (firestoreAvailability === 'unavailable') {
-    return;
-  }
-
-  const providerId =
+  const providerId = (
     extra.provider ||
     user.providerData?.[0]?.providerId ||
-    'password';
+    'password'
+  ).slice(0, 40);
 
-  const cleanEmail = (user.email || '').trim().toLowerCase();
-  const cleanUsername = (extra.username || '').trim().toLowerCase();
-  const displayName = (extra.fullName || user.displayName || cleanUsername || cleanEmail.split('@')[0] || 'Member').trim();
-
-  const writes: Promise<void>[] = [];
+  const cleanEmail = (user.email || '').trim().toLowerCase().slice(0, 200);
+  const cleanUsername = sanitizeValidUsername(extra.username);
+  const cleanPhone = (extra.phone || '').trim().slice(0, 20);
+  const cleanPhotoUrl = (user.photoURL || '').trim().slice(0, 2000);
+  const displayName = (
+    extra.fullName ||
+    user.displayName ||
+    cleanUsername ||
+    cleanEmail.split('@')[0] ||
+    'Member'
+  )
+    .trim()
+    .slice(0, 120);
 
   const userPath = `users/${user.uid}`;
-  writes.push(
-    setDoc(
-      doc(firestoreDb, 'users', user.uid),
-      {
-        uid: user.uid,
-        email: cleanEmail,
-        fullName: displayName,
-        ...(cleanUsername ? { username: cleanUsername } : {}),
-        ...(extra.phone ? { phone: extra.phone } : {}),
-        ...(extra.gender ? { gender: extra.gender } : {}),
-        photoUrl: user.photoURL || '',
-        provider: providerId,
-        emailVerified: Boolean(user.emailVerified),
-        ...(extra.isNewUser ? { createdAt: serverTimestamp() } : {}),
-        lastSignedInAt: serverTimestamp()
-      },
-      { merge: true }
-    ).catch((error) => {
-      if (isPermanentFirestoreUnavailableError(error)) {
-        firestoreAvailability = 'unavailable';
-      } else {
-        const info = buildFirestoreErrorInfo(error, authInstance, OperationType.WRITE, userPath);
-        console.warn('Firestore user profile sync skipped:', JSON.stringify(info));
-      }
-    })
-  );
+  const userRef = doc(firestoreDb, 'users', user.uid);
 
-  if (cleanUsername && cleanEmail) {
-    const lookupPath = `usernames/${cleanUsername}`;
-    writes.push(
-      setDoc(
-        doc(firestoreDb, 'usernames', cleanUsername),
-        {
-          uid: user.uid,
-          username: cleanUsername,
-          email: cleanEmail,
-          fullName: displayName,
-          phone: extra.phone || '',
-          ...(extra.gender ? { gender: extra.gender } : {}),
-          updatedAt: serverTimestamp()
-        },
-        { merge: true }
-      ).catch((error) => {
-        if (isPermanentFirestoreUnavailableError(error)) {
-          firestoreAvailability = 'unavailable';
+  const writes: Promise<void>[] = [
+    (async () => {
+      try {
+        const existingSnap = await getDoc(userRef);
+        if (!existingSnap.exists() || extra.isNewUser) {
+          await setDoc(userRef, {
+            uid: user.uid,
+            email: cleanEmail,
+            fullName: displayName,
+            ...(cleanUsername ? { username: cleanUsername } : {}),
+            ...(cleanPhone ? { phone: cleanPhone } : {}),
+            ...(extra.gender ? { gender: extra.gender } : {}),
+            ...(cleanPhotoUrl ? { photoUrl: cleanPhotoUrl } : {}),
+            provider: providerId,
+            emailVerified: Boolean(user.emailVerified),
+            createdAt: serverTimestamp(),
+            lastSignedInAt: serverTimestamp()
+          });
         } else {
-          const info = buildFirestoreErrorInfo(error, authInstance, OperationType.WRITE, lookupPath);
-          console.warn('Firestore username lookup sync skipped:', JSON.stringify(info));
+          const existingData = existingSnap.data();
+          const hasCreatedAt = Boolean(existingData?.createdAt);
+          if (!hasCreatedAt) {
+            await setDoc(userRef, {
+              uid: user.uid,
+              email: existingData?.email || cleanEmail,
+              fullName: displayName,
+              ...(cleanUsername ? { username: cleanUsername } : {}),
+              ...(cleanPhone ? { phone: cleanPhone } : {}),
+              ...(extra.gender ? { gender: extra.gender } : {}),
+              ...(cleanPhotoUrl ? { photoUrl: cleanPhotoUrl } : {}),
+              provider: existingData?.provider || providerId,
+              emailVerified: Boolean(user.emailVerified),
+              createdAt: serverTimestamp(),
+              lastSignedInAt: serverTimestamp()
+            });
+          } else {
+            await updateDoc(userRef, {
+              fullName: displayName,
+              ...(cleanUsername ? { username: cleanUsername } : {}),
+              ...(cleanPhone ? { phone: cleanPhone } : {}),
+              ...(extra.gender ? { gender: extra.gender } : {}),
+              ...(cleanPhotoUrl ? { photoUrl: cleanPhotoUrl } : {}),
+              emailVerified: Boolean(user.emailVerified),
+              lastSignedInAt: serverTimestamp()
+            });
+          }
         }
-      })
+      } catch (error) {
+        handleFirestoreError(error, OperationType.WRITE, userPath, authInstance);
+      }
+    })()
+  ];
+
+  if (cleanUsername && cleanEmail.length >= 3) {
+    const lookupPath = `usernames/${cleanUsername}`;
+    const lookupRef = doc(firestoreDb, 'usernames', cleanUsername);
+    writes.push(
+      (async () => {
+        try {
+          const lookupSnap = await getDoc(lookupRef);
+          if (!lookupSnap.exists()) {
+            await setDoc(lookupRef, {
+              uid: user.uid,
+              username: cleanUsername,
+              email: cleanEmail,
+              fullName: displayName,
+              ...(cleanPhone ? { phone: cleanPhone } : {}),
+              ...(extra.gender ? { gender: extra.gender } : {}),
+              updatedAt: serverTimestamp()
+            });
+          } else if (lookupSnap.data()?.uid === user.uid) {
+            await updateDoc(lookupRef, {
+              email: cleanEmail,
+              fullName: displayName,
+              ...(cleanPhone ? { phone: cleanPhone } : {}),
+              ...(extra.gender ? { gender: extra.gender } : {}),
+              updatedAt: serverTimestamp()
+            });
+          }
+        } catch (error) {
+          handleFirestoreError(error, OperationType.WRITE, lookupPath, authInstance);
+        }
+      })()
     );
   }
 
-  const { timedOut } = await raceWithTimeout(Promise.allSettled(writes), 1500, null);
-  if (timedOut) {
-    firestoreAvailability = 'unavailable';
-  }
+  await Promise.allSettled(writes);
 }
 
 export async function lookupEmailByUsernameFromFirestore(
   authInstance: Auth,
   username: string
 ): Promise<{ email: string; username: string; fullName?: string; phone?: string; gender?: 'Male' | 'Female' } | null> {
-  if (firestoreAvailability === 'unavailable') {
-    return null;
-  }
-
-  const clean = username.trim().toLowerCase();
-  if (!clean || clean.includes('@') || /[^a-z0-9_]/.test(clean)) {
+  const clean = sanitizeValidUsername(username);
+  if (!clean) {
     return null;
   }
 
   const lookupPath = `usernames/${clean}`;
   try {
-    const { timedOut, value: snap } = await raceWithTimeout(
-      getDoc(doc(db, 'usernames', clean)),
-      1500,
-      null
-    );
-    if (timedOut || !snap) {
-      if (timedOut) firestoreAvailability = 'unavailable';
-      return null;
-    }
-    firestoreAvailability = 'available';
+    const snap = await getDoc(doc(db, 'usernames', clean));
     if (!snap.exists()) return null;
     const data = snap.data();
     if (typeof data?.email === 'string' && data.email.trim()) {
@@ -247,19 +245,13 @@ export async function lookupEmailByUsernameFromFirestore(
       };
     }
   } catch (error) {
-    if (isPermanentFirestoreUnavailableError(error)) {
-      firestoreAvailability = 'unavailable';
-    } else {
-      const info = buildFirestoreErrorInfo(error, authInstance, OperationType.GET, lookupPath);
-      console.warn('Firestore username lookup unavailable:', JSON.stringify(info));
-    }
+    handleFirestoreError(error, OperationType.GET, lookupPath, authInstance);
   }
   return null;
 }
 
 /**
  * Deletes the authenticated user's profile and username lookup documents from Firestore.
- * Bounded by a strict timeout and skips immediately when Firestore is unavailable.
  */
 export async function deleteUserDataFromFirestore(
   firestoreDb: Firestore,
@@ -267,40 +259,23 @@ export async function deleteUserDataFromFirestore(
   user: User,
   username?: string
 ): Promise<void> {
-  if (firestoreAvailability === 'unavailable') {
-    return;
-  }
-
   const deletes: Promise<void>[] = [];
   const userPath = `users/${user.uid}`;
   deletes.push(
     deleteDoc(doc(firestoreDb, 'users', user.uid)).catch((error) => {
-      if (isPermanentFirestoreUnavailableError(error)) {
-        firestoreAvailability = 'unavailable';
-      } else {
-        const info = buildFirestoreErrorInfo(error, authInstance, OperationType.DELETE, userPath);
-        console.warn('Firestore user profile delete skipped:', JSON.stringify(info));
-      }
+      handleFirestoreError(error, OperationType.DELETE, userPath, authInstance);
     })
   );
 
-  const cleanUsername = (username || '').trim().toLowerCase();
-  if (cleanUsername && !/[^a-z0-9_]/.test(cleanUsername)) {
+  const cleanUsername = sanitizeValidUsername(username);
+  if (cleanUsername) {
     const lookupPath = `usernames/${cleanUsername}`;
     deletes.push(
       deleteDoc(doc(firestoreDb, 'usernames', cleanUsername)).catch((error) => {
-        if (isPermanentFirestoreUnavailableError(error)) {
-          firestoreAvailability = 'unavailable';
-        } else {
-          const info = buildFirestoreErrorInfo(error, authInstance, OperationType.DELETE, lookupPath);
-          console.warn('Firestore username delete skipped:', JSON.stringify(info));
-        }
+        handleFirestoreError(error, OperationType.DELETE, lookupPath, authInstance);
       })
     );
   }
 
-  const { timedOut } = await raceWithTimeout(Promise.allSettled(deletes), 1500, null);
-  if (timedOut) {
-    firestoreAvailability = 'unavailable';
-  }
+  await Promise.all(deletes);
 }

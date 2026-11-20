@@ -1,0 +1,528 @@
+{
+  "entities": {
+    "AdminUser": {
+      "title": "AdminUser",
+      "description": "Authorized portal administrator record.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "maxLength": 200
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 64
+        }
+      },
+      "required": ["uid", "createdAt"]
+    },
+    "UserAccountProfile": {
+      "title": "UserAccountProfile",
+      "description": "Authenticated user account metadata stored privately per user UID.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "email": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "fullName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "username": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 40,
+          "pattern": "^[a-z0-9_]+$"
+        },
+        "phone": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "gender": {
+          "type": "string",
+          "enum": ["Male", "Female"]
+        },
+        "photoUrl": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "provider": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "emailVerified": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 64
+        },
+        "lastSignedInAt": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 64
+        }
+      },
+      "required": ["uid", "email", "fullName", "provider", "emailVerified", "lastSignedInAt"]
+    },
+    "UsernameLookup": {
+      "title": "UsernameLookup",
+      "description": "Maps lowercase username handles to email for cross-device username sign-in.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "username": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 40,
+          "pattern": "^[a-z0-9_]+$"
+        },
+        "email": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 200
+        },
+        "fullName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "phone": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "gender": {
+          "type": "string",
+          "enum": ["Male", "Female"]
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 64
+        }
+      },
+      "required": ["uid", "username", "email", "updatedAt"]
+    },
+    "MatrimonyProfileDoc": {
+      "title": "MatrimonyProfileDoc",
+      "description": "Public directory fields for a Samaj matrimonial biodata (excludes direct phone PII).",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "ownerName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "age": {
+          "type": "number"
+        },
+        "gender": {
+          "type": "string",
+          "enum": ["Male", "Female"]
+        },
+        "gotra": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "city": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "state": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "native": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "location": {
+          "type": "string",
+          "maxLength": 180
+        },
+        "education": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "profession": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "income": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "height": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "dob": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "birthTime": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "familyDetails": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "about": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "photo": {
+          "type": "string",
+          "maxLength": 350000
+        },
+        "coverPhoto": {
+          "type": "string",
+          "maxLength": 350000
+        },
+        "gallery": {
+          "type": "array"
+        },
+        "socialLinks": {
+          "type": "object"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "draft", "archived"]
+        },
+        "visibility": {
+          "type": "string",
+          "enum": ["public", "verified_only", "private"]
+        },
+        "verified": {
+          "type": "boolean"
+        },
+        "createdAtIso": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 64
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 64
+        }
+      },
+      "required": ["id", "ownerUid", "ownerId", "name", "age", "gender", "gotra", "city", "education", "profession", "status", "verified", "createdAt", "updatedAt"]
+    },
+    "ProfilePrivateContact": {
+      "title": "ProfilePrivateContact",
+      "description": "Isolated PII contact phone document for a matrimonial profile.",
+      "type": "object",
+      "properties": {
+        "ownerUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "phone": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 30
+        },
+        "contact": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 30
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 64
+        }
+      },
+      "required": ["ownerUid", "phone", "contact", "updatedAt"]
+    },
+    "ProfileUnlock": {
+      "title": "ProfileUnlock",
+      "description": "Records a signed-in user unlocking a matrimonial profile's contact details.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "unlockedAt": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 64
+        }
+      },
+      "required": ["uid", "unlockedAt"]
+    },
+    "BusinessAdDoc": {
+      "title": "BusinessAdDoc",
+      "description": "Community business directory advertisement listing.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "ownerName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "owner": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "category": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "city": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "address": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "phone": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "contacts": {
+          "type": "array"
+        },
+        "tagline": {
+          "type": "string",
+          "maxLength": 240
+        },
+        "offer": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "rating": {
+          "type": "string",
+          "maxLength": 30
+        },
+        "isFeatured": {
+          "type": "boolean"
+        },
+        "adTier": {
+          "type": "string",
+          "enum": ["standard", "featured", "spotlight"]
+        },
+        "adPricePaid": {
+          "type": "number"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "draft", "paused"]
+        },
+        "banner": {
+          "type": "string",
+          "maxLength": 350000
+        },
+        "bannerFit": {
+          "type": "string",
+          "enum": ["cover", "contain"]
+        },
+        "createdAtIso": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 64
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 64
+        }
+      },
+      "required": ["id", "ownerUid", "ownerId", "title", "owner", "category", "address", "status", "createdAt", "updatedAt"]
+    },
+    "SamajEventDoc": {
+      "title": "SamajEventDoc",
+      "description": "Community event or Parichay Sammelan announcement.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "ownerUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 180
+        },
+        "date": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "time": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "location": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "venue": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "organizedBy": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "badge": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "archived"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 64
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 64
+        }
+      },
+      "required": ["id", "ownerUid", "title", "date", "location", "description", "status", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/admins/{userId}": {
+      "schema": { "$ref": "#/entities/AdminUser" },
+      "description": "Administrator role lookup documents."
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserAccountProfile" },
+      "description": "Private user account metadata and PII."
+    },
+    "/usernames/{username}": {
+      "schema": { "$ref": "#/entities/UsernameLookup" },
+      "description": "Username-to-email lookup index for cross-device sign-in."
+    },
+    "/profiles/{profileId}": {
+      "schema": { "$ref": "#/entities/MatrimonyProfileDoc" },
+      "description": "Shared community matrimonial biodatas synced across all devices."
+    },
+    "/profiles/{profileId}/private/{docId}": {
+      "schema": { "$ref": "#/entities/ProfilePrivateContact" },
+      "description": "Isolated PII contact phone numbers for matrimonial profiles."
+    },
+    "/profiles/{profileId}/unlocks/{userId}": {
+      "schema": { "$ref": "#/entities/ProfileUnlock" },
+      "description": "Per-user contact unlock receipts gating access to private contact info."
+    },
+    "/ads/{adId}": {
+      "schema": { "$ref": "#/entities/BusinessAdDoc" },
+      "description": "Shared community business directory advertisements."
+    },
+    "/events/{eventId}": {
+      "schema": { "$ref": "#/entities/SamajEventDoc" },
+      "description": "Shared community events and Parichay Sammelans."
+    }
+  }
+}

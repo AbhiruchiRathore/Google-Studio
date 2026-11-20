@@ -52,6 +52,21 @@ import {
   deleteUserDataFromFirestore,
   testFirestoreConnection
 } from './utils/firebaseUserSync';
+import {
+  subscribeDirectoryProfiles,
+  subscribeDirectoryAds,
+  subscribeSamajEvents,
+  saveProfileToFirestore,
+  deleteProfileFromFirestore,
+  saveAdToFirestore,
+  deleteAdFromFirestore,
+  saveEventToFirestore,
+  unlockAndFetchProfileContact,
+  fetchPrivateContactForProfile,
+  backfillLocalOwnedItemsToFirestore,
+  resolveIsFirebaseAdmin,
+  toValidDocId
+} from './utils/firestoreDirectorySync';
 
 const VALID_TABS = new Set<TabType>([
   'matrimony',
@@ -296,6 +311,9 @@ export const App: React.FC = () => {
     return INITIAL_PROFILES;
   });
 
+  const profilesRef = useRef<MatrimonyProfile[]>(profiles);
+  profilesRef.current = profiles;
+
   // Business Ads State
   const [ads, setAds] = useState<BusinessAd[]>(() => {
     try {
@@ -313,6 +331,9 @@ export const App: React.FC = () => {
     }
     return INITIAL_ADS;
   });
+
+  const adsRef = useRef<BusinessAd[]>(ads);
+  adsRef.current = ads;
 
   // Events State
   const [events, setEvents] = useState<SamajEvent[]>(() => {
@@ -354,9 +375,20 @@ export const App: React.FC = () => {
     }
     return null;
   });
+  const [firebaseAuthUser, setFirebaseAuthUser] = useState<User | null>(() => auth.currentUser);
+  const [isFirebaseAdmin, setIsFirebaseAdmin] = useState(false);
+  const [firestoreFatalError, setFirestoreFatalError] = useState<Error | null>(null);
+  const deletedProfileIdsRef = useRef<Set<string>>(new Set());
+  const deletedAdIdsRef = useRef<Set<string>>(new Set());
+  const unlockedProfilesRef = useRef<(number | string)[]>(unlockedProfiles);
+  unlockedProfilesRef.current = unlockedProfiles;
   const authSessionRef = useRef<AuthSession | null>(authSession);
   authSessionRef.current = authSession;
   const prevAuthSessionRef = useRef<AuthSession | null>(authSession);
+
+  if (firestoreFatalError) {
+    throw firestoreFatalError;
+  }
 
   const {
     location: userLocation,
@@ -408,6 +440,164 @@ export const App: React.FC = () => {
   useEffect(() => {
     void testFirestoreConnection();
   }, []);
+
+  // Resolve Firebase Admin privileges cleanly when Firebase Auth user changes
+  useEffect(() => {
+    let cancelled = false;
+    if (!firebaseAuthUser) {
+      setIsFirebaseAdmin(false);
+      return;
+    }
+    void resolveIsFirebaseAdmin(firebaseAuthUser).then((isAdmin) => {
+      if (!cancelled) {
+        setIsFirebaseAdmin(isAdmin);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [firebaseAuthUser]);
+
+  // Live Cloud Firestore subscriptions for profiles, business ads, and events
+  useEffect(() => {
+    const defaultProfileIds = new Set(INITIAL_PROFILES.map((p) => toValidDocId(p.id)));
+    const defaultAdIds = new Set(INITIAL_ADS.map((a) => toValidDocId(a.id)));
+
+    const unsubProfiles = subscribeDirectoryProfiles(
+      firebaseAuthUser,
+      isFirebaseAdmin,
+      unlockedProfilesRef.current,
+      (cloudProfiles) => {
+        const cloudIds = new Set(cloudProfiles.map((p) => toValidDocId(p.id)));
+        let localCustom: MatrimonyProfile[] = [];
+        try {
+          const stored = localStorage.getItem('samaj_profiles');
+          if (stored) {
+            const parsed = JSON.parse(stored) as MatrimonyProfile[];
+            if (Array.isArray(parsed)) {
+              localCustom = parsed.filter((p) => {
+                const docId = toValidDocId(p.id);
+                return (
+                  !defaultProfileIds.has(docId) &&
+                  !cloudIds.has(docId) &&
+                  !deletedProfileIdsRef.current.has(docId)
+                );
+              });
+            }
+          }
+        } catch {
+          // ignore localStorage read errors
+        }
+        const filteredCloud = cloudProfiles.filter(
+          (p) => !deletedProfileIdsRef.current.has(toValidDocId(p.id))
+        );
+        setProfiles([...filteredCloud, ...localCustom, ...INITIAL_PROFILES]);
+      },
+      (err) => setFirestoreFatalError(err)
+    );
+
+    const unsubAds = subscribeDirectoryAds(
+      firebaseAuthUser,
+      isFirebaseAdmin,
+      (cloudAds) => {
+        const cloudIds = new Set(cloudAds.map((a) => toValidDocId(a.id)));
+        let localCustom: BusinessAd[] = [];
+        try {
+          const stored = localStorage.getItem('samaj_ads');
+          if (stored) {
+            const parsed = JSON.parse(stored) as BusinessAd[];
+            if (Array.isArray(parsed)) {
+              localCustom = parsed.filter((a) => {
+                const docId = toValidDocId(a.id);
+                return (
+                  !defaultAdIds.has(docId) &&
+                  !cloudIds.has(docId) &&
+                  !deletedAdIdsRef.current.has(docId)
+                );
+              });
+            }
+          }
+        } catch {
+          // ignore localStorage read errors
+        }
+        const filteredCloud = cloudAds.filter(
+          (a) => !deletedAdIdsRef.current.has(toValidDocId(a.id))
+        );
+        setAds([...filteredCloud, ...localCustom, ...INITIAL_ADS]);
+      },
+      (err) => setFirestoreFatalError(err)
+    );
+
+    const unsubEvents = subscribeSamajEvents(
+      (cloudEvents) => {
+        const cloudIds = new Set(cloudEvents.map((e) => toValidDocId(e.id)));
+        const defaultEventTitles = new Set(INITIAL_EVENTS.map((e) => e.title.trim().toLowerCase()));
+        let localCustom: SamajEvent[] = [];
+        try {
+          const stored = localStorage.getItem('samaj_events');
+          if (stored) {
+            const parsed = JSON.parse(stored) as SamajEvent[];
+            if (Array.isArray(parsed)) {
+              localCustom = parsed.filter((e) => {
+                const docId = toValidDocId(e.id);
+                const titleKey = (e.title || '').trim().toLowerCase();
+                return !defaultEventTitles.has(titleKey) && !cloudIds.has(docId);
+              });
+            }
+          }
+        } catch {
+          // ignore
+        }
+        const mergedDefaults = INITIAL_EVENTS.filter(
+          (ev) => !cloudEvents.some((c) => c.title.trim().toLowerCase() === ev.title.trim().toLowerCase())
+        );
+        setEvents([...cloudEvents, ...localCustom, ...mergedDefaults]);
+      },
+      (err) => setFirestoreFatalError(err)
+    );
+
+    return () => {
+      unsubProfiles();
+      unsubAds();
+      unsubEvents();
+    };
+  }, [firebaseAuthUser, isFirebaseAdmin]);
+
+  // Backfill any pre-cloud locally-owned items to Cloud Firestore once signed in
+  useEffect(() => {
+    if (!firebaseAuthUser || !authSession) return;
+    const ownerKey = getSessionOwnerKey(authSession);
+    if (!ownerKey) return;
+    void backfillLocalOwnedItemsToFirestore(authSession, firebaseAuthUser, ownerKey);
+  }, [firebaseAuthUser, authSession]);
+
+  // Hydrate private contacts for already-unlocked profiles when authenticated
+  useEffect(() => {
+    if (!firebaseAuthUser || unlockedProfiles.length === 0) return;
+    let cancelled = false;
+    void Promise.all(
+      unlockedProfiles.map(async (id) => {
+        const contactData = await fetchPrivateContactForProfile(id);
+        return contactData ? { id: toValidDocId(id), ...contactData } : null;
+      })
+    ).then((results) => {
+      if (cancelled) return;
+      const updates = results.filter((r): r is { id: string; phone: string; contact: string } => r !== null);
+      if (updates.length === 0) return;
+      const byId = new Map(updates.map((u) => [u.id, u]));
+      setProfiles((prev) =>
+        prev.map((p) => {
+          const match = byId.get(toValidDocId(p.id));
+          return match && (!p.phone || !p.contact)
+            ? { ...p, phone: match.phone, contact: match.contact }
+            : p;
+        })
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [firebaseAuthUser, unlockedProfiles]);
 
   // Build consistent AuthSession from Firebase Auth User without overwriting UsernamePassword metadata
   const buildAndSyncFirebaseSession = useCallback((user: User): AuthSession => {
@@ -490,6 +680,8 @@ export const App: React.FC = () => {
       phone: session.phone,
       gender: session.gender,
       provider: isGoogleProvider ? 'google.com' : 'password'
+    }).catch((err) => {
+      console.warn('User profile sync skipped:', err);
     });
 
     return session;
@@ -500,6 +692,7 @@ export const App: React.FC = () => {
     getRedirectResult(auth)
       .then((result) => {
         if (result?.user) {
+          setFirebaseAuthUser(result.user);
           const session = buildAndSyncFirebaseSession(result.user);
           setAuthSession(session);
           if (currentTabRef.current === 'signup' && !hasPasswordResetParams()) {
@@ -510,6 +703,7 @@ export const App: React.FC = () => {
       .catch((err) => console.warn('Redirect result check:', err?.code || err));
 
     const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setFirebaseAuthUser(user);
       if (user) {
         const session = buildAndSyncFirebaseSession(user);
         setAuthSession(session);
@@ -554,6 +748,24 @@ export const App: React.FC = () => {
       }
       return updated;
     });
+
+    if (auth.currentUser) {
+      void unlockAndFetchProfileContact(id, auth.currentUser)
+        .then((contactData) => {
+          if (!contactData) return;
+          const targetDocId = toValidDocId(id);
+          setProfiles((prev) =>
+            prev.map((p) =>
+              toValidDocId(p.id) === targetDocId
+                ? { ...p, phone: contactData.phone, contact: contactData.contact }
+                : p
+            )
+          );
+        })
+        .catch((err) => {
+          console.warn('Firestore unlock contact sync:', err);
+        });
+    }
   };
 
   const handleAddProfile = (newProfile: MatrimonyProfile): boolean => {
@@ -578,6 +790,7 @@ export const App: React.FC = () => {
       ownerName: authSession.name || authSession.username || authSession.email || 'Member'
     };
 
+    deletedProfileIdsRef.current.delete(toValidDocId(ownedProfile.id));
     setProfiles(prev => [ownedProfile, ...prev]);
     try {
       const stored = localStorage.getItem('samaj_profiles');
@@ -586,6 +799,18 @@ export const App: React.FC = () => {
       localStorage.setItem('samaj_profiles', JSON.stringify(userProfiles));
     } catch (e) {
       console.error("Error saving profile:", e);
+    }
+
+    if (auth.currentUser) {
+      void saveProfileToFirestore(
+        ownedProfile,
+        auth.currentUser,
+        ownerKey,
+        ownedProfile.ownerName,
+        isFirebaseAdmin
+      ).catch((err) => {
+        console.error('Failed to sync new profile to Cloud Firestore:', err);
+      });
     }
     return true;
   };
@@ -632,6 +857,7 @@ export const App: React.FC = () => {
         authSession?.email ||
         undefined
     };
+    deletedAdIdsRef.current.delete(toValidDocId(ownedAd.id));
     setAds(prev => [ownedAd, ...prev]);
     try {
       const stored = localStorage.getItem('samaj_ads');
@@ -640,6 +866,17 @@ export const App: React.FC = () => {
       localStorage.setItem('samaj_ads', JSON.stringify(userAds));
     } catch (e) {
       console.error("Error saving ad:", e);
+    }
+
+    if (auth.currentUser) {
+      void saveAdToFirestore(
+        ownedAd,
+        auth.currentUser,
+        ownerKey || auth.currentUser.uid,
+        ownedAd.ownerName
+      ).catch((err) => {
+        console.error('Failed to sync new business ad to Cloud Firestore:', err);
+      });
     }
   };
 
@@ -668,14 +905,24 @@ export const App: React.FC = () => {
   };
 
   const handleAddEvent = (newEvent: SamajEvent) => {
-    setEvents(prev => [newEvent, ...prev]);
+    const eventWithId: SamajEvent = {
+      ...newEvent,
+      id: newEvent.id || Date.now()
+    };
+    setEvents(prev => [eventWithId, ...prev]);
     try {
       const stored = localStorage.getItem('samaj_events');
       const userEvents = stored ? JSON.parse(stored) : [...INITIAL_EVENTS];
-      userEvents.unshift(newEvent);
+      userEvents.unshift(eventWithId);
       localStorage.setItem('samaj_events', JSON.stringify(userEvents));
     } catch (e) {
       console.error("Error saving event:", e);
+    }
+
+    if (auth.currentUser) {
+      void saveEventToFirestore(eventWithId, auth.currentUser).catch((err) => {
+        console.error('Failed to sync event to Cloud Firestore:', err);
+      });
     }
   };
 
@@ -694,9 +941,23 @@ export const App: React.FC = () => {
     } catch (e) {
       console.error("Error updating profile:", e);
     }
+
+    if (auth.currentUser) {
+      const ownerKey = getSessionOwnerKey(authSession) || auth.currentUser.uid;
+      void saveProfileToFirestore(
+        updatedProfile,
+        auth.currentUser,
+        ownerKey,
+        updatedProfile.ownerName || authSession?.name,
+        isFirebaseAdmin
+      ).catch((err) => {
+        console.error('Failed to update profile in Cloud Firestore:', err);
+      });
+    }
   };
 
   const handleDeleteProfile = (id: number | string) => {
+    deletedProfileIdsRef.current.add(toValidDocId(id));
     setProfiles(prev => prev.filter(p => p.id !== id));
     try {
       const stored = localStorage.getItem('samaj_profiles');
@@ -707,6 +968,12 @@ export const App: React.FC = () => {
       }
     } catch (e) {
       console.error("Error deleting profile:", e);
+    }
+
+    if (auth.currentUser) {
+      void deleteProfileFromFirestore(id).catch((err) => {
+        console.error('Failed to delete profile from Cloud Firestore:', err);
+      });
     }
   };
 
@@ -725,9 +992,22 @@ export const App: React.FC = () => {
     } catch (e) {
       console.error("Error updating ad:", e);
     }
+
+    if (auth.currentUser) {
+      const ownerKey = getSessionOwnerKey(authSession) || auth.currentUser.uid;
+      void saveAdToFirestore(
+        updatedAd,
+        auth.currentUser,
+        ownerKey,
+        updatedAd.ownerName || authSession?.name
+      ).catch((err) => {
+        console.error('Failed to update ad in Cloud Firestore:', err);
+      });
+    }
   };
 
   const handleDeleteAd = (id: number | string) => {
+    deletedAdIdsRef.current.add(toValidDocId(id));
     setAds(prev => prev.filter(a => a.id !== id));
     try {
       const stored = localStorage.getItem('samaj_ads');
@@ -738,6 +1018,12 @@ export const App: React.FC = () => {
       }
     } catch (e) {
       console.error("Error deleting ad:", e);
+    }
+
+    if (auth.currentUser) {
+      void deleteAdFromFirestore(id).catch((err) => {
+        console.error('Failed to delete ad from Cloud Firestore:', err);
+      });
     }
   };
 
@@ -805,6 +1091,28 @@ export const App: React.FC = () => {
       const cleanUsername = (activeSession.username || '').trim().toLowerCase();
       const cleanEmail = (activeSession.email || '').trim().toLowerCase();
 
+      const deleteOwnedCloudDocs = async () => {
+        const ownedProfileIds = profilesRef.current
+          .filter((p) => isProfileOwnedBySession(p, activeSession))
+          .map((p) => p.id);
+        const ownedAdIds = adsRef.current
+          .filter((a) => isAdOwnedBySession(a, activeSession))
+          .map((a) => a.id);
+
+        await Promise.all([
+          ...ownedProfileIds.map((pid) =>
+            deleteProfileFromFirestore(pid).catch((err) =>
+              console.warn('Firestore owned profile cleanup:', err)
+            )
+          ),
+          ...ownedAdIds.map((aid) =>
+            deleteAdFromFirestore(aid).catch((err) =>
+              console.warn('Firestore owned ad cleanup:', err)
+            )
+          )
+        ]);
+      };
+
       // 1. Delete Firebase Auth & Firestore account records if signed in with Firebase
       if (firebaseUser) {
         try {
@@ -812,6 +1120,7 @@ export const App: React.FC = () => {
             const cred = EmailAuthProvider.credential(firebaseUser.email, reauthPassword);
             await reauthenticateWithCredential(firebaseUser, cred);
           }
+          await deleteOwnedCloudDocs();
           await deleteUserDataFromFirestore(db, auth, firebaseUser, cleanUsername);
           await deleteUser(firebaseUser);
         } catch (err: unknown) {
@@ -820,6 +1129,7 @@ export const App: React.FC = () => {
             if (activeSession.method === 'Google') {
               try {
                 await reauthenticateWithPopup(firebaseUser, new GoogleAuthProvider());
+                await deleteOwnedCloudDocs();
                 await deleteUserDataFromFirestore(db, auth, firebaseUser, cleanUsername);
                 await deleteUser(firebaseUser);
               } catch {
