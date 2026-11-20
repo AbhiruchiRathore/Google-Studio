@@ -1199,8 +1199,12 @@ _Powered by Svayaa_`;
                         {config.featureChatEnabled && (
                           <button
                             onClick={() => {
-                              if (!isProfileAccessible(p.id) && config.subscriptionEnabled) {
-                                setShowSubscriptionModal(true);
+                              if (!isProfileAccessible(p.id)) {
+                                if (config.subscriptionEnabled && isStrictPaywallActive) {
+                                  setShowSubscriptionModal(true);
+                                } else {
+                                  handleOpenProfile(p.id);
+                                }
                               } else {
                                 setActiveChatProfile(p);
                               }

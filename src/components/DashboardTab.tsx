@@ -1514,7 +1514,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                     <ImageUploadField
                       label={t('Avatar Profile Photo', 'प्रोफ़ाइल फ़ोटो')}
                       value={editingProfile.photo || ''}
-                      onChange={(url) => setEditingProfile({ ...editingProfile, photo: url })}
+                      onChange={(url) => setEditingProfile((prev) => prev ? { ...prev, photo: url } : prev)}
                       variant="avatar"
                       maxDimension={720}
                       urlPlaceholder="https://images.unsplash.com/photo-..."
@@ -1523,7 +1523,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                     <ImageUploadField
                       label={t('Background Cover Photo', 'बैकग्राउंड कवर फ़ोटो')}
                       value={editingProfile.coverPhoto || ''}
-                      onChange={(url) => setEditingProfile({ ...editingProfile, coverPhoto: url })}
+                      onChange={(url) => setEditingProfile((prev) => prev ? { ...prev, coverPhoto: url } : prev)}
                       variant="banner"
                       maxDimension={960}
                       urlPlaceholder="https://images.unsplash.com/photo-..."
@@ -1548,14 +1548,13 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
 
                   {showGalleryAddInput && (
                     <div className="flex flex-wrap gap-2 items-center bg-rose-50/40 p-2.5 rounded-xl border border-rose-100 text-xs">
-                      <label className="bg-white hover:bg-amber-50 text-[#380812] border border-amber-300 px-3 py-2 rounded-lg font-bold cursor-pointer flex items-center gap-1.5 shrink-0">
-                        <Upload className="w-3.5 h-3.5 text-amber-700" />
-                        <span>{t('Upload Photos (Multiple)', 'एक या अधिक फ़ोटो अपलोड करें')}</span>
+                      <label className="relative overflow-hidden bg-white hover:bg-amber-50 text-[#380812] border border-amber-300 px-3 py-2 rounded-lg font-bold cursor-pointer flex items-center gap-1.5 shrink-0 select-none">
                         <input
                           type="file"
                           accept="image/*"
                           multiple
-                          className="sr-only"
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                          aria-label={t('Upload Photos (Multiple)', 'एक या अधिक फ़ोटो अपलोड करें')}
                           onChange={async (e) => {
                             const files: File[] = Array.from(e.target.files || []);
                             e.target.value = '';
@@ -1570,16 +1569,21 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                               }
                             }
                             if (uploaded.length > 0) {
-                              const currentGallery = editingProfile.gallery || [];
-                              setEditingProfile({
-                                ...editingProfile,
-                                photo: editingProfile.photo || uploaded[0],
-                                gallery: Array.from(new Set([...currentGallery, ...uploaded]))
+                              setEditingProfile((prev) => {
+                                if (!prev) return prev;
+                                const currentGallery = prev.gallery || [];
+                                return {
+                                  ...prev,
+                                  photo: prev.photo || uploaded[0],
+                                  gallery: Array.from(new Set([...currentGallery, ...uploaded]))
+                                };
                               });
                               setShowGalleryAddInput(false);
                             }
                           }}
                         />
+                        <Upload className="w-3.5 h-3.5 text-amber-700" />
+                        <span>{t('Upload Photos (Multiple)', 'एक या अधिक फ़ोटो अपलोड करें')}</span>
                       </label>
                       <input
                         type="url"
@@ -2013,7 +2017,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                 <ImageUploadField
                   label={t('Shop Photo / Storefront Banner', 'दुकान की फ़ोटो / बैनर')}
                   value={editingAd.banner || ''}
-                  onChange={(url) => setEditingAd({ ...editingAd, banner: url })}
+                  onChange={(url) => setEditingAd((prev) => prev ? { ...prev, banner: url } : prev)}
                   variant="banner"
                   maxDimension={960}
                   urlPlaceholder="https://images.unsplash.com/photo-..."

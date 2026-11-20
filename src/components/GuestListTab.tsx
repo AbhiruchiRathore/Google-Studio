@@ -1,8 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Users, UserPlus, Search, Edit3, Trash2, Share2, 
   Printer, CheckCircle2, Clock, X, Send, 
-  Calendar, AlertCircle, Lock, Download, FileSpreadsheet
+  Calendar, AlertCircle, Lock, Download, FileSpreadsheet,
+  ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { GuestItem, GuestListOccasion, TabType, AuthSession } from '../types';
 import { sanitizePhoneInput, validatePhoneNumber } from '../utils/validation';
@@ -147,6 +148,8 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({ authSession, onNavig
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const GUESTS_PER_PAGE = 10;
+  const [currentPage, setCurrentPage] = useState(1);
 
   const [showAddGuestModal, setShowAddGuestModal] = useState(false);
   const [editingGuest, setEditingGuest] = useState<GuestItem | null>(null);
@@ -166,6 +169,22 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({ authSession, onNavig
     status: 'Pending' as GuestItem['status'],
     notes: ''
   });
+
+  const openAddNewGuestModal = () => {
+    setEditingGuest(null);
+    setGuestFormError(null);
+    setGuestForm({
+      name: '',
+      phone: '',
+      address: '',
+      city: '',
+      category: 'Family/Relatives',
+      membersCount: 2,
+      status: 'Pending',
+      notes: ''
+    });
+    setShowAddGuestModal(true);
+  };
 
   const saveOccasions = (updated: GuestListOccasion[]) => {
     setOccasions(updated);
@@ -196,6 +215,24 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({ authSession, onNavig
       return matchSearch && matchCat && matchStat;
     });
   }, [activeOccasion, searchQuery, filterCategory, filterStatus]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredGuests.length / GUESTS_PER_PAGE));
+  const safePage = Math.min(currentPage, totalPages);
+  const pageStartIndex = (safePage - 1) * GUESTS_PER_PAGE;
+  const paginatedGuests = useMemo(
+    () => filteredGuests.slice(pageStartIndex, pageStartIndex + GUESTS_PER_PAGE),
+    [filteredGuests, pageStartIndex]
+  );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeOccasionId, searchQuery, filterCategory, filterStatus]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const totalGuests = activeOccasion?.guests.length || 0;
   const totalAttendees = activeOccasion?.guests.reduce((acc, g) => acc + (Number(g.membersCount) || 1), 0) || 0;
@@ -281,6 +318,7 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({ authSession, onNavig
         };
       });
       saveOccasions(updatedOccasions);
+      setCurrentPage(1);
     }
 
     setShowAddGuestModal(false);
@@ -555,28 +593,6 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({ authSession, onNavig
 
         <div className="flex flex-wrap items-center gap-2.5 shrink-0">
           <button
-            onClick={() => {
-              setEditingGuest(null);
-              setGuestFormError(null);
-              setGuestForm({
-                name: '',
-                phone: '',
-                address: '',
-                city: '',
-                category: 'Family/Relatives',
-                membersCount: 2,
-                status: 'Pending',
-                notes: ''
-              });
-              setShowAddGuestModal(true);
-            }}
-            className="bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-stone-950 font-bold px-4 py-2.5 rounded-xl text-xs flex items-center gap-1.5 shadow-md cursor-pointer hover:scale-102 transition-all"
-          >
-            <UserPlus className="w-4 h-4 text-stone-950" />
-            <span>{t('+ Add New Guest', '+ नया अतिथि जोड़ें')}</span>
-          </button>
-
-          <button
             onClick={() => setShowNewOccasionModal(true)}
             className="bg-white/10 hover:bg-white/20 text-stone-100 font-semibold px-4 py-2.5 rounded-xl text-xs flex items-center gap-1.5 border border-white/20 cursor-pointer transition-colors"
           >
@@ -711,6 +727,33 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({ authSession, onNavig
 
       {/* GUEST TABLE */}
       <div className="bg-white rounded-3xl border border-stone-200 shadow-sm overflow-hidden">
+        {/* Table Top Toolbar with "+ Add New Guest" directly above the table */}
+        <div className="px-4 sm:px-6 py-3.5 bg-gradient-to-r from-amber-50/80 via-white to-amber-50/50 border-b border-stone-200 flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="font-serif font-bold text-sm sm:text-base text-stone-900 flex items-center gap-2">
+              <Users className="w-4 h-4 text-[#851834] shrink-0" />
+              <span>{t('Guest Directory Table', 'अतिथि सूची तालिका')}</span>
+            </h3>
+            <p className="text-[11px] text-stone-500 mt-0.5">
+              {filteredGuests.length === 0
+                ? t('0 guest entries', '0 अतिथि')
+                : t(
+                    `Showing ${pageStartIndex + 1}–${Math.min(pageStartIndex + GUESTS_PER_PAGE, filteredGuests.length)} of ${filteredGuests.length} entries (${GUESTS_PER_PAGE} per page)`,
+                    `कुल ${filteredGuests.length} में से ${pageStartIndex + 1}–${Math.min(pageStartIndex + GUESTS_PER_PAGE, filteredGuests.length)} अतिथि दिखाए जा रहे हैं`
+                  )}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={openAddNewGuestModal}
+            className="bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-stone-950 font-bold px-4 py-2.5 rounded-xl text-xs flex items-center gap-1.5 shadow-sm cursor-pointer transition-all shrink-0"
+          >
+            <UserPlus className="w-4 h-4 text-stone-950 shrink-0" />
+            <span>{t('+ Add New Guest', '+ नया अतिथि जोड़ें')}</span>
+          </button>
+        </div>
+
         {filteredGuests.length === 0 ? (
           <div className="p-12 text-center space-y-3">
             <div className="w-14 h-14 bg-amber-50 rounded-2xl mx-auto flex items-center justify-center border border-amber-200">
@@ -721,12 +764,13 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({ authSession, onNavig
             </h4>
             <p className="text-xs text-stone-500 max-w-sm mx-auto leading-relaxed">
               {t(
-                'No guests match your current filter or search. Click "+ Add New Guest" to add guests.',
-                'आपकी खोज के अनुसार कोई अतिथि नहीं मिला। नया अतिथि जोड़ने के लिए "+ नया अतिथि जोड़ें" दबाएं।'
+                'No guests match your current filter or search. Click "+ Add New Guest" above to add guests.',
+                'आपकी खोज के अनुसार कोई अतिथि नहीं मिला। नया अतिथि जोड़ने के लिए ऊपर "+ नया अतिथि जोड़ें" दबाएं।'
               )}
             </p>
           </div>
         ) : (
+          <>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
@@ -741,10 +785,10 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({ authSession, onNavig
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100 text-stone-800">
-                {filteredGuests.map((guest, idx) => (
+                {paginatedGuests.map((guest, idx) => (
                   <tr key={guest.id} className="hover:bg-amber-50/30 transition-colors">
                     <td className="py-3.5 px-4 font-mono text-stone-400 font-semibold text-[11px]">
-                      {idx + 1}
+                      {pageStartIndex + idx + 1}
                     </td>
 
                     <td className="py-3.5 px-4">
@@ -833,6 +877,45 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({ authSession, onNavig
               </tbody>
             </table>
           </div>
+
+          {/* Pagination Footer (10 guests per page) */}
+          {filteredGuests.length > GUESTS_PER_PAGE && (
+            <div className="px-4 sm:px-6 py-3.5 bg-stone-50/80 border-t border-stone-200 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+              <span className="text-stone-600 font-medium">
+                {t(
+                  `Showing ${pageStartIndex + 1}–${Math.min(pageStartIndex + GUESTS_PER_PAGE, filteredGuests.length)} of ${filteredGuests.length} guests · Page ${safePage} of ${totalPages}`,
+                  `कुल ${filteredGuests.length} अतिथियों में से ${pageStartIndex + 1}–${Math.min(pageStartIndex + GUESTS_PER_PAGE, filteredGuests.length)} · पृष्ठ ${safePage} / ${totalPages}`
+                )}
+              </span>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={safePage <= 1}
+                  onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                  className="px-3.5 py-2 rounded-xl border border-stone-300 bg-white hover:bg-stone-100 disabled:opacity-45 disabled:cursor-not-allowed text-stone-800 font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  <span>{t('Previous', 'पिछला')}</span>
+                </button>
+
+                <span className="px-3 py-2 rounded-xl bg-[#380812] text-amber-200 font-bold text-xs tabular-nums">
+                  {safePage} / {totalPages}
+                </span>
+
+                <button
+                  type="button"
+                  disabled={safePage >= totalPages}
+                  onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                  className="px-3.5 py-2 rounded-xl border border-stone-300 bg-white hover:bg-stone-100 disabled:opacity-45 disabled:cursor-not-allowed text-stone-800 font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+                >
+                  <span>{t('Next', 'अगला')}</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+          </>
         )}
       </div>
 

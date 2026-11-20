@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useId, useState } from 'react';
 import { Camera, Upload, Trash2, Link2, RefreshCw, AlertCircle, Star, Plus } from 'lucide-react';
 import { compressAndReadImageFile } from '../utils/imageUpload';
 import { useLanguage } from '../context/LanguageContext';
@@ -21,7 +21,7 @@ export const MultiPhotoUploadField: React.FC<MultiPhotoUploadFieldProps> = ({
   helperText,
 }) => {
   const { t } = useLanguage();
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const inputId = useId();
   const [isProcessing, setIsProcessing] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [showUrlBox, setShowUrlBox] = useState(false);
@@ -124,7 +124,9 @@ export const MultiPhotoUploadField: React.FC<MultiPhotoUploadFieldProps> = ({
     <div className="space-y-2.5 text-xs">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <label className="block font-bold text-slate-700">{label}</label>
+          <label htmlFor={inputId} className="block font-bold text-slate-700 cursor-pointer">
+            {label}
+          </label>
           <span className="text-[10px] font-bold bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full border border-amber-200">
             {photos.length}/{maxPhotos}
           </span>
@@ -143,15 +145,6 @@ export const MultiPhotoUploadField: React.FC<MultiPhotoUploadFieldProps> = ({
           </span>
         </button>
       </div>
-
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        multiple
-        onChange={handleFilesSelect}
-        className="sr-only"
-      />
 
       {photos.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3 rounded-2xl border border-amber-200 bg-amber-50/35">
@@ -209,12 +202,22 @@ export const MultiPhotoUploadField: React.FC<MultiPhotoUploadFieldProps> = ({
 
           {/* Add More Tile inside grid if under limit */}
           {photos.length < maxPhotos && (
-            <button
-              type="button"
-              disabled={isProcessing}
-              onClick={() => fileInputRef.current?.click()}
-              className="aspect-square rounded-xl border-2 border-dashed border-amber-300 hover:border-[#851834] bg-white/80 hover:bg-amber-50 flex flex-col items-center justify-center gap-1.5 p-2 text-center cursor-pointer transition-all"
+            <label
+              htmlFor={inputId}
+              className={`relative overflow-hidden aspect-square rounded-xl border-2 border-dashed border-amber-300 hover:border-[#851834] bg-white/80 hover:bg-amber-50 flex flex-col items-center justify-center gap-1.5 p-2 text-center cursor-pointer transition-all select-none focus-within:ring-2 focus-within:ring-amber-500 ${
+                isProcessing ? 'opacity-65 pointer-events-none' : ''
+              }`}
             >
+              <input
+                id={inputId}
+                type="file"
+                accept="image/*"
+                multiple
+                disabled={isProcessing}
+                onChange={handleFilesSelect}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                aria-label={t('Add More Photos', 'और फ़ोटो जोड़ें')}
+              />
               {isProcessing ? (
                 <RefreshCw className="w-5 h-5 animate-spin text-amber-700" />
               ) : (
@@ -226,18 +229,28 @@ export const MultiPhotoUploadField: React.FC<MultiPhotoUploadFieldProps> = ({
               <span className="text-[10px] text-stone-500">
                 {t(`${maxPhotos - photos.length} left`, `${maxPhotos - photos.length} शेष`)}
               </span>
-            </button>
+            </label>
           )}
         </div>
       )}
 
       {photos.length === 0 && (
-        <button
-          type="button"
-          disabled={isProcessing}
-          onClick={() => fileInputRef.current?.click()}
-          className="w-full border-2 border-dashed border-amber-300 hover:border-[#851834] bg-amber-50/40 hover:bg-amber-50/80 rounded-2xl p-4 sm:p-5 text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-1.5 group"
+        <label
+          htmlFor={inputId}
+          className={`relative overflow-hidden w-full border-2 border-dashed border-amber-300 hover:border-[#851834] bg-amber-50/40 hover:bg-amber-50/80 rounded-2xl p-4 sm:p-5 text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-1.5 group select-none focus-within:ring-2 focus-within:ring-amber-500 ${
+            isProcessing ? 'opacity-65 pointer-events-none' : ''
+          }`}
         >
+          <input
+            id={inputId}
+            type="file"
+            accept="image/*"
+            multiple
+            disabled={isProcessing}
+            onChange={handleFilesSelect}
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+            aria-label={label}
+          />
           <div className="w-10 h-10 rounded-xl bg-white border border-amber-200 shadow-2xs flex items-center justify-center text-[#851834] group-hover:scale-105 transition-transform">
             {isProcessing ? (
               <RefreshCw className="w-5 h-5 animate-spin text-amber-700" />
@@ -258,7 +271,7 @@ export const MultiPhotoUploadField: React.FC<MultiPhotoUploadFieldProps> = ({
                 'गैलरी या कैमरे से एक से अधिक फ़ोटो चुनें'
               )}
           </span>
-        </button>
+        </label>
       )}
 
       {showUrlBox && (

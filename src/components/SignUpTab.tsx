@@ -395,7 +395,7 @@ export default function SignUpTab({
       void syncUserProfileToFirestore(db, auth, auth.currentUser, {
         provider: 'google.com'
       });
-      onLogin(activeSession, 'dashboard');
+      onLogin(activeSession, 'matrimony');
       return;
     }
 
@@ -403,7 +403,7 @@ export default function SignUpTab({
       setIsSigningIn(true);
       try {
         await signInWithAndroidWebView((session) => {
-          onLogin(session, 'dashboard');
+          onLogin(session, 'matrimony');
         });
       } catch (error: any) {
         if (error?.code === 'auth/unauthorized-domain' && typeof window !== 'undefined') {
@@ -417,7 +417,7 @@ export default function SignUpTab({
       setIsSigningIn(true);
       try {
         await signInWithDesktopBrowser((session) => {
-          onLogin(session, 'dashboard');
+          onLogin(session, 'matrimony');
         });
       } catch (error: any) {
         console.warn("Desktop Google Sign-In caught error:", error?.code, error?.message);
@@ -440,7 +440,7 @@ export default function SignUpTab({
 
   const handleModalSuccess = (session: AuthSession) => {
     setShowGoogleModal(false);
-    onLogin(session, 'dashboard');
+    onLogin(session, 'matrimony');
   };
 
   const clearResetQueryParamsFromUrl = () => {
@@ -1209,7 +1209,7 @@ export default function SignUpTab({
             loggedInAt: new Date().toISOString(),
             verified: true
           };
-          onLogin(session, 'dashboard');
+          onLogin(session, 'matrimony');
           return;
         } catch (err: any) {
           const code = err?.code || '';
@@ -1262,7 +1262,7 @@ export default function SignUpTab({
                   loggedInAt: new Date().toISOString(),
                   verified: true
                 };
-                onLogin(session, 'dashboard');
+                onLogin(session, 'matrimony');
                 return;
               }
             } catch (createErr: any) {
@@ -1331,7 +1331,7 @@ export default function SignUpTab({
           loggedInAt: new Date().toISOString(),
           verified: true
         };
-        onLogin(session, 'dashboard');
+        onLogin(session, 'matrimony');
         return;
       }
 

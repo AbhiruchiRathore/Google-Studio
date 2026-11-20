@@ -461,45 +461,52 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
               )}
             </div>
 
-            <select
-              value={selectedBoyId}
-              onChange={(e) => setSelectedBoyId(e.target.value)}
-              className="w-full p-3 rounded-xl border border-stone-300 text-xs font-semibold text-stone-800 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none bg-stone-50"
+            <div
+              role="listbox"
+              aria-label={t('Select Groom', 'वर चुनें')}
+              className="max-h-56 overflow-y-auto rounded-xl border border-stone-200 divide-y divide-stone-100 bg-white"
             >
               {filteredGrooms.length === 0 ? (
-                <option value="" disabled>
+                <div className="p-4 text-center text-xs text-stone-500">
                   {t('No matching grooms found', 'कोई वर नहीं मिला')}
-                </option>
+                </div>
               ) : (
-                filteredGrooms.map(g => (
-                  <option key={g.id} value={g.id}>
-                    {g.name} ({g.age} {t('Yrs', 'वर्ष')} · {g.city} · {t('Gotra', 'गोत्र')}: {g.gotra})
-                  </option>
-                ))
-              )}
-            </select>
-
-            {boySearch.trim() && filteredGrooms.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {filteredGrooms.slice(0, 4).map((g) => {
+                filteredGrooms.map((g) => {
                   const isSelected = g.id.toString() === selectedBoyId.toString();
                   return (
                     <button
                       key={g.id}
                       type="button"
+                      role="option"
+                      aria-selected={isSelected}
                       onClick={() => setSelectedBoyId(g.id)}
-                      className={`text-[11px] px-2.5 py-1 rounded-lg border font-medium transition-all cursor-pointer truncate max-w-full ${
+                      className={`w-full text-left px-3 py-2.5 flex items-center gap-3 transition-colors cursor-pointer ${
                         isSelected
-                          ? 'bg-[#380812] text-amber-200 border-[#380812]'
-                          : 'bg-amber-50/70 hover:bg-amber-100 text-stone-800 border-amber-200'
+                          ? 'bg-amber-50/90 text-[#380812]'
+                          : 'hover:bg-stone-50 text-stone-800'
                       }`}
                     >
-                      {g.name} · {g.city}
+                      <img
+                        src={g.photo || '/KiranKumar.png'}
+                        alt={g.name}
+                        className="w-9 h-9 rounded-lg object-cover object-top border border-stone-200 shrink-0"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className={`text-xs truncate ${isSelected ? 'font-bold text-[#380812]' : 'font-semibold text-stone-900'}`}>
+                          {g.name}
+                        </p>
+                        <p className="text-[11px] text-stone-500 truncate">
+                          {g.age} {t('Yrs', 'वर्ष')} · {g.city} · {t('Gotra', 'गोत्र')}: {g.gotra}
+                        </p>
+                      </div>
+                      {isSelected && (
+                        <CheckCircle2 className="w-4 h-4 text-[#851834] shrink-0" />
+                      )}
                     </button>
                   );
-                })}
-              </div>
-            )}
+                })
+              )}
+            </div>
 
             {boySearch.trim() && filteredGrooms.length === 0 && (
               <div className="text-[11px] text-rose-700 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
@@ -585,45 +592,52 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
               )}
             </div>
 
-            <select
-              value={selectedGirlId}
-              onChange={(e) => setSelectedGirlId(e.target.value)}
-              className="w-full p-3 rounded-xl border border-stone-300 text-xs font-semibold text-stone-800 focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none bg-stone-50"
+            <div
+              role="listbox"
+              aria-label={t('Select Bride', 'वधू चुनें')}
+              className="max-h-56 overflow-y-auto rounded-xl border border-stone-200 divide-y divide-stone-100 bg-white"
             >
               {filteredBrides.length === 0 ? (
-                <option value="" disabled>
+                <div className="p-4 text-center text-xs text-stone-500">
                   {t('No matching brides found', 'कोई वधू नहीं मिली')}
-                </option>
+                </div>
               ) : (
-                filteredBrides.map(b => (
-                  <option key={b.id} value={b.id}>
-                    {b.name} ({b.age} {t('Yrs', 'वर्ष')} · {b.city} · {t('Gotra', 'गोत्र')}: {b.gotra})
-                  </option>
-                ))
-              )}
-            </select>
-
-            {girlSearch.trim() && filteredBrides.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {filteredBrides.slice(0, 4).map((b) => {
+                filteredBrides.map((b) => {
                   const isSelected = b.id.toString() === selectedGirlId.toString();
                   return (
                     <button
                       key={b.id}
                       type="button"
+                      role="option"
+                      aria-selected={isSelected}
                       onClick={() => setSelectedGirlId(b.id)}
-                      className={`text-[11px] px-2.5 py-1 rounded-lg border font-medium transition-all cursor-pointer truncate max-w-full ${
+                      className={`w-full text-left px-3 py-2.5 flex items-center gap-3 transition-colors cursor-pointer ${
                         isSelected
-                          ? 'bg-[#380812] text-amber-200 border-[#380812]'
-                          : 'bg-rose-50/70 hover:bg-rose-100 text-stone-800 border-rose-200'
+                          ? 'bg-rose-50/90 text-[#380812]'
+                          : 'hover:bg-stone-50 text-stone-800'
                       }`}
                     >
-                      {b.name} · {b.city}
+                      <img
+                        src={b.photo || '/IshikaRathore.png'}
+                        alt={b.name}
+                        className="w-9 h-9 rounded-lg object-cover object-top border border-stone-200 shrink-0"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className={`text-xs truncate ${isSelected ? 'font-bold text-[#380812]' : 'font-semibold text-stone-900'}`}>
+                          {b.name}
+                        </p>
+                        <p className="text-[11px] text-stone-500 truncate">
+                          {b.age} {t('Yrs', 'वर्ष')} · {b.city} · {t('Gotra', 'गोत्र')}: {b.gotra}
+                        </p>
+                      </div>
+                      {isSelected && (
+                        <CheckCircle2 className="w-4 h-4 text-[#851834] shrink-0" />
+                      )}
                     </button>
                   );
-                })}
-              </div>
-            )}
+                })
+              )}
+            </div>
 
             {girlSearch.trim() && filteredBrides.length === 0 && (
               <div className="text-[11px] text-rose-700 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
@@ -699,32 +713,44 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-3">
               <div>
-                <label className="font-bold text-stone-700 block mb-1">{t('Rashi (Zodiac)', 'राशि')}</label>
-                <select
-                  value={customBoyRashi}
-                  onChange={(e) => setCustomBoyRashi(Number(e.target.value))}
-                  className="w-full p-2.5 rounded-xl border border-stone-300 bg-stone-50 font-medium"
-                >
-                  {RASHIS.map(r => (
-                    <option key={r.index} value={r.index}>
-                      {lang === 'hi' ? r.hindiName : `${r.name} (Lord: ${r.lord})`}
-                    </option>
+                <label className="font-bold text-stone-700 block mb-1.5">{t('Rashi (Zodiac)', 'राशि')}</label>
+                <div className="max-h-32 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-1.5 p-2 rounded-xl border border-stone-200 bg-stone-50">
+                  {RASHIS.map((r) => (
+                    <button
+                      key={r.index}
+                      type="button"
+                      onClick={() => setCustomBoyRashi(r.index)}
+                      className={`px-2 py-1.5 rounded-lg text-[11px] font-semibold text-left truncate transition-colors cursor-pointer ${
+                        customBoyRashi === r.index
+                          ? 'bg-[#380812] text-amber-200 shadow-2xs'
+                          : 'bg-white text-stone-700 border border-stone-200 hover:bg-amber-50'
+                      }`}
+                    >
+                      {lang === 'hi' ? r.hindiName : r.name}
+                    </button>
                   ))}
-                </select>
+                </div>
               </div>
               <div>
-                <label className="font-bold text-stone-700 block mb-1">{t('Nakshatra', 'नक्षत्र')}</label>
-                <select
-                  value={customBoyNakshatra}
-                  onChange={(e) => setCustomBoyNakshatra(Number(e.target.value))}
-                  className="w-full p-2.5 rounded-xl border border-stone-300 bg-stone-50 font-medium"
-                >
-                  {NAKSHATRAS.map(n => (
-                    <option key={n.index} value={n.index}>{lang === 'hi' ? n.hindiName : n.name}</option>
+                <label className="font-bold text-stone-700 block mb-1.5">{t('Nakshatra', 'नक्षत्र')}</label>
+                <div className="max-h-32 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-1.5 p-2 rounded-xl border border-stone-200 bg-stone-50">
+                  {NAKSHATRAS.map((n) => (
+                    <button
+                      key={n.index}
+                      type="button"
+                      onClick={() => setCustomBoyNakshatra(n.index)}
+                      className={`px-2 py-1.5 rounded-lg text-[11px] font-semibold text-left truncate transition-colors cursor-pointer ${
+                        customBoyNakshatra === n.index
+                          ? 'bg-[#380812] text-amber-200 shadow-2xs'
+                          : 'bg-white text-stone-700 border border-stone-200 hover:bg-amber-50'
+                      }`}
+                    >
+                      {lang === 'hi' ? n.hindiName : n.name}
+                    </button>
                   ))}
-                </select>
+                </div>
               </div>
             </div>
 
@@ -778,32 +804,44 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-3">
               <div>
-                <label className="font-bold text-stone-700 block mb-1">{t('Rashi (Zodiac)', 'राशि')}</label>
-                <select
-                  value={customGirlRashi}
-                  onChange={(e) => setCustomGirlRashi(Number(e.target.value))}
-                  className="w-full p-2.5 rounded-xl border border-stone-300 bg-stone-50 font-medium"
-                >
-                  {RASHIS.map(r => (
-                    <option key={r.index} value={r.index}>
-                      {lang === 'hi' ? r.hindiName : `${r.name} (Lord: ${r.lord})`}
-                    </option>
+                <label className="font-bold text-stone-700 block mb-1.5">{t('Rashi (Zodiac)', 'राशि')}</label>
+                <div className="max-h-32 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-1.5 p-2 rounded-xl border border-stone-200 bg-stone-50">
+                  {RASHIS.map((r) => (
+                    <button
+                      key={r.index}
+                      type="button"
+                      onClick={() => setCustomGirlRashi(r.index)}
+                      className={`px-2 py-1.5 rounded-lg text-[11px] font-semibold text-left truncate transition-colors cursor-pointer ${
+                        customGirlRashi === r.index
+                          ? 'bg-[#380812] text-amber-200 shadow-2xs'
+                          : 'bg-white text-stone-700 border border-stone-200 hover:bg-rose-50'
+                      }`}
+                    >
+                      {lang === 'hi' ? r.hindiName : r.name}
+                    </button>
                   ))}
-                </select>
+                </div>
               </div>
               <div>
-                <label className="font-bold text-stone-700 block mb-1">{t('Nakshatra', 'नक्षत्र')}</label>
-                <select
-                  value={customGirlNakshatra}
-                  onChange={(e) => setCustomGirlNakshatra(Number(e.target.value))}
-                  className="w-full p-2.5 rounded-xl border border-stone-300 bg-stone-50 font-medium"
-                >
-                  {NAKSHATRAS.map(n => (
-                    <option key={n.index} value={n.index}>{lang === 'hi' ? n.hindiName : n.name}</option>
+                <label className="font-bold text-stone-700 block mb-1.5">{t('Nakshatra', 'नक्षत्र')}</label>
+                <div className="max-h-32 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-1.5 p-2 rounded-xl border border-stone-200 bg-stone-50">
+                  {NAKSHATRAS.map((n) => (
+                    <button
+                      key={n.index}
+                      type="button"
+                      onClick={() => setCustomGirlNakshatra(n.index)}
+                      className={`px-2 py-1.5 rounded-lg text-[11px] font-semibold text-left truncate transition-colors cursor-pointer ${
+                        customGirlNakshatra === n.index
+                          ? 'bg-[#380812] text-amber-200 shadow-2xs'
+                          : 'bg-white text-stone-700 border border-stone-200 hover:bg-rose-50'
+                      }`}
+                    >
+                      {lang === 'hi' ? n.hindiName : n.name}
+                    </button>
                   ))}
-                </select>
+                </div>
               </div>
             </div>
 

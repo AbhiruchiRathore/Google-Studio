@@ -15,7 +15,7 @@ import { ImageUploadField } from './ImageUploadField';
 
 interface AdvertiseShopTabProps {
   authSession: AuthSession | null;
-  onLogin: (session: AuthSession) => void;
+  onLogin: (session: AuthSession, redirectTab?: TabType) => void;
   onAddAd: (ad: BusinessAd) => void;
   onNavigateTab: (tab: TabType) => void;
 }
@@ -87,22 +87,22 @@ export const AdvertiseShopTab: React.FC<AdvertiseShopTabProps> = ({
 
   const handleGoogleSuccess = (session: AuthSession) => {
     setShowGoogleModal(false);
-    onLogin(session);
+    onLogin(session, 'advertise-shop');
     setFormData(prev => ({ ...prev, owner: session.name || prev.owner }));
   };
 
   const handleDirectGoogleClick = async () => {
     const existing = getExistingDeviceGoogleSession();
     if (existing) {
-      onLogin(existing);
+      onLogin(existing, 'advertise-shop');
       setFormData(prev => ({ ...prev, owner: existing.name || prev.owner }));
       return;
     }
     try {
       if (isAndroidEnvironment()) {
-        await signInWithAndroidWebView(onLogin);
+        await signInWithAndroidWebView((s) => onLogin(s, 'advertise-shop'));
       } else {
-        await signInWithDesktopBrowser(onLogin);
+        await signInWithDesktopBrowser((s) => onLogin(s, 'advertise-shop'));
       }
     } catch {
       setShowGoogleModal(true);

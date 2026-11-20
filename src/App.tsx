@@ -37,7 +37,7 @@ import {
   reauthenticateWithPopup,
   User
 } from 'firebase/auth';
-import { Sparkles, Lock, CheckCircle2, X } from 'lucide-react';
+import { Sparkles, Lock, CheckCircle2, X, UserCheck, LayoutDashboard, Users } from 'lucide-react';
 import { useLanguage } from './context/LanguageContext';
 import { useAdminConfig, DEFAULT_ADMIN_CONFIG } from './context/AdminConfigContext';
 import { sanitizePhoneInput } from './utils/validation';
@@ -154,7 +154,7 @@ function getUrlForTab(tab: TabType, search = ''): string {
 
 export const App: React.FC = () => {
   const { t } = useLanguage();
-  const { config } = useAdminConfig();
+  const { config, userSubscription } = useAdminConfig();
   const [currentTab, setCurrentTab] = useState<TabType>(() => getInitialTabFromUrl());
   const currentTabRef = useRef<TabType>(currentTab);
   currentTabRef.current = currentTab;
@@ -351,10 +351,22 @@ export const App: React.FC = () => {
     return INITIAL_EVENTS;
   });
 
-  // Unlocked profile contacts
+  // Auth session (declared before user-scoped unlockedProfiles)
+  const [authSession, setAuthSession] = useState<AuthSession | null>(() => {
+    try {
+      const stored = localStorage.getItem('user_auth_session');
+      if (stored) return JSON.parse(stored);
+    } catch (e) {
+      console.error("Error reading user_auth_session:", e);
+    }
+    return null;
+  });
+
+  // Per-user unlocked profile contacts (strictly scoped so every newly signed-up user starts with 3 free views)
+  const unlockedStorageKey = getUserStorageKey('unlocked_profiles', authSession);
   const [unlockedProfiles, setUnlockedProfiles] = useState<(number | string)[]>(() => {
     try {
-      const stored = localStorage.getItem('unlocked_profiles');
+      const stored = localStorage.getItem(getUserStorageKey('unlocked_profiles', authSession));
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed)) return parsed;
@@ -365,16 +377,20 @@ export const App: React.FC = () => {
     return [];
   });
 
-  // Auth session
-  const [authSession, setAuthSession] = useState<AuthSession | null>(() => {
+  useEffect(() => {
     try {
-      const stored = localStorage.getItem('user_auth_session');
-      if (stored) return JSON.parse(stored);
-    } catch (e) {
-      console.error("Error reading user_auth_session:", e);
+      const stored = localStorage.getItem(unlockedStorageKey);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        setUnlockedProfiles(Array.isArray(parsed) ? parsed : []);
+      } else {
+        setUnlockedProfiles([]);
+      }
+    } catch {
+      setUnlockedProfiles([]);
     }
-    return null;
-  });
+  }, [unlockedStorageKey]);
+
   const [firebaseAuthUser, setFirebaseAuthUser] = useState<User | null>(() => auth.currentUser);
   const [isFirebaseAdmin, setIsFirebaseAdmin] = useState(false);
   const [firestoreFatalError, setFirestoreFatalError] = useState<Error | null>(null);
@@ -696,7 +712,7 @@ export const App: React.FC = () => {
           const session = buildAndSyncFirebaseSession(result.user);
           setAuthSession(session);
           if (currentTabRef.current === 'signup' && !hasPasswordResetParams()) {
-            navigateToTab('dashboard', { replace: true });
+            navigateToTab('matrimony', { replace: true });
           }
         }
       })
@@ -708,7 +724,7 @@ export const App: React.FC = () => {
         const session = buildAndSyncFirebaseSession(user);
         setAuthSession(session);
         if (currentTabRef.current === 'signup' && !hasPasswordResetParams()) {
-          navigateToTab('dashboard', { replace: true });
+          navigateToTab('matrimony', { replace: true });
         }
       } else {
         const stored = localStorage.getItem('user_auth_session');
@@ -742,7 +758,7 @@ export const App: React.FC = () => {
       if (prev.includes(id)) return prev;
       const updated = [...prev, id];
       try {
-        localStorage.setItem('unlocked_profiles', JSON.stringify(updated));
+        localStorage.setItem(getUserStorageKey('unlocked_profiles', authSessionRef.current), JSON.stringify(updated));
       } catch (e) {
         console.error(e);
       }
@@ -1040,7 +1056,7 @@ export const App: React.FC = () => {
     });
   }, []);
 
-  const handleLogin = (session: AuthSession, redirectTab: TabType = 'dashboard') => {
+  const handleLogin = (session: AuthSession, redirectTab: TabType = 'matrimony') => {
     setAuthSession(session);
     try {
       localStorage.setItem('user_auth_session', JSON.stringify(session));
@@ -1205,6 +1221,7 @@ export const App: React.FC = () => {
       // 4. Remove all per-user localStorage data (likes, admirers, chats, photos/media, notifications, blocked list, location prompt)
       const ownerKey = getSessionOwnerKey(activeSession);
       const userScopedKeys = [
+        getUserStorageKey('unlocked_profiles', activeSession),
         getUserStorageKey('samaj_liked_profiles', activeSession),
         getUserStorageKey('samaj_profile_admirers', activeSession),
         getUserStorageKey('samaj_chat_messages', activeSession),
@@ -1250,6 +1267,7 @@ export const App: React.FC = () => {
       }
 
       clearLocation();
+      setUnlockedProfiles([]);
       setAuthSession(null);
       setAccountDeletedNotice(true);
       navigateToTab('delete-account', { replace: true });
@@ -1360,6 +1378,57 @@ export const App: React.FC = () => {
       <main className="flex-1 max-w-7xl w-full min-w-0 mx-auto px-3 sm:px-6 lg:px-8 py-5 sm:py-8">
         {currentTab === 'matrimony' && (
           <div className="space-y-6">
+            {authSession && (
+              <div className="bg-white rounded-2xl border border-emerald-200/90 shadow-xs px-4 py-3.5 sm:px-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center shrink-0 relative">
+                    <UserCheck className="w-5 h-5 text-emerald-700" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white absolute -top-0.5 -right-0.5 animate-pulse" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                      <p className="text-xs sm:text-sm font-bold text-stone-900 truncate">
+                        {t(`Logged in as ${authSession.name || 'Samaj Member'}`, `लॉग इन: ${authSession.name || 'समाज सदस्य'}`)}
+                      </p>
+                      <span className="text-[11px] font-semibold text-emerald-700">
+                        · {t('Active Session', 'सक्रिय सत्र')}
+                      </span>
+                    </div>
+                    <p className="text-[11px] sm:text-xs text-stone-600 truncate mt-0.5">
+                      {authSession.email || (authSession.username ? `@${authSession.username}` : authSession.phone ? `+91 ${authSession.phone}` : '')}
+                      {(authSession.email || authSession.username || authSession.phone) ? ' · ' : ''}
+                      {authSession.username === 'AdminAbhi' || hasRegisteredProfile || userSubscription?.active || config.contactAccessMode === 'free'
+                        ? t('Full Biodata Access Active', 'पूर्ण बायोडाटा एक्सेस सक्रिय')
+                        : config.subscriptionEnabled && config.contactAccessMode === 'subscription_required'
+                          ? t('Samaj Subscription Required for Full Contacts', 'पूर्ण संपर्क हेतु सदस्यता आवश्यक')
+                          : t(
+                              `Free Profile Views Left: ${Math.max(0, 3 - unlockedProfiles.length)} of 3`,
+                              `शेष निःशुल्क प्रोफ़ाइल व्यू: 3 में से ${Math.max(0, 3 - unlockedProfiles.length)}`
+                            )}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => navigateToTab('matrimony', { scrollToId: 'biodatas-section' })}
+                    className="flex-1 sm:flex-initial bg-amber-50 hover:bg-amber-100 text-[#380812] border border-amber-300 font-bold px-3.5 py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+                  >
+                    <Users className="w-3.5 h-3.5 text-amber-800 shrink-0" />
+                    <span>{t('Browse Biodatas', 'बायोडाटा देखें')}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigateToTab('dashboard')}
+                    className="flex-1 sm:flex-initial bg-[#380812] hover:bg-[#540e1b] text-amber-200 border border-amber-400/30 font-bold px-3.5 py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-xs transition-colors"
+                  >
+                    <LayoutDashboard className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+                    <span>{t('Member Dashboard', 'सदस्य डैशबोर्ड')}</span>
+                  </button>
+                </div>
+              </div>
+            )}
             <FoundingOfferCard
               verifiedCount={verifiedProfilesCount}
               hasRegisteredProfile={hasRegisteredProfile}

@@ -267,16 +267,23 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
 
                 <button
                   onClick={() => handleTabClick('dashboard')}
-                  title={t('Open Member Dashboard', 'सदस्य डैशबोर्ड खोलें')}
+                  title={t('Logged in — Open Member Dashboard', 'लॉग इन हैं — सदस्य डैशबोर्ड खोलें')}
                   className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold transition-all border cursor-pointer ${
                     currentTab === 'dashboard'
                       ? 'bg-amber-300 text-[#4c0d1b] border-amber-200 shadow-sm'
-                      : 'bg-white/10 text-amber-100 hover:bg-white/15 border-amber-400/30'
+                      : 'bg-emerald-500/15 text-amber-100 hover:bg-emerald-500/25 border-emerald-400/50'
                   }`}
                 >
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                  <UserCheck className="w-3.5 h-3.5 text-emerald-300" />
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+                  <UserCheck className={`w-3.5 h-3.5 shrink-0 ${currentTab === 'dashboard' ? 'text-[#4c0d1b]' : 'text-emerald-300'}`} />
                   <span className="max-w-[110px] truncate">{authSession.name || `+91 ${authSession.phone}`}</span>
+                  <span className={`text-[10px] font-bold uppercase tracking-wide pl-1 border-l ${
+                    currentTab === 'dashboard'
+                      ? 'border-[#4c0d1b]/30 text-[#4c0d1b]'
+                      : 'border-amber-300/30 text-amber-200'
+                  }`}>
+                    {t('Dashboard', 'डैशबोर्ड')}
+                  </span>
                 </button>
 
                 {onLogout && (
@@ -299,8 +306,35 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
             )}
           </div>
 
-          {/* Mobile & Tablet: Quick Language Switcher + Hamburger */}
+          {/* Mobile & Tablet: Logged-in Indicator / Sign-In + Quick Language Switcher + Hamburger */}
           <div className="xl:hidden flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {authSession ? (
+              <button
+                type="button"
+                onClick={() => handleTabClick('dashboard')}
+                title={t('Logged in — Switch to Member Dashboard', 'लॉग इन हैं — सदस्य डैशबोर्ड खोलें')}
+                aria-label={t('Logged in — Open Member Dashboard', 'सदस्य डैशबोर्ड खोलें')}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-bold border transition-all cursor-pointer max-w-[138px] sm:max-w-[180px] ${
+                  currentTab === 'dashboard'
+                    ? 'bg-amber-300 text-[#4c0d1b] border-amber-200 shadow-xs'
+                    : 'bg-emerald-500/20 text-amber-50 border-emerald-400/60 hover:bg-emerald-500/30'
+                }`}
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+                <span className="truncate">{(authSession.name || authSession.username || 'Member').split(' ')[0]}</span>
+                <LayoutDashboard className={`w-3.5 h-3.5 shrink-0 ${currentTab === 'dashboard' ? 'text-[#4c0d1b]' : 'text-amber-300'}`} />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => handleTabClick('signup')}
+                className="bg-amber-300 hover:bg-amber-200 text-[#4c0d1b] font-bold px-2.5 py-1.5 rounded-xl text-[11px] flex items-center gap-1 cursor-pointer shadow-xs shrink-0"
+              >
+                <UserPlus className="w-3.5 h-3.5 shrink-0" />
+                <span>{t('Sign In', 'लॉगिन')}</span>
+              </button>
+            )}
+
             <div 
               className="flex items-center bg-black/25 border border-amber-400/40 rounded-xl p-0.5 text-[11px] font-bold"
               role="group"

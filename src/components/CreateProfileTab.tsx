@@ -14,7 +14,7 @@ import { MultiPhotoUploadField } from './MultiPhotoUploadField';
 
 interface CreateProfileTabProps {
   authSession: AuthSession | null;
-  onLogin: (session: AuthSession) => void;
+  onLogin: (session: AuthSession, redirectTab?: TabType) => void;
   onAddProfile: (profile: MatrimonyProfile) => boolean | void;
   onNavigateTab: (tab: TabType) => void;
   hasRegisteredProfile?: boolean;
@@ -99,20 +99,20 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
 
   const handleGoogleSuccess = (session: AuthSession) => {
     setShowGoogleModal(false);
-    onLogin(session);
+    onLogin(session, 'create-profile');
   };
 
   const handleDirectGoogleClick = async () => {
     const existing = getExistingDeviceGoogleSession();
     if (existing) {
-      onLogin(existing);
+      onLogin(existing, 'create-profile');
       return;
     }
     try {
       if (isAndroidEnvironment()) {
-        await signInWithAndroidWebView(onLogin);
+        await signInWithAndroidWebView((s) => onLogin(s, 'create-profile'));
       } else {
-        await signInWithDesktopBrowser(onLogin);
+        await signInWithDesktopBrowser((s) => onLogin(s, 'create-profile'));
       }
     } catch {
       setShowGoogleModal(true);

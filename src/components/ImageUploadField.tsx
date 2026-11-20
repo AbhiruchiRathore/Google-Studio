@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useId, useState } from 'react';
 import { Camera, Upload, Trash2, Link2, RefreshCw, AlertCircle } from 'lucide-react';
 import { compressAndReadImageFile } from '../utils/imageUpload';
 import { useLanguage } from '../context/LanguageContext';
@@ -25,7 +25,7 @@ export const ImageUploadField: React.FC<ImageUploadFieldProps> = ({
   allowUrlInput = true,
 }) => {
   const { t } = useLanguage();
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const inputId = useId();
   const [isProcessing, setIsProcessing] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [showUrlBox, setShowUrlBox] = useState(false);
@@ -80,7 +80,9 @@ export const ImageUploadField: React.FC<ImageUploadFieldProps> = ({
   return (
     <div className="space-y-2 text-xs">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <label className="block font-bold text-slate-700">{label}</label>
+        <label htmlFor={inputId} className="block font-bold text-slate-700 cursor-pointer">
+          {label}
+        </label>
         {allowUrlInput && (
           <button
             type="button"
@@ -96,14 +98,6 @@ export const ImageUploadField: React.FC<ImageUploadFieldProps> = ({
           </button>
         )}
       </div>
-
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        onChange={handleFileSelect}
-        className="sr-only"
-      />
 
       {value ? (
         <div
@@ -132,19 +126,32 @@ export const ImageUploadField: React.FC<ImageUploadFieldProps> = ({
                 : t('Image preview ready', 'फ़ोटो प्रीव्यू तैयार है')}
             </p>
             <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                disabled={isProcessing}
-                onClick={() => fileInputRef.current?.click()}
-                className="bg-white hover:bg-amber-100/70 text-[#380812] border border-amber-300 font-semibold px-3 py-1.5 rounded-xl text-[11px] flex items-center gap-1.5 cursor-pointer transition-colors"
+              <label
+                htmlFor={inputId}
+                className={`relative overflow-hidden bg-white hover:bg-amber-100/70 text-[#380812] border border-amber-300 font-semibold px-3 py-1.5 rounded-xl text-[11px] inline-flex items-center gap-1.5 cursor-pointer transition-colors select-none focus-within:ring-2 focus-within:ring-amber-500 ${
+                  isProcessing ? 'opacity-60 pointer-events-none' : ''
+                }`}
               >
+                <input
+                  id={inputId}
+                  type="file"
+                  accept="image/*"
+                  disabled={isProcessing}
+                  onChange={handleFileSelect}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                  aria-label={t('Change Photo', 'फोटो बदलें')}
+                />
                 {isProcessing ? (
-                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-700" />
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-700 shrink-0" />
                 ) : (
-                  <Camera className="w-3.5 h-3.5 text-amber-700" />
+                  <Camera className="w-3.5 h-3.5 text-amber-700 shrink-0" />
                 )}
-                <span>{t('Change Photo', 'फोटो बदलें')}</span>
-              </button>
+                <span>
+                  {isProcessing
+                    ? t('Uploading...', 'अपलोड हो रही है...')
+                    : t('Change Photo', 'फोटो बदलें')}
+                </span>
+              </label>
 
               <button
                 type="button"
@@ -158,12 +165,21 @@ export const ImageUploadField: React.FC<ImageUploadFieldProps> = ({
           </div>
         </div>
       ) : (
-        <button
-          type="button"
-          disabled={isProcessing}
-          onClick={() => fileInputRef.current?.click()}
-          className="w-full border-2 border-dashed border-amber-300 hover:border-[#851834] bg-amber-50/40 hover:bg-amber-50/80 rounded-2xl p-4 sm:p-5 text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-1.5 group"
+        <label
+          htmlFor={inputId}
+          className={`relative overflow-hidden w-full border-2 border-dashed border-amber-300 hover:border-[#851834] bg-amber-50/40 hover:bg-amber-50/80 rounded-2xl p-4 sm:p-5 text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-1.5 group select-none focus-within:ring-2 focus-within:ring-amber-500 ${
+            isProcessing ? 'opacity-65 pointer-events-none' : ''
+          }`}
         >
+          <input
+            id={inputId}
+            type="file"
+            accept="image/*"
+            disabled={isProcessing}
+            onChange={handleFileSelect}
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+            aria-label={label}
+          />
           <div className="w-10 h-10 rounded-xl bg-white border border-amber-200 shadow-2xs flex items-center justify-center text-[#851834] group-hover:scale-105 transition-transform">
             {isProcessing ? (
               <RefreshCw className="w-5 h-5 animate-spin text-amber-700" />
@@ -183,7 +199,7 @@ export const ImageUploadField: React.FC<ImageUploadFieldProps> = ({
                 'JPG, PNG, WEBP समर्थित • स्वतः ऑप्टिमाइज़ किया जाता है'
               )}
           </span>
-        </button>
+        </label>
       )}
 
       {showUrlBox && (
