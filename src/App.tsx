@@ -37,7 +37,7 @@ import {
   reauthenticateWithPopup,
   User
 } from 'firebase/auth';
-import { Sparkles, Lock, CheckCircle2, X, UserCheck, LayoutDashboard, Users } from 'lucide-react';
+import { Sparkles, Lock, CheckCircle2, X } from 'lucide-react';
 import { useLanguage } from './context/LanguageContext';
 import { useAdminConfig, DEFAULT_ADMIN_CONFIG } from './context/AdminConfigContext';
 import { sanitizePhoneInput } from './utils/validation';
@@ -65,6 +65,7 @@ import {
   fetchPrivateContactForProfile,
   backfillLocalOwnedItemsToFirestore,
   resolveIsFirebaseAdmin,
+  extractReadableFirestoreError,
   toValidDocId
 } from './utils/firestoreDirectorySync';
 
@@ -705,7 +706,7 @@ export const App: React.FC = () => {
 
   // Global Auth Listener to handle Redirect returns & Email/Password / Google sign-ins across Web & APK WebView
   useEffect(() => {
-    getRedirectResult(auth)
+    const redirectCheck = getRedirectResult(auth)
       .then((result) => {
         if (result?.user) {
           setFirebaseAuthUser(result.user);
@@ -727,10 +728,23 @@ export const App: React.FC = () => {
           navigateToTab('matrimony', { replace: true });
         }
       } else {
-        const stored = localStorage.getItem('user_auth_session');
-        if (!stored) {
+        void redirectCheck.finally(() => {
+          if (auth.currentUser) return;
+          try {
+            const stored = localStorage.getItem('user_auth_session');
+            if (stored) {
+              const parsed = JSON.parse(stored) as AuthSession;
+              if (parsed?.username === 'AdminAbhi') {
+                return;
+              }
+              localStorage.removeItem('user_auth_session');
+              localStorage.removeItem('device_google_account');
+            }
+          } catch {
+            localStorage.removeItem('user_auth_session');
+          }
           setAuthSession(null);
-        }
+        });
       }
     });
     return () => unsubscribe();
@@ -784,55 +798,114 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleAddProfile = (newProfile: MatrimonyProfile): boolean => {
-    if (!config.featureProfileCreationEnabled) {
-      return false;
+  const ensureAuthenticatedUserForWrite = useCallback(async (): Promise<
+    { ok: true; user: User; ownerKey: string } | { ok: false; error: string }
+  > => {
+    await auth.authStateReady();
+    const currentUser = auth.currentUser;
+    const activeSession = authSessionRef.current;
+    const ownerKey = getSessionOwnerKey(activeSession) || currentUser?.uid || '';
+
+    if (!currentUser) {
+      if (activeSession?.username === 'AdminAbhi') {
+        return {
+          ok: false,
+          error:
+            'AdminAbhi is a local session. Please sign in with your official admin account (abhiruchirathore97@gmail.com) via Google or Email/Password so changes save live to Cloud Firestore.'
+        };
+      }
+      return {
+        ok: false,
+        error:
+          'Your cloud session is not active. Please sign out and log in again with Email & Password or Google so your entry saves live for everyone.'
+      };
     }
 
-    const ownerKey = getSessionOwnerKey(authSession);
-    if (!authSession || !ownerKey) {
-      return false;
+    return { ok: true, user: currentUser, ownerKey };
+  }, []);
+
+  const handleAddProfile = async (
+    newProfile: MatrimonyProfile
+  ): Promise<{ ok: boolean; error?: string }> => {
+    if (!config.featureProfileCreationEnabled) {
+      return {
+        ok: false,
+        error: 'Profile creation is currently paused by Samaj administration.'
+      };
+    }
+
+    const activeSession = authSessionRef.current;
+    if (!activeSession) {
+      return {
+        ok: false,
+        error: 'Please sign in first to publish your profile.'
+      };
     }
 
     // Strict constraint: User can add only 1 profile per login
     if (userOwnedProfiles.length >= 1) {
-      return false;
+      return {
+        ok: false,
+        error:
+          'Only 1 profile can be created per login. You already have a published profile in your account.'
+      };
+    }
+
+    const authCheck = await ensureAuthenticatedUserForWrite();
+    if (!authCheck.ok) {
+      return authCheck;
     }
 
     const ownedProfile: MatrimonyProfile = {
       ...newProfile,
       verified: !config.requireAdminVerification,
-      ownerId: ownerKey,
-      ownerName: authSession.name || authSession.username || authSession.email || 'Member'
+      ownerId: authCheck.ownerKey,
+      ownerName:
+        activeSession.name || activeSession.username || activeSession.email || 'Member'
     };
 
-    deletedProfileIdsRef.current.delete(toValidDocId(ownedProfile.id));
-    setProfiles(prev => [ownedProfile, ...prev]);
     try {
-      const stored = localStorage.getItem('samaj_profiles');
-      const userProfiles = stored ? JSON.parse(stored) : [];
-      userProfiles.unshift(ownedProfile);
-      localStorage.setItem('samaj_profiles', JSON.stringify(userProfiles));
-    } catch (e) {
-      console.error("Error saving profile:", e);
-    }
-
-    if (auth.currentUser) {
-      void saveProfileToFirestore(
+      await saveProfileToFirestore(
         ownedProfile,
-        auth.currentUser,
-        ownerKey,
+        authCheck.user,
+        authCheck.ownerKey,
         ownedProfile.ownerName,
         isFirebaseAdmin
-      ).catch((err) => {
-        console.error('Failed to sync new profile to Cloud Firestore:', err);
-      });
+      );
+    } catch (err) {
+      console.error('Failed to sync new profile to Cloud Firestore:', err);
+      return {
+        ok: false,
+        error: extractReadableFirestoreError(err)
+      };
     }
-    return true;
+
+    deletedProfileIdsRef.current.delete(toValidDocId(ownedProfile.id));
+    setProfiles((prev) =>
+      prev.some((p) => toValidDocId(p.id) === toValidDocId(ownedProfile.id))
+        ? prev
+        : [ownedProfile, ...prev]
+    );
+    try {
+      const stored = localStorage.getItem('samaj_profiles');
+      const userProfiles: MatrimonyProfile[] = stored ? JSON.parse(stored) : [];
+      if (!userProfiles.some((p) => toValidDocId(p.id) === toValidDocId(ownedProfile.id))) {
+        userProfiles.unshift(ownedProfile);
+        localStorage.setItem('samaj_profiles', JSON.stringify(userProfiles));
+      }
+    } catch (e) {
+      console.error('Error saving profile cache:', e);
+    }
+
+    return { ok: true };
   };
 
-  const handleAddQuickProfile = (partial: Partial<MatrimonyProfile>): boolean => {
-    const cleanPhone = sanitizePhoneInput(partial.phone || partial.contact || authSession?.phone || '');
+  const handleAddQuickProfile = async (
+    partial: Partial<MatrimonyProfile>
+  ): Promise<{ ok: boolean; error?: string }> => {
+    const cleanPhone = sanitizePhoneInput(
+      partial.phone || partial.contact || authSessionRef.current?.phone || ''
+    );
     const newProfile: MatrimonyProfile = {
       id: Date.now(),
       name: partial.name || 'Candidate',
@@ -842,18 +915,22 @@ export const App: React.FC = () => {
       city: partial.city || 'Indore',
       state: partial.state || 'Madhya Pradesh',
       native: partial.native || partial.city || 'Indore',
-      location: partial.location || `${partial.city || 'Indore'}, ${partial.state || 'Madhya Pradesh'}`,
+      location:
+        partial.location || `${partial.city || 'Indore'}, ${partial.state || 'Madhya Pradesh'}`,
       education: partial.education || 'Graduate',
       profession: partial.profession || 'Business / Professional',
       income: partial.income || 'Competitive',
       height: partial.height || "5' 6\"",
-      familyDetails: partial.familyDetails || 'Respected Rathore Samaj family. Quick registration via portal.',
+      familyDetails:
+        partial.familyDetails || 'Respected Rathore Samaj family. Quick registration via portal.',
       about: partial.about || 'Well-settled respected Rathore Samaj family.',
       contact: partial.contact || cleanPhone,
       phone: cleanPhone,
-      photo: partial.photo || (partial.gender === 'Female' 
-        ? "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80" 
-        : "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80"),
+      photo:
+        partial.photo ||
+        (partial.gender === 'Female'
+          ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80'
+          : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80'),
       gallery: partial.gallery && partial.gallery.length > 0 ? partial.gallery : undefined,
       verified: true,
       createdAt: new Date().toISOString()
@@ -861,43 +938,64 @@ export const App: React.FC = () => {
     return handleAddProfile(newProfile);
   };
 
-  const handleAddAd = (newAd: BusinessAd) => {
-    const ownerKey = getSessionOwnerKey(authSession);
+  const handleAddAd = async (newAd: BusinessAd): Promise<{ ok: boolean; error?: string }> => {
+    const authCheck = await ensureAuthenticatedUserForWrite();
+    if (!authCheck.ok) {
+      return authCheck;
+    }
+
+    const activeSession = authSessionRef.current;
     const ownedAd: BusinessAd = {
       ...newAd,
-      ownerId: newAd.ownerId || ownerKey || undefined,
+      ownerId: newAd.ownerId || authCheck.ownerKey,
       ownerName:
         newAd.ownerName ||
-        authSession?.name ||
-        authSession?.username ||
-        authSession?.email ||
+        activeSession?.name ||
+        activeSession?.username ||
+        activeSession?.email ||
         undefined
     };
+
+    try {
+      await saveAdToFirestore(
+        ownedAd,
+        authCheck.user,
+        authCheck.ownerKey,
+        ownedAd.ownerName
+      );
+    } catch (err) {
+      console.error('Failed to sync new business ad to Cloud Firestore:', err);
+      return {
+        ok: false,
+        error: extractReadableFirestoreError(err)
+      };
+    }
+
     deletedAdIdsRef.current.delete(toValidDocId(ownedAd.id));
-    setAds(prev => [ownedAd, ...prev]);
+    setAds((prev) =>
+      prev.some((a) => toValidDocId(a.id) === toValidDocId(ownedAd.id))
+        ? prev
+        : [ownedAd, ...prev]
+    );
     try {
       const stored = localStorage.getItem('samaj_ads');
-      const userAds = stored ? JSON.parse(stored) : [];
-      userAds.unshift(ownedAd);
-      localStorage.setItem('samaj_ads', JSON.stringify(userAds));
+      const userAds: BusinessAd[] = stored ? JSON.parse(stored) : [];
+      if (!userAds.some((a) => toValidDocId(a.id) === toValidDocId(ownedAd.id))) {
+        userAds.unshift(ownedAd);
+        localStorage.setItem('samaj_ads', JSON.stringify(userAds));
+      }
     } catch (e) {
-      console.error("Error saving ad:", e);
+      console.error('Error saving ad cache:', e);
     }
 
-    if (auth.currentUser) {
-      void saveAdToFirestore(
-        ownedAd,
-        auth.currentUser,
-        ownerKey || auth.currentUser.uid,
-        ownedAd.ownerName
-      ).catch((err) => {
-        console.error('Failed to sync new business ad to Cloud Firestore:', err);
-      });
-    }
+    return { ok: true };
   };
 
-  const handleAddQuickAd = (partial: Partial<BusinessAd>) => {
-    const ownerKey = getSessionOwnerKey(authSession);
+  const handleAddQuickAd = async (
+    partial: Partial<BusinessAd>
+  ): Promise<{ ok: boolean; error?: string }> => {
+    const activeSession = authSessionRef.current;
+    const ownerKey = getSessionOwnerKey(activeSession);
     const newAd: BusinessAd = {
       id: Date.now(),
       title: partial.title || 'New Samaj Business',
@@ -905,49 +1003,98 @@ export const App: React.FC = () => {
       category: partial.category || 'Retail & Shopping',
       city: partial.city || 'Indore',
       address: partial.address || 'Main Market',
-      phone: sanitizePhoneInput(partial.phone || authSession?.phone || ''),
+      phone: sanitizePhoneInput(partial.phone || activeSession?.phone || ''),
+      contacts: partial.contacts,
       tagline: partial.tagline || 'Special Samaj Member Discount Available.',
       offer: partial.offer || '10% Discount for Samaj Members',
       rating: '5.0 ★',
       isFeatured: partial.isFeatured || false,
       adTier: partial.adTier,
       adPricePaid: partial.adPricePaid,
-      banner: partial.banner || 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=600&q=80',
+      banner:
+        partial.banner ||
+        'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=600&q=80',
       ownerId: ownerKey || undefined,
-      ownerName: authSession?.name || authSession?.username || authSession?.email || undefined,
+      ownerName:
+        activeSession?.name || activeSession?.username || activeSession?.email || undefined,
       createdAt: new Date().toISOString()
     };
-    handleAddAd(newAd);
+    return handleAddAd(newAd);
   };
 
-  const handleAddEvent = (newEvent: SamajEvent) => {
+  const handleAddEvent = async (
+    newEvent: SamajEvent
+  ): Promise<{ ok: boolean; error?: string }> => {
+    const authCheck = await ensureAuthenticatedUserForWrite();
+    if (!authCheck.ok) {
+      return authCheck;
+    }
+
     const eventWithId: SamajEvent = {
       ...newEvent,
       id: newEvent.id || Date.now()
     };
-    setEvents(prev => [eventWithId, ...prev]);
+
+    try {
+      await saveEventToFirestore(eventWithId, authCheck.user);
+    } catch (err) {
+      console.error('Failed to sync event to Cloud Firestore:', err);
+      return {
+        ok: false,
+        error: extractReadableFirestoreError(err)
+      };
+    }
+
+    setEvents((prev) =>
+      prev.some((ev) => toValidDocId(ev.id) === toValidDocId(eventWithId.id))
+        ? prev
+        : [eventWithId, ...prev]
+    );
     try {
       const stored = localStorage.getItem('samaj_events');
-      const userEvents = stored ? JSON.parse(stored) : [...INITIAL_EVENTS];
-      userEvents.unshift(eventWithId);
-      localStorage.setItem('samaj_events', JSON.stringify(userEvents));
+      const userEvents: SamajEvent[] = stored ? JSON.parse(stored) : [...INITIAL_EVENTS];
+      if (!userEvents.some((ev) => toValidDocId(ev.id) === toValidDocId(eventWithId.id))) {
+        userEvents.unshift(eventWithId);
+        localStorage.setItem('samaj_events', JSON.stringify(userEvents));
+      }
     } catch (e) {
-      console.error("Error saving event:", e);
+      console.error('Error saving event cache:', e);
     }
 
-    if (auth.currentUser) {
-      void saveEventToFirestore(eventWithId, auth.currentUser).catch((err) => {
-        console.error('Failed to sync event to Cloud Firestore:', err);
-      });
-    }
+    return { ok: true };
   };
 
-  const handleUpdateProfile = (updatedProfile: MatrimonyProfile) => {
-    setProfiles(prev => prev.map(p => p.id === updatedProfile.id ? updatedProfile : p));
+  const handleUpdateProfile = async (
+    updatedProfile: MatrimonyProfile
+  ): Promise<{ ok: boolean; error?: string }> => {
+    const authCheck = await ensureAuthenticatedUserForWrite();
+    if (!authCheck.ok) {
+      return authCheck;
+    }
+
+    try {
+      await saveProfileToFirestore(
+        updatedProfile,
+        authCheck.user,
+        authCheck.ownerKey,
+        updatedProfile.ownerName || authSessionRef.current?.name,
+        isFirebaseAdmin
+      );
+    } catch (err) {
+      console.error('Failed to update profile in Cloud Firestore:', err);
+      return {
+        ok: false,
+        error: extractReadableFirestoreError(err)
+      };
+    }
+
+    setProfiles((prev) =>
+      prev.map((p) => (p.id === updatedProfile.id ? updatedProfile : p))
+    );
     try {
       const stored = localStorage.getItem('samaj_profiles');
       const userProfiles: MatrimonyProfile[] = stored ? JSON.parse(stored) : [];
-      const index = userProfiles.findIndex(p => p.id === updatedProfile.id);
+      const index = userProfiles.findIndex((p) => p.id === updatedProfile.id);
       if (index >= 0) {
         userProfiles[index] = updatedProfile;
       } else {
@@ -955,35 +1102,24 @@ export const App: React.FC = () => {
       }
       localStorage.setItem('samaj_profiles', JSON.stringify(userProfiles));
     } catch (e) {
-      console.error("Error updating profile:", e);
+      console.error('Error updating profile cache:', e);
     }
 
-    if (auth.currentUser) {
-      const ownerKey = getSessionOwnerKey(authSession) || auth.currentUser.uid;
-      void saveProfileToFirestore(
-        updatedProfile,
-        auth.currentUser,
-        ownerKey,
-        updatedProfile.ownerName || authSession?.name,
-        isFirebaseAdmin
-      ).catch((err) => {
-        console.error('Failed to update profile in Cloud Firestore:', err);
-      });
-    }
+    return { ok: true };
   };
 
   const handleDeleteProfile = (id: number | string) => {
     deletedProfileIdsRef.current.add(toValidDocId(id));
-    setProfiles(prev => prev.filter(p => p.id !== id));
+    setProfiles((prev) => prev.filter((p) => p.id !== id));
     try {
       const stored = localStorage.getItem('samaj_profiles');
       if (stored) {
         const userProfiles: MatrimonyProfile[] = JSON.parse(stored);
-        const remaining = userProfiles.filter(p => p.id !== id);
+        const remaining = userProfiles.filter((p) => p.id !== id);
         localStorage.setItem('samaj_profiles', JSON.stringify(remaining));
       }
     } catch (e) {
-      console.error("Error deleting profile:", e);
+      console.error('Error deleting profile:', e);
     }
 
     if (auth.currentUser) {
@@ -993,12 +1129,34 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleUpdateAd = (updatedAd: BusinessAd) => {
-    setAds(prev => prev.map(a => a.id === updatedAd.id ? updatedAd : a));
+  const handleUpdateAd = async (
+    updatedAd: BusinessAd
+  ): Promise<{ ok: boolean; error?: string }> => {
+    const authCheck = await ensureAuthenticatedUserForWrite();
+    if (!authCheck.ok) {
+      return authCheck;
+    }
+
+    try {
+      await saveAdToFirestore(
+        updatedAd,
+        authCheck.user,
+        authCheck.ownerKey,
+        updatedAd.ownerName || authSessionRef.current?.name
+      );
+    } catch (err) {
+      console.error('Failed to update ad in Cloud Firestore:', err);
+      return {
+        ok: false,
+        error: extractReadableFirestoreError(err)
+      };
+    }
+
+    setAds((prev) => prev.map((a) => (a.id === updatedAd.id ? updatedAd : a)));
     try {
       const stored = localStorage.getItem('samaj_ads');
       const userAds: BusinessAd[] = stored ? JSON.parse(stored) : [];
-      const index = userAds.findIndex(a => a.id === updatedAd.id);
+      const index = userAds.findIndex((a) => a.id === updatedAd.id);
       if (index >= 0) {
         userAds[index] = updatedAd;
       } else {
@@ -1006,34 +1164,24 @@ export const App: React.FC = () => {
       }
       localStorage.setItem('samaj_ads', JSON.stringify(userAds));
     } catch (e) {
-      console.error("Error updating ad:", e);
+      console.error('Error updating ad cache:', e);
     }
 
-    if (auth.currentUser) {
-      const ownerKey = getSessionOwnerKey(authSession) || auth.currentUser.uid;
-      void saveAdToFirestore(
-        updatedAd,
-        auth.currentUser,
-        ownerKey,
-        updatedAd.ownerName || authSession?.name
-      ).catch((err) => {
-        console.error('Failed to update ad in Cloud Firestore:', err);
-      });
-    }
+    return { ok: true };
   };
 
   const handleDeleteAd = (id: number | string) => {
     deletedAdIdsRef.current.add(toValidDocId(id));
-    setAds(prev => prev.filter(a => a.id !== id));
+    setAds((prev) => prev.filter((a) => a.id !== id));
     try {
       const stored = localStorage.getItem('samaj_ads');
       if (stored) {
         const userAds: BusinessAd[] = JSON.parse(stored);
-        const remaining = userAds.filter(a => a.id !== id);
+        const remaining = userAds.filter((a) => a.id !== id);
         localStorage.setItem('samaj_ads', JSON.stringify(remaining));
       }
     } catch (e) {
-      console.error("Error deleting ad:", e);
+      console.error('Error deleting ad:', e);
     }
 
     if (auth.currentUser) {
@@ -1304,7 +1452,7 @@ export const App: React.FC = () => {
             {t('Return to Home', 'होम पर लौटें')}
           </button>
         )}
-        {authSession?.username === 'AdminAbhi' && (
+        {(authSession?.username === 'AdminAbhi' || isFirebaseAdmin) && (
           <button
             onClick={() => navigateToTab('admin')}
             className="bg-amber-300 text-[#380812] font-bold px-5 py-2.5 rounded-xl text-xs cursor-pointer"
@@ -1378,57 +1526,6 @@ export const App: React.FC = () => {
       <main className="flex-1 max-w-7xl w-full min-w-0 mx-auto px-3 sm:px-6 lg:px-8 py-5 sm:py-8">
         {currentTab === 'matrimony' && (
           <div className="space-y-6">
-            {authSession && (
-              <div className="bg-white rounded-2xl border border-emerald-200/90 shadow-xs px-4 py-3.5 sm:px-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center shrink-0 relative">
-                    <UserCheck className="w-5 h-5 text-emerald-700" />
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 ring-2 ring-white absolute -top-0.5 -right-0.5 animate-pulse" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                      <p className="text-xs sm:text-sm font-bold text-stone-900 truncate">
-                        {t(`Logged in as ${authSession.name || 'Samaj Member'}`, `लॉग इन: ${authSession.name || 'समाज सदस्य'}`)}
-                      </p>
-                      <span className="text-[11px] font-semibold text-emerald-700">
-                        · {t('Active Session', 'सक्रिय सत्र')}
-                      </span>
-                    </div>
-                    <p className="text-[11px] sm:text-xs text-stone-600 truncate mt-0.5">
-                      {authSession.email || (authSession.username ? `@${authSession.username}` : authSession.phone ? `+91 ${authSession.phone}` : '')}
-                      {(authSession.email || authSession.username || authSession.phone) ? ' · ' : ''}
-                      {authSession.username === 'AdminAbhi' || hasRegisteredProfile || userSubscription?.active || config.contactAccessMode === 'free'
-                        ? t('Full Biodata Access Active', 'पूर्ण बायोडाटा एक्सेस सक्रिय')
-                        : config.subscriptionEnabled && config.contactAccessMode === 'subscription_required'
-                          ? t('Samaj Subscription Required for Full Contacts', 'पूर्ण संपर्क हेतु सदस्यता आवश्यक')
-                          : t(
-                              `Free Profile Views Left: ${Math.max(0, 3 - unlockedProfiles.length)} of 3`,
-                              `शेष निःशुल्क प्रोफ़ाइल व्यू: 3 में से ${Math.max(0, 3 - unlockedProfiles.length)}`
-                            )}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => navigateToTab('matrimony', { scrollToId: 'biodatas-section' })}
-                    className="flex-1 sm:flex-initial bg-amber-50 hover:bg-amber-100 text-[#380812] border border-amber-300 font-bold px-3.5 py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
-                  >
-                    <Users className="w-3.5 h-3.5 text-amber-800 shrink-0" />
-                    <span>{t('Browse Biodatas', 'बायोडाटा देखें')}</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => navigateToTab('dashboard')}
-                    className="flex-1 sm:flex-initial bg-[#380812] hover:bg-[#540e1b] text-amber-200 border border-amber-400/30 font-bold px-3.5 py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer shadow-xs transition-colors"
-                  >
-                    <LayoutDashboard className="w-3.5 h-3.5 text-amber-300 shrink-0" />
-                    <span>{t('Member Dashboard', 'सदस्य डैशबोर्ड')}</span>
-                  </button>
-                </div>
-              </div>
-            )}
             <FoundingOfferCard
               verifiedCount={verifiedProfilesCount}
               hasRegisteredProfile={hasRegisteredProfile}

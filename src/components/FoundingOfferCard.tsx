@@ -36,6 +36,30 @@ export const FoundingOfferCard: React.FC<FoundingOfferCardProps> = ({
     onNavigateTab(hasRegisteredProfile ? 'dashboard' : 'create-profile');
   };
 
+  if (userQualified) {
+    return (
+      <section
+        aria-label={t('Founding Member Lifetime Premium', 'फाउंडिंग सदस्य आजीवन प्रीमियम')}
+        className="rounded-2xl bg-gradient-to-r from-[#28060d] via-[#3d0a16] to-[#1e0308] text-white border border-amber-400/35 px-4 py-3 sm:px-5 flex flex-wrap items-center justify-between gap-3 shadow-sm"
+      >
+        <div className="flex items-center gap-2.5 min-w-0">
+          <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
+          <p className="text-xs sm:text-sm font-medium text-amber-50 truncate">
+            {t(
+              'Founding Lifetime Premium active on your verified profile',
+              'आपकी सत्यापित प्रोफ़ाइल पर आजीवन प्रीमियम सक्रिय है'
+            )}
+          </p>
+        </div>
+        <span className="text-[11px] font-semibold text-amber-300 tabular-nums shrink-0">
+          {lang === 'hi'
+            ? `${claimedCount}/${FOUNDING_PROFILE_LIMIT} सत्यापित स्थान`
+            : `${claimedCount}/${FOUNDING_PROFILE_LIMIT} spots claimed`}
+        </span>
+      </section>
+    );
+  }
+
   return (
     <section
       aria-label={t('First 500 Verified Profiles Lifetime Premium Offer', 'प्रथम ५०० सत्यापित प्रोफ़ाइल हेतु आजीवन प्रीमियम ऑफर')}

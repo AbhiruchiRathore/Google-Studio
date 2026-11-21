@@ -31,7 +31,7 @@ interface MatrimonyTabProps {
   onUnblockProfile?: (id: number | string) => void;
   onUnlockProfile: (id: number | string) => void;
   onNavigateTab: (tab: TabType) => void;
-  onAddQuickProfile: (profile: Partial<MatrimonyProfile>) => void;
+  onAddQuickProfile: (profile: Partial<MatrimonyProfile>) => Promise<{ ok: boolean; error?: string }> | { ok: boolean; error?: string } | boolean | void;
   onSelectKundaliProfile?: (profileId: number | string, gender: 'Male' | 'Female') => void;
 }
 
@@ -204,7 +204,9 @@ _Powered by Svayaa_`;
 
   const effectiveViewMode = config.featureLikesEnabled ? viewMode : 'all';
 
-  const isAdminUser = authSession?.username === 'AdminAbhi';
+  const isAdminUser =
+    authSession?.username === 'AdminAbhi' ||
+    (authSession?.email || '').trim().toLowerCase() === 'abhiruchirathore97@gmail.com';
   const genderPrefStorageKey = getUserStorageKey('samaj_candidate_gender', authSession);
   const [storedCandidateGender, setStoredCandidateGender] = useState<'Male' | 'Female' | null>(() => {
     try {

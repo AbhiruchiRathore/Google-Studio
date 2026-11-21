@@ -1,4 +1,4 @@
-const CACHE_NAME = 'rathore-rishtey-pwa-v2';
+const CACHE_NAME = 'rathore-rishtey-pwa-v3';
 const OFFLINE_URL = '/offline.html';
 
 const PRECACHE_ASSETS = [
@@ -6,6 +6,9 @@ const PRECACHE_ASSETS = [
   '/index.html',
   '/offline.html',
   '/manifest.json',
+  '/manifest.webmanifest',
+  '/favicon.ico',
+  '/pwa-144x144.png',
   '/pwa-192x192.png',
   '/pwa-512x512.png',
   '/pwa-maskable-512x512.png',
@@ -85,6 +88,22 @@ self.addEventListener('fetch', (event) => {
           if (cachedRoot) return cachedRoot;
           return caches.match(OFFLINE_URL);
         })
+    );
+    return;
+  }
+
+  // Web manifests: Network-First so app name and icon updates always propagate immediately
+  if (url.pathname === '/manifest.json' || url.pathname === '/manifest.webmanifest') {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response && response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy)).catch(() => undefined);
+          }
+          return response;
+        })
+        .catch(() => caches.match(request))
     );
     return;
   }

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Lock, ShieldCheck, Users, AlertCircle, CheckCircle2, LayoutDashboard } from 'lucide-react';
+import { Lock, Users, AlertCircle, CheckCircle2, LayoutDashboard, RefreshCw } from 'lucide-react';
 import { MatrimonyProfile, TabType, AuthSession } from '../types';
 import { GoogleSignInModal } from './GoogleSignInModal';
 import {
@@ -15,7 +15,7 @@ import { MultiPhotoUploadField } from './MultiPhotoUploadField';
 interface CreateProfileTabProps {
   authSession: AuthSession | null;
   onLogin: (session: AuthSession, redirectTab?: TabType) => void;
-  onAddProfile: (profile: MatrimonyProfile) => boolean | void;
+  onAddProfile: (profile: MatrimonyProfile) => Promise<{ ok: boolean; error?: string }> | { ok: boolean; error?: string } | boolean | void;
   onNavigateTab: (tab: TabType) => void;
   hasRegisteredProfile?: boolean;
   existingUserProfile?: MatrimonyProfile | null;
@@ -31,6 +31,8 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
 }) => {
   const { lang, t } = useLanguage();
   const [showGoogleModal, setShowGoogleModal] = useState(false);
+  const [googleErrorCode, setGoogleErrorCode] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
 
@@ -99,10 +101,12 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
 
   const handleGoogleSuccess = (session: AuthSession) => {
     setShowGoogleModal(false);
+    setGoogleErrorCode(null);
     onLogin(session, 'create-profile');
   };
 
   const handleDirectGoogleClick = async () => {
+    setGoogleErrorCode(null);
     const existing = getExistingDeviceGoogleSession();
     if (existing) {
       onLogin(existing, 'create-profile');
@@ -114,13 +118,15 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
       } else {
         await signInWithDesktopBrowser((s) => onLogin(s, 'create-profile'));
       }
-    } catch {
+    } catch (err: any) {
+      setGoogleErrorCode(err?.code || null);
       setShowGoogleModal(true);
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setFormError(null);
 
     if (!formData.name.trim() || !formData.gotra.trim() || !formData.education.trim()) {
@@ -172,15 +178,31 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
       createdAt: new Date().toISOString()
     };
 
-    const added = onAddProfile(newProfile);
-    if (added === false) {
-      setFormError(t(
-        'Only 1 profile can be created per login. You already have a published profile in your account.',
-        'प्रति लॉगिन केवल 1 प्रोफ़ाइल बनाई जा सकती है। आपके खाते में पहले से एक प्रोफ़ाइल मौजूद है।'
-      ));
-      return;
+    setIsSubmitting(true);
+    try {
+      const result = await onAddProfile(newProfile);
+      const isOk =
+        result === true ||
+        result === undefined ||
+        (typeof result === 'object' && result !== null && result.ok);
+
+      if (!isOk) {
+        const errText =
+          typeof result === 'object' && result !== null && result.error
+            ? result.error
+            : t(
+                'Could not save profile to the live database. Please check your login and internet connection.',
+                'प्रोफ़ाइल लाइव डेटाबेस में सेव नहीं हो सकी। कृपया अपना लॉगिन और इंटरनेट जांचें।'
+              );
+        setFormError(errText);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+
+      onNavigateTab('dashboard');
+    } finally {
+      setIsSubmitting(false);
     }
-    onNavigateTab('dashboard');
   };
 
   if (!authSession) {
@@ -190,6 +212,11 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
           isOpen={showGoogleModal}
           onClose={() => setShowGoogleModal(false)}
           onSuccess={handleGoogleSuccess}
+          errorCode={googleErrorCode}
+          onUseEmailAuth={() => {
+            setShowGoogleModal(false);
+            onNavigateTab('signup');
+          }}
         />
 
         <div className="bg-white p-6 md:p-8 rounded-2xl border border-amber-200 shadow-xl space-y-6 text-center">
@@ -310,15 +337,7 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
       <div className="bg-white p-6 sm:p-8 rounded-3xl border border-stone-200/90 shadow-sm space-y-5">
         <div className="flex justify-between items-center border-b border-stone-100 pb-3">
           <div>
-            <div className="flex items-center gap-2">
-              <span className="bg-emerald-50 text-emerald-800 text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1 border border-emerald-200">
-                <ShieldCheck className="w-3 h-3 text-emerald-600" /> {t('Signed In', 'लॉग इन सक्रिय')}
-              </span>
-              <span className="text-xs text-stone-500">
-                {authSession.name || `+91 ${authSession.phone}`}
-              </span>
-            </div>
-            <h2 className="text-2xl font-serif font-bold text-stone-900 mt-1">
+            <h2 className="text-2xl font-serif font-bold text-stone-900">
               {t('Create Matrimonial Profile', 'वैवाहिक प्रोफ़ाइल (बायोडाटा) बनाएं')}
             </h2>
             <p className="text-xs text-stone-500 font-light">
@@ -658,9 +677,15 @@ export const CreateProfileTab: React.FC<CreateProfileTabProps> = ({
 
           <button 
             type="submit" 
-            className="w-full bg-gradient-to-r from-[#380812] to-[#540e1b] hover:from-[#24050b] hover:to-[#380812] text-amber-200 font-bold py-3.5 rounded-xl text-xs sm:text-sm shadow-md transition-all cursor-pointer border border-amber-400/30 hover:scale-[1.01]"
+            disabled={isSubmitting}
+            className="w-full bg-gradient-to-r from-[#380812] to-[#540e1b] hover:from-[#24050b] hover:to-[#380812] disabled:opacity-60 text-amber-200 font-bold py-3.5 rounded-xl text-xs sm:text-sm shadow-md transition-all cursor-pointer border border-amber-400/30 hover:scale-[1.01] flex items-center justify-center gap-2"
           >
-            {t('Publish Profile to Directory & Unlock Contacts', 'प्रोफ़ाइल प्रकाशित करें और संपर्क अनलॉक करें')}
+            {isSubmitting && <RefreshCw className="w-4 h-4 animate-spin text-amber-300" />}
+            <span>
+              {isSubmitting
+                ? t('Publishing Live to Cloud Database...', 'लाइव डेटाबेस में सेव हो रहा है...')
+                : t('Publish Profile to Directory & Unlock Contacts', 'प्रोफ़ाइल प्रकाशित करें और संपर्क अनलॉक करें')}
+            </span>
           </button>
         </form>
       </div>

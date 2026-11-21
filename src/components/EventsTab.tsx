@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Calendar, MapPin, ExternalLink, PlusCircle, X, CheckCircle2 } from 'lucide-react';
+import { Calendar, MapPin, ExternalLink, PlusCircle, X, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
 import { SamajEvent, AuthSession } from '../types';
 import { useLanguage } from '../context/LanguageContext';
 import { useAdminConfig } from '../context/AdminConfigContext';
@@ -7,14 +7,19 @@ import { useAdminConfig } from '../context/AdminConfigContext';
 interface EventsTabProps {
   authSession?: AuthSession | null;
   events: SamajEvent[];
-  onAddEvent: (event: SamajEvent) => void;
+  onAddEvent: (event: SamajEvent) => Promise<{ ok: boolean; error?: string }> | { ok: boolean; error?: string } | void;
 }
 
 export const EventsTab: React.FC<EventsTabProps> = ({ authSession, events, onAddEvent }) => {
   const { t } = useLanguage();
   const { config } = useAdminConfig();
-  const canPostEvent = config.allowUserEventPosting || authSession?.username === 'AdminAbhi';
+  const canPostEvent =
+    config.allowUserEventPosting ||
+    authSession?.username === 'AdminAbhi' ||
+    (authSession?.email || '').trim().toLowerCase() === 'abhiruchirathore97@gmail.com';
   const [showAddModal, setShowAddModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [successToast, setSuccessToast] = useState(false);
   const [newEvent, setNewEvent] = useState({
     title: '',
@@ -26,34 +31,48 @@ export const EventsTab: React.FC<EventsTabProps> = ({ authSession, events, onAdd
     link: ''
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!canPostEvent || !newEvent.title || !newEvent.date || !newEvent.location) return;
+    if (isSubmitting || !canPostEvent || !newEvent.title || !newEvent.date || !newEvent.location) return;
+    setSubmitError(null);
+    setIsSubmitting(true);
 
-    onAddEvent({
-      id: Date.now(),
-      title: newEvent.title,
-      date: newEvent.date,
-      time: newEvent.time,
-      location: newEvent.location,
-      venue: newEvent.venue || newEvent.location,
-      description: newEvent.description,
-      link: newEvent.link || undefined,
-      badge: t('Community Announcement', 'समाज सूचना')
-    });
+    try {
+      const result = await onAddEvent({
+        id: Date.now(),
+        title: newEvent.title,
+        date: newEvent.date,
+        time: newEvent.time,
+        location: newEvent.location,
+        venue: newEvent.venue || newEvent.location,
+        description: newEvent.description,
+        link: newEvent.link || undefined,
+        badge: t('Community Announcement', 'समाज सूचना')
+      });
 
-    setShowAddModal(false);
-    setNewEvent({
-      title: '',
-      date: '',
-      time: '10:00 AM - 5:00 PM',
-      location: '',
-      venue: '',
-      description: '',
-      link: ''
-    });
-    setSuccessToast(true);
-    setTimeout(() => setSuccessToast(false), 4500);
+      if (result && typeof result === 'object' && !result.ok) {
+        setSubmitError(
+          result.error ||
+            t('Could not publish event notice to cloud database.', 'कार्यक्रम सूचना क्लाउड में सेव नहीं हो सकी।')
+        );
+        return;
+      }
+
+      setShowAddModal(false);
+      setNewEvent({
+        title: '',
+        date: '',
+        time: '10:00 AM - 5:00 PM',
+        location: '',
+        venue: '',
+        description: '',
+        link: ''
+      });
+      setSuccessToast(true);
+      setTimeout(() => setSuccessToast(false), 4500);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -172,6 +191,13 @@ export const EventsTab: React.FC<EventsTabProps> = ({ authSession, events, onAdd
               {t('Inform Rathore Samaj families about upcoming sammelans and meets.', 'राठौर समाज के परिवारों को आगामी सम्मेलन एवं बैठकों की जानकारी दें।')}
             </p>
 
+            {submitError && (
+              <div className="mb-3 p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{submitError}</span>
+              </div>
+            )}
+
             <form onSubmit={handleSubmit} className="space-y-3 text-xs">
               <div>
                 <label className="font-bold text-slate-700 block mb-1">{t('Event / Sammelan Title *', 'कार्यक्रम / सम्मेलन का शीर्षक *')}</label>
@@ -246,9 +272,15 @@ export const EventsTab: React.FC<EventsTabProps> = ({ authSession, events, onAdd
 
               <button 
                 type="submit" 
-                className="w-full bg-red-900 hover:bg-red-800 text-amber-100 font-bold py-3 rounded-xl shadow mt-2 cursor-pointer transition-colors"
+                disabled={isSubmitting}
+                className="w-full bg-red-900 hover:bg-red-800 disabled:opacity-60 text-amber-100 font-bold py-3 rounded-xl shadow mt-2 cursor-pointer transition-colors flex items-center justify-center gap-2"
               >
-                {t('Publish Event Notice', 'सूचना प्रकाशित करें')}
+                {isSubmitting && <RefreshCw className="w-4 h-4 animate-spin text-amber-300" />}
+                <span>
+                  {isSubmitting
+                    ? t('Publishing Notice...', 'सूचना प्रकाशित हो रही है...')
+                    : t('Publish Event Notice', 'सूचना प्रकाशित करें')}
+                </span>
               </button>
             </form>
           </div>

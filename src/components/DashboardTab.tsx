@@ -26,15 +26,17 @@ import {
 } from '../utils/profileOwnership';
 import { LocationPermissionStatus, UserLocationData } from '../hooks/useUserLocation';
 
+type SaveMutationResult = Promise<{ ok: boolean; error?: string }> | { ok: boolean; error?: string } | boolean | void;
+
 interface DashboardTabProps {
   authSession: AuthSession | null;
   profiles: MatrimonyProfile[];
   ads: BusinessAd[];
-  onUpdateProfile: (updatedProfile: MatrimonyProfile) => void;
-  onAddProfile: (newProfile: MatrimonyProfile) => boolean | void;
+  onUpdateProfile: (updatedProfile: MatrimonyProfile) => SaveMutationResult;
+  onAddProfile: (newProfile: MatrimonyProfile) => SaveMutationResult;
   onDeleteProfile: (id: number | string) => void;
-  onUpdateAd: (updatedAd: BusinessAd) => void;
-  onAddAd: (newAd: BusinessAd) => void;
+  onUpdateAd: (updatedAd: BusinessAd) => SaveMutationResult;
+  onAddAd: (newAd: BusinessAd) => SaveMutationResult;
   onDeleteAd: (id: number | string) => void;
   onNavigateTab: (tab: TabType) => void;
   onLogout: () => void;
@@ -170,6 +172,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   // Inline Profile Editor State
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [editingProfile, setEditingProfile] = useState<MatrimonyProfile | null>(null);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [profileFormError, setProfileFormError] = useState('');
   const [showGalleryAddInput, setShowGalleryAddInput] = useState(false);
   const [newGalleryUrlInput, setNewGalleryUrlInput] = useState('');
@@ -177,6 +180,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   // Inline Business Ad Editor State
   const [isEditingAd, setIsEditingAd] = useState(false);
   const [editingAd, setEditingAd] = useState<BusinessAd | null>(null);
+  const [isSavingAd, setIsSavingAd] = useState(false);
   const [adFormError, setAdFormError] = useState('');
 
   // Live Preview Modals
@@ -186,6 +190,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   // Quick Card Settings Modals
   const [settingsModalProfile, setSettingsModalProfile] = useState<MatrimonyProfile | null>(null);
   const [settingsModalAd, setSettingsModalAd] = useState<BusinessAd | null>(null);
+  const [settingsModalError, setSettingsModalError] = useState<string | null>(null);
   const [confirmDeleteProfileId, setConfirmDeleteProfileId] = useState<number | string | null>(null);
   const [confirmDeleteAdId, setConfirmDeleteAdId] = useState<number | string | null>(null);
 
@@ -387,9 +392,9 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   };
 
   // Handler: Save Profile Edits
-  const handleSaveProfileEdits = (e: React.FormEvent) => {
+  const handleSaveProfileEdits = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingProfile) return;
+    if (!editingProfile || isSavingProfile) return;
     setProfileFormError('');
 
     if (!editingProfile.name.trim() || !editingProfile.gotra.trim()) {
@@ -410,41 +415,67 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     };
 
     const exists = profiles.some(p => p.id === cleanedProfile.id);
-    if (exists) {
-      onUpdateProfile(cleanedProfile);
-    } else {
-      if (hasOwnProfile) {
-        setProfileFormError(t(
-          'Only 1 profile can be created per login. Please edit or delete your existing profile first.',
-          'प्रति लॉगिन केवल 1 प्रोफ़ाइल बनाई जा सकती है। कृपया अपनी मौजूदा प्रोफ़ाइल को संपादित करें।'
-        ));
-        return;
-      }
-      const added = onAddProfile(cleanedProfile);
-      if (added === false) {
-        setProfileFormError(t(
-          'Only 1 profile can be created per login.',
-          'प्रति लॉगिन केवल 1 प्रोफ़ाइल बनाई जा सकती है।'
-        ));
-        return;
-      }
+    if (!exists && hasOwnProfile) {
+      setProfileFormError(t(
+        'Only 1 profile can be created per login. Please edit or delete your existing profile first.',
+        'प्रति लॉगिन केवल 1 प्रोफ़ाइल बनाई जा सकती है। कृपया अपनी मौजूदा प्रोफ़ाइल को संपादित करें।'
+      ));
+      return;
     }
 
-    setIsEditingProfile(false);
-    setEditingProfile(null);
+    setIsSavingProfile(true);
+    try {
+      const result = exists
+        ? await onUpdateProfile(cleanedProfile)
+        : await onAddProfile(cleanedProfile);
+
+      const isOk =
+        result === true ||
+        result === undefined ||
+        (typeof result === 'object' && result !== null && result.ok);
+
+      if (!isOk) {
+        const errMsg =
+          typeof result === 'object' && result !== null && result.error
+            ? result.error
+            : t(
+                'Could not save profile changes to the live database. Please check your login and internet.',
+                'प्रोफ़ाइल बदलाव लाइव डेटाबेस में सेव नहीं हो सके। कृपया लॉगिन व इंटरनेट जांचें।'
+              );
+        setProfileFormError(errMsg);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+
+      setIsEditingProfile(false);
+      setEditingProfile(null);
+    } finally {
+      setIsSavingProfile(false);
+    }
   };
 
   // Handler: Toggle Profile Status
-  const handleToggleProfileStatus = (profile: MatrimonyProfile) => {
+  const handleToggleProfileStatus = async (profile: MatrimonyProfile) => {
+    setSettingsModalError(null);
     const nextStatus: ProfileStatus = profile.status === 'active' ? 'draft' : 'active';
     const updated = { ...profile, status: nextStatus };
-    onUpdateProfile(updated);
+    const result = await onUpdateProfile(updated);
+    if (result && typeof result === 'object' && !result.ok) {
+      setSettingsModalError(result.error || t('Failed to update status.', 'स्थिति अपडेट नहीं हो सकी।'));
+      return;
+    }
+    setSettingsModalProfile(updated);
   };
 
   // Handler: Update Profile Visibility
-  const handleUpdateProfileVisibility = (profile: MatrimonyProfile, visibility: VisibilitySetting) => {
+  const handleUpdateProfileVisibility = async (profile: MatrimonyProfile, visibility: VisibilitySetting) => {
+    setSettingsModalError(null);
     const updated = { ...profile, visibility };
-    onUpdateProfile(updated);
+    const result = await onUpdateProfile(updated);
+    if (result && typeof result === 'object' && !result.ok) {
+      setSettingsModalError(result.error || t('Failed to update visibility.', 'दृश्यता अपडेट नहीं हो सकी।'));
+      return;
+    }
     setSettingsModalProfile(null);
   };
 
@@ -487,9 +518,9 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   };
 
   // Handler: Save Business Ad Edits
-  const handleSaveAdEdits = (e: React.FormEvent) => {
+  const handleSaveAdEdits = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingAd) return;
+    if (!editingAd || isSavingAd) return;
     setAdFormError('');
 
     if (!editingAd.title.trim() || !editingAd.address.trim()) {
@@ -526,27 +557,56 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     };
 
     const exists = ads.some(a => a.id === cleanedAd.id);
-    if (exists) {
-      onUpdateAd(cleanedAd);
-    } else {
-      onAddAd(cleanedAd);
-    }
+    setIsSavingAd(true);
+    try {
+      const result = exists ? await onUpdateAd(cleanedAd) : await onAddAd(cleanedAd);
+      const isOk =
+        result === true ||
+        result === undefined ||
+        (typeof result === 'object' && result !== null && result.ok);
 
-    setIsEditingAd(false);
-    setEditingAd(null);
+      if (!isOk) {
+        const errMsg =
+          typeof result === 'object' && result !== null && result.error
+            ? result.error
+            : t(
+                'Could not save business ad to the live database. Please check your login and internet.',
+                'विज्ञापन लाइव डेटाबेस में सेव नहीं हो सका। कृपया लॉगिन व इंटरनेट जांचें।'
+              );
+        setAdFormError(errMsg);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+
+      setIsEditingAd(false);
+      setEditingAd(null);
+    } finally {
+      setIsSavingAd(false);
+    }
   };
 
   // Handler: Toggle Ad Status (Active <-> Draft)
-  const handleToggleAdStatus = (ad: BusinessAd) => {
+  const handleToggleAdStatus = async (ad: BusinessAd) => {
+    setSettingsModalError(null);
     const nextStatus = ad.status === 'active' ? 'draft' : 'active';
     const updated: BusinessAd = { ...ad, status: nextStatus };
-    onUpdateAd(updated);
+    const result = await onUpdateAd(updated);
+    if (result && typeof result === 'object' && !result.ok) {
+      setSettingsModalError(result.error || t('Failed to update ad status.', 'विज्ञापन स्थिति अपडेट नहीं हो सकी।'));
+      return;
+    }
+    setSettingsModalAd(updated);
   };
 
   // Handler: Toggle Ad Featured
-  const handleToggleAdFeatured = (ad: BusinessAd) => {
+  const handleToggleAdFeatured = async (ad: BusinessAd) => {
+    setSettingsModalError(null);
     const updated: BusinessAd = { ...ad, isFeatured: !ad.isFeatured };
-    onUpdateAd(updated);
+    const result = await onUpdateAd(updated);
+    if (result && typeof result === 'object' && !result.ok) {
+      setSettingsModalError(result.error || t('Failed to update ad placement.', 'विज्ञापन श्रेणी अपडेट नहीं हो सकी।'));
+      return;
+    }
     setSettingsModalAd(null);
   };
 
@@ -1799,9 +1859,15 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                   </button>
                   <button
                     type="submit"
-                    className="w-full sm:w-auto px-6 py-2.5 bg-gradient-to-r from-[#6e1628] via-[#851834] to-[#6e1628] hover:opacity-95 text-amber-100 font-bold rounded-xl text-xs shadow-md border border-amber-300/30 cursor-pointer"
+                    disabled={isSavingProfile}
+                    className="w-full sm:w-auto px-6 py-2.5 bg-gradient-to-r from-[#6e1628] via-[#851834] to-[#6e1628] hover:opacity-95 disabled:opacity-60 text-amber-100 font-bold rounded-xl text-xs shadow-md border border-amber-300/30 cursor-pointer flex items-center justify-center gap-2"
                   >
-                    {t('Save & Update Profile', 'प्रोफ़ाइल सहेजें व अपडेट करें')}
+                    {isSavingProfile && <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-200" />}
+                    <span>
+                      {isSavingProfile
+                        ? t('Saving Live to Cloud...', 'लाइव डेटाबेस में सेव हो रहा है...')
+                        : t('Save & Update Profile', 'प्रोफ़ाइल सहेजें व अपडेट करें')}
+                    </span>
                   </button>
                 </div>
               </form>
@@ -2057,9 +2123,15 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                     </button>
                     <button
                       type="submit"
-                      className="w-full sm:w-auto px-6 py-2.5 bg-gradient-to-r from-[#6e1628] via-[#851834] to-[#6e1628] hover:opacity-95 text-amber-100 font-bold rounded-xl text-xs shadow-md border border-amber-300/30 cursor-pointer"
+                      disabled={isSavingAd}
+                      className="w-full sm:w-auto px-6 py-2.5 bg-gradient-to-r from-[#6e1628] via-[#851834] to-[#6e1628] hover:opacity-95 disabled:opacity-60 text-amber-100 font-bold rounded-xl text-xs shadow-md border border-amber-300/30 cursor-pointer flex items-center justify-center gap-2"
                     >
-                      {t('Save & Publish Ad', 'विज्ञापन सहेजें व प्रकाशित करें')}
+                      {isSavingAd && <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-200" />}
+                      <span>
+                        {isSavingAd
+                          ? t('Saving Ad Live...', 'विज्ञापन सेव हो रहा है...')
+                          : t('Save & Publish Ad', 'विज्ञापन सहेजें व प्रकाशित करें')}
+                      </span>
                     </button>
                   </div>
                 </form>
@@ -2364,7 +2436,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                           <div className="absolute top-3 left-3">
                             {p.status === 'active' ? (
                               <span className="bg-emerald-600/90 text-white text-[10px] font-bold px-2.5 py-1 rounded-full shadow-xs flex items-center gap-1 backdrop-blur-xs font-serif">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-200 animate-pulse"></span>
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-200"></span>
                                 {t('Active • Live', 'सक्रिय • लाइव')}
                               </span>
                             ) : (
@@ -2566,7 +2638,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                           <div className="absolute bottom-2.5 left-3">
                             {ad.status === 'active' ? (
                               <span className="bg-emerald-600/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 backdrop-blur-xs">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-200 animate-pulse"></span>
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-200"></span>
                                 {t('Live in Directory', 'डायरेक्टरी में लाइव')}
                               </span>
                             ) : (
@@ -3750,10 +3822,17 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               <h4 className="font-serif font-bold text-stone-900 text-sm">
                 {t('Profile Settings:', 'प्रोफ़ाइल सेटिंग्स:')} {settingsModalProfile.name}
               </h4>
-              <button onClick={() => setSettingsModalProfile(null)}>
+              <button onClick={() => { setSettingsModalProfile(null); setSettingsModalError(null); }}>
                 <X className="w-4 h-4 text-stone-400" />
               </button>
             </div>
+
+            {settingsModalError && (
+              <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{settingsModalError}</span>
+              </div>
+            )}
 
             <div className="space-y-3 text-xs">
               <div>
@@ -3858,10 +3937,17 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               <h4 className="font-serif font-bold text-stone-900 text-sm">
                 {t('Ad Settings:', 'विज्ञापन सेटिंग्स:')} {settingsModalAd.title}
               </h4>
-              <button onClick={() => setSettingsModalAd(null)}>
+              <button onClick={() => { setSettingsModalAd(null); setSettingsModalError(null); }}>
                 <X className="w-4 h-4 text-stone-400" />
               </button>
             </div>
+
+            {settingsModalError && (
+              <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{settingsModalError}</span>
+              </div>
+            )}
 
             <div className="space-y-3 text-xs">
               <div>

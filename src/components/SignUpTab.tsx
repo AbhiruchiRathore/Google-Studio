@@ -173,24 +173,6 @@ export function getExistingDeviceGoogleSession(): AuthSession | null {
       verified: auth.currentUser.emailVerified
     };
   }
-  try {
-    const raw = localStorage.getItem('device_google_account');
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed?.email) {
-        return {
-          method: 'Google',
-          name: parsed.name || parsed.email.split('@')[0],
-          email: parsed.email,
-          photoUrl: parsed.photoUrl || '',
-          loggedInAt: new Date().toISOString(),
-          verified: true
-        };
-      }
-    }
-  } catch {
-    // ignore storage errors
-  }
   return null;
 }
 
@@ -236,14 +218,18 @@ export const signInWithDesktopBrowser = async (
       return session;
     }
   } catch (error: any) {
+    if (error?.code === 'auth/popup-blocked') {
+      await signInWithRedirect(auth, provider);
+      return undefined;
+    }
     console.error("Desktop Google Sign-In (Popup) Error:", error?.code, error?.message || error);
     throw error;
   }
 };
 
 /**
- * Authentication Method 2: Android APK (WebView)
- * Uses signInWithRedirect() without forcing re-authentication when Google account is already logged in on the phone.
+ * Authentication Method 2: Android APK (WebView) / Mobile Browser
+ * Uses redirect for embedded WebViews, and tries popup with redirect fallback on mobile browsers/TWA.
  */
 export const signInWithAndroidWebView = async (
   onSuccess?: (session: AuthSession) => void
@@ -265,10 +251,40 @@ export const signInWithAndroidWebView = async (
   provider.addScope('profile');
   provider.addScope('email');
 
+  const ua = typeof navigator !== 'undefined' ? navigator.userAgent || '' : '';
+  const isStrictWebView =
+    /\bwv\b|Version\/[0-9.]+/i.test(ua) ||
+    Boolean(typeof window !== 'undefined' && (window as unknown as { Android?: unknown }).Android);
+
+  if (isStrictWebView) {
+    try {
+      await signInWithRedirect(auth, provider);
+    } catch (error: any) {
+      console.error("Android Google Sign-In (Redirect) Error:", error?.message || error);
+      throw error;
+    }
+    return;
+  }
+
   try {
-    await signInWithRedirect(auth, provider);
+    const result = await signInWithPopup(auth, provider);
+    if (result?.user) {
+      const session: AuthSession = {
+        method: 'Google',
+        name: result.user.displayName || 'Google User',
+        email: result.user.email || '',
+        photoUrl: result.user.photoURL || '',
+        loggedInAt: new Date().toISOString(),
+        verified: result.user.emailVerified
+      };
+      if (onSuccess) onSuccess(session);
+    }
   } catch (error: any) {
-    console.error("Android Google Sign-In (Redirect) Error:", error?.message || error);
+    if (error?.code === 'auth/popup-blocked') {
+      await signInWithRedirect(auth, provider);
+      return;
+    }
+    console.error("Android Browser Google Sign-In Error:", error?.code, error?.message || error);
     throw error;
   }
 };
@@ -293,6 +309,7 @@ export default function SignUpTab({
 }: SignUpTabProps) {
   const { lang, t } = useLanguage();
   const [showGoogleModal, setShowGoogleModal] = useState(false);
+  const [googleErrorCode, setGoogleErrorCode] = useState<string | null>(null);
   const [unauthorizedDomain, setUnauthorizedDomain] = useState<string | null>(null);
   const [emailProviderDisabled, setEmailProviderDisabled] = useState(false);
   const [copiedDomain, setCopiedDomain] = useState(false);
@@ -399,6 +416,8 @@ export default function SignUpTab({
       return;
     }
 
+    setGoogleErrorCode(null);
+
     if (isAndroidEnvironment()) {
       setIsSigningIn(true);
       try {
@@ -406,6 +425,7 @@ export default function SignUpTab({
           onLogin(session, 'matrimony');
         });
       } catch (error: any) {
+        setGoogleErrorCode(error?.code || null);
         if (error?.code === 'auth/unauthorized-domain' && typeof window !== 'undefined') {
           setUnauthorizedDomain(window.location.hostname);
         }
@@ -421,6 +441,7 @@ export default function SignUpTab({
         });
       } catch (error: any) {
         console.warn("Desktop Google Sign-In caught error:", error?.code, error?.message);
+        setGoogleErrorCode(error?.code || null);
         if (
           error?.code === 'auth/unauthorized-domain' ||
           error?.message?.includes('authorized domain')
@@ -428,10 +449,8 @@ export default function SignUpTab({
           if (typeof window !== 'undefined') {
             setUnauthorizedDomain(window.location.hostname);
           }
-          setShowGoogleModal(true);
-        } else {
-          setShowGoogleModal(true);
         }
+        setShowGoogleModal(true);
       } finally {
         setIsSigningIn(false);
       }
@@ -440,6 +459,7 @@ export default function SignUpTab({
 
   const handleModalSuccess = (session: AuthSession) => {
     setShowGoogleModal(false);
+    setGoogleErrorCode(null);
     onLogin(session, 'matrimony');
   };
 
@@ -1320,18 +1340,13 @@ export default function SignUpTab({
         }
       }
 
-      // Local-only record without any email attached
-      if (matched && !emailCandidate && matched.password === password) {
-        const session: AuthSession = {
-          method: 'UsernamePassword',
-          name: matched.fullName || matched.username,
-          username: matched.username,
-          phone: matched.phone || '',
-          email: '',
-          loggedInAt: new Date().toISOString(),
-          verified: true
-        };
-        onLogin(session, 'matrimony');
+      if (matched && !emailCandidate) {
+        setLoginError(
+          t(
+            'This account needs an email address to sync with the live cloud database. Please sign up with your email or log in using your registered email.',
+            'लाइव क्लाउड डेटाबेस से जुड़ने के लिए इस खाते में ईमेल आवश्यक है। कृपया अपने ईमेल से लॉग इन या साइन अप करें।'
+          )
+        );
         return;
       }
 
@@ -1441,7 +1456,16 @@ export default function SignUpTab({
 
   return (
     <div className="max-w-md mx-auto py-4 sm:py-8 px-1 sm:px-4">
-      <GoogleSignInModal isOpen={showGoogleModal} onClose={() => setShowGoogleModal(false)} onSuccess={handleModalSuccess} />
+      <GoogleSignInModal
+        isOpen={showGoogleModal}
+        onClose={() => setShowGoogleModal(false)}
+        onSuccess={handleModalSuccess}
+        errorCode={googleErrorCode}
+        onUseEmailAuth={() => {
+          setShowGoogleModal(false);
+          setAuthMode('signup');
+        }}
+      />
 
       <div className="bg-white p-6 sm:p-8 rounded-2xl border border-stone-200/90 shadow-sm space-y-5">
         <div className="text-center space-y-1.5">

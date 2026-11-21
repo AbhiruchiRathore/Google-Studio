@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Store, PlusCircle, Phone, Tag, Star, X, Sparkles, UserPlus, Heart, Share2, AlertCircle } from 'lucide-react';
+import { Store, PlusCircle, Phone, Tag, Star, X, Sparkles, UserPlus, Heart, Share2, AlertCircle, RefreshCw } from 'lucide-react';
 import { BusinessAd, BusinessContact, TabType, AuthSession } from '../types';
 import { sanitizePhoneInput, validatePhoneNumber } from '../utils/validation';
 import { useLanguage } from '../context/LanguageContext';
@@ -18,7 +18,7 @@ interface BusinessTabProps {
   authSession: AuthSession | null;
   ads: BusinessAd[];
   onNavigateTab: (tab: TabType) => void;
-  onAddQuickAd: (ad: Partial<BusinessAd>) => void;
+  onAddQuickAd: (ad: Partial<BusinessAd>) => Promise<{ ok: boolean; error?: string }> | { ok: boolean; error?: string } | void;
 }
 
 export const BusinessTab: React.FC<BusinessTabProps> = ({
@@ -30,6 +30,7 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({
   const { lang, t } = useLanguage();
   const { config } = useAdminConfig();
   const [showQuickModal, setShowQuickModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [modalError, setModalError] = useState<string | null>(null);
   const [previewBanner, setPreviewBanner] = useState<{ url: string; title: string } | null>(null);
@@ -164,8 +165,9 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({
     return ad.category === selectedCategory;
   });
 
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setModalError(null);
     if (!formState.title.trim()) {
       setModalError(t('Shop name is required.', 'दुकान का नाम आवश्यक है।'));
@@ -207,41 +209,57 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({
       });
     }
 
-    onAddQuickAd({
-      title: formState.title.trim(),
-      owner: secOwner ? `${primaryOwner} & ${secOwner}` : primaryOwner,
-      category: formState.category,
-      city: 'Indore',
-      address: formState.address.trim() || 'Main City Market',
-      phone: phoneCheck.cleaned,
-      contacts,
-      tagline: formState.tagline.trim() || 'Quality services & verified products for community members.',
-      offer: formState.offer,
-      rating: '5.0 ★',
-      isFeatured: isFeaturedAd,
-      adTier: formState.tier,
-      adPricePaid,
-      banner: formState.banner.trim() !== ''
-        ? formState.banner.trim()
-        : isFeaturedAd
-          ? 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=600&q=80'
-          : 'https://images.unsplash.com/photo-1555421689-491a97ff2040?auto=format&fit=crop&w=600&q=80'
-    });
+    setIsSubmitting(true);
+    try {
+      const result = await onAddQuickAd({
+        title: formState.title.trim(),
+        owner: secOwner ? `${primaryOwner} & ${secOwner}` : primaryOwner,
+        category: formState.category,
+        city: 'Indore',
+        address: formState.address.trim() || 'Main City Market',
+        phone: phoneCheck.cleaned,
+        contacts,
+        tagline: formState.tagline.trim() || 'Quality services & verified products for community members.',
+        offer: formState.offer,
+        rating: '5.0 ★',
+        isFeatured: isFeaturedAd,
+        adTier: formState.tier,
+        adPricePaid,
+        banner: formState.banner.trim() !== ''
+          ? formState.banner.trim()
+          : isFeaturedAd
+            ? 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=600&q=80'
+            : 'https://images.unsplash.com/photo-1555421689-491a97ff2040?auto=format&fit=crop&w=600&q=80'
+      });
 
-    setShowQuickModal(false);
-    setFormState({
-      title: '',
-      owner: '',
-      category: 'Clothing & Retail',
-      phone: '',
-      secondaryOwner: '',
-      secondaryPhone: '',
-      address: '',
-      tagline: '',
-      offer: 'Special Samaj Member Discount',
-      tier: 'standard',
-      banner: ''
-    });
+      if (result && typeof result === 'object' && !result.ok) {
+        setModalError(
+          result.error ||
+            t(
+              'Please sign in first and verify your internet connection to publish live.',
+              'लाइव प्रकाशित करने के लिए कृपया पहले साइन इन करें और इंटरनेट जांचें।'
+            )
+        );
+        return;
+      }
+
+      setShowQuickModal(false);
+      setFormState({
+        title: '',
+        owner: '',
+        category: 'Clothing & Retail',
+        phone: '',
+        secondaryOwner: '',
+        secondaryPhone: '',
+        address: '',
+        tagline: '',
+        offer: 'Special Samaj Member Discount',
+        tier: 'standard',
+        banner: ''
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -680,9 +698,15 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({
 
               <button 
                 type="submit" 
-                className="w-full bg-amber-500 hover:bg-amber-400 text-red-950 font-bold py-3 rounded-xl shadow mt-2 cursor-pointer transition-colors"
+                disabled={isSubmitting}
+                className="w-full bg-amber-500 hover:bg-amber-400 disabled:opacity-60 text-red-950 font-bold py-3 rounded-xl shadow mt-2 cursor-pointer transition-colors flex items-center justify-center gap-2"
               >
-                {t('Submit Advertisement', 'विज्ञापन सबमिट करें')}
+                {isSubmitting && <RefreshCw className="w-4 h-4 animate-spin text-red-950" />}
+                <span>
+                  {isSubmitting
+                    ? t('Publishing Ad Live...', 'विज्ञापन सेव हो रहा है...')
+                    : t('Submit Advertisement', 'विज्ञापन सबमिट करें')}
+                </span>
               </button>
             </form>
           </div>

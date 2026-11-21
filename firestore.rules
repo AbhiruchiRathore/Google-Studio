@@ -272,6 +272,7 @@ service cloud.firestore {
 
     match /profiles/{profileId} {
       allow get: if isValidId(profileId) && (
+        resource == null ||
         (existing().status == 'active' && existing().verified == true) ||
         (isSignedIn() && existing().ownerUid == request.auth.uid) ||
         isAdmin()
@@ -310,7 +311,8 @@ service cloud.firestore {
         allow get: if isValidId(profileId) && docId == 'contact' && (
           isAdmin() ||
           (isSignedIn() && (
-            get(/databases/$(database)/documents/profiles/$(profileId)).data.ownerUid == request.auth.uid ||
+            (exists(/databases/$(database)/documents/profiles/$(profileId)) &&
+              get(/databases/$(database)/documents/profiles/$(profileId)).data.ownerUid == request.auth.uid) ||
             exists(/databases/$(database)/documents/profiles/$(profileId)/unlocks/$(request.auth.uid))
           ))
         );
@@ -339,6 +341,7 @@ service cloud.firestore {
 
     match /ads/{adId} {
       allow get: if isValidId(adId) && (
+        resource == null ||
         existing().status == 'active' ||
         (isSignedIn() && existing().ownerUid == request.auth.uid) ||
         isAdmin()
@@ -374,6 +377,7 @@ service cloud.firestore {
 
     match /events/{eventId} {
       allow get: if isValidId(eventId) && (
+        resource == null ||
         existing().status == 'active' ||
         (isSignedIn() && existing().ownerUid == request.auth.uid) ||
         isAdmin()

@@ -56,7 +56,8 @@ export const MultiPhotoUploadField: React.FC<MultiPhotoUploadFieldProps> = ({
       try {
         const compressed = await compressAndReadImageFile(file, {
           maxDimension,
-          quality: 0.8,
+          quality: 0.78,
+          maxOutputChars: 160_000,
         });
         if (!photos.includes(compressed) && !newlyUploaded.includes(compressed)) {
           newlyUploaded.push(compressed);

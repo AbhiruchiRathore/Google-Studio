@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Users, Home, ShieldCheck, Phone, ArrowLeft, CheckCircle2, 
-  Sparkles, User, AlertCircle, Lock, LayoutDashboard
+  Sparkles, User, AlertCircle, Lock, LayoutDashboard, RefreshCw
 } from 'lucide-react';
 import { TabType, AuthSession, MatrimonyProfile } from '../types';
 import { sanitizePhoneInput, validatePhoneNumber } from '../utils/validation';
@@ -11,7 +11,7 @@ import { MultiPhotoUploadField } from './MultiPhotoUploadField';
 interface FamilyDetailsTabProps {
   authSession: AuthSession | null;
   onNavigateTab: (tab: TabType) => void;
-  onAddQuickProfile: (profile: Partial<MatrimonyProfile>) => boolean | void;
+  onAddQuickProfile: (profile: Partial<MatrimonyProfile>) => Promise<{ ok: boolean; error?: string }> | { ok: boolean; error?: string } | boolean | void;
   hasRegisteredProfile: boolean;
   existingUserProfile?: MatrimonyProfile | null;
 }
@@ -25,6 +25,7 @@ export const FamilyDetailsTab: React.FC<FamilyDetailsTabProps> = ({
 }) => {
   const { lang, t } = useLanguage();
   const [submitted, setSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [primaryPhoneError, setPrimaryPhoneError] = useState<string | null>(null);
   const [secondaryPhoneError, setSecondaryPhoneError] = useState<string | null>(null);
@@ -52,8 +53,9 @@ export const FamilyDetailsTab: React.FC<FamilyDetailsTabProps> = ({
     photos: authSession?.photoUrl ? [authSession.photoUrl] : ([] as string[])
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setErrorMsg('');
 
     if (!form.fatherName.trim() || !form.selfGotra.trim() || !form.nativePlace.trim()) {
@@ -92,38 +94,52 @@ export const FamilyDetailsTab: React.FC<FamilyDetailsTabProps> = ({
 
     const aboutFamily = `Maternal (Nanihaal) Gotra: ${form.maternalGotra || 'Not specified'}. Kuldevi: ${form.kuldevi || 'Maa Chamunda / Kuldevi'}. ${form.familyBackground || 'Well-settled respected Rathore Samaj family.'}`;
 
-    const added = onAddQuickProfile({
-      name: candidateDisplayName,
-      age: Number(form.age) || 26,
-      gender: form.gender,
-      gotra: form.selfGotra.trim(),
-      city: form.currentCity.trim() || form.nativePlace.trim() || 'Indore',
-      state: form.currentState.trim() || 'Madhya Pradesh',
-      native: form.nativePlace.trim(),
-      location: `${form.currentCity || form.nativePlace}, ${form.currentState}`,
-      contact: contactString,
-      phone: primaryCheck.cleaned,
-      education: 'Graduate / Professional',
-      profession: 'Service / Business / Professional',
-      income: 'Competitive',
-      familyDetails: familyDetailsSummary,
-      about: aboutFamily,
-      photo: form.photos[0] || undefined,
-      gallery: form.photos.length > 0 ? form.photos : undefined,
-      verified: true
-    });
+    setIsSubmitting(true);
+    try {
+      const result = await onAddQuickProfile({
+        name: candidateDisplayName,
+        age: Number(form.age) || 26,
+        gender: form.gender,
+        gotra: form.selfGotra.trim(),
+        city: form.currentCity.trim() || form.nativePlace.trim() || 'Indore',
+        state: form.currentState.trim() || 'Madhya Pradesh',
+        native: form.nativePlace.trim(),
+        location: `${form.currentCity || form.nativePlace}, ${form.currentState}`,
+        contact: contactString,
+        phone: primaryCheck.cleaned,
+        education: 'Graduate / Professional',
+        profession: 'Service / Business / Professional',
+        income: 'Competitive',
+        familyDetails: familyDetailsSummary,
+        about: aboutFamily,
+        photo: form.photos[0] || undefined,
+        gallery: form.photos.length > 0 ? form.photos : undefined,
+        verified: true
+      });
 
-    if (added === false) {
-      setErrorMsg(t(
-        'Only 1 profile can be created per login. You already have a published profile in your account.',
-        'प्रति लॉगिन केवल 1 प्रोफ़ाइल बनाई जा सकती है। आपके खाते में पहले से एक प्रोफ़ाइल मौजूद है।'
-      ));
+      const isOk =
+        result === true ||
+        result === undefined ||
+        (typeof result === 'object' && result !== null && result.ok);
+
+      if (!isOk) {
+        const errText =
+          typeof result === 'object' && result !== null && result.error
+            ? result.error
+            : t(
+                'Could not save family profile to the live database. Please check your login and internet connection.',
+                'पारिवारिक प्रोफ़ाइल लाइव डेटाबेस में सेव नहीं हो सकी। कृपया लॉगिन व इंटरनेट जांचें।'
+              );
+        setErrorMsg(errText);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+
+      setSubmitted(true);
       window.scrollTo({ top: 0, behavior: 'smooth' });
-      return;
+    } finally {
+      setIsSubmitting(false);
     }
-
-    setSubmitted(true);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   if (!authSession) {
@@ -700,10 +716,19 @@ export const FamilyDetailsTab: React.FC<FamilyDetailsTabProps> = ({
         <div className="pt-2 flex flex-col sm:flex-row gap-3">
           <button 
             type="submit" 
-            className="flex-1 bg-gradient-to-r from-[#380812] to-[#540e1b] hover:from-[#24050b] hover:to-[#380812] text-amber-200 font-bold py-3.5 px-6 rounded-2xl shadow-lg transition-all text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer border border-amber-400/30 hover:scale-[1.01]"
+            disabled={isSubmitting}
+            className="flex-1 bg-gradient-to-r from-[#380812] to-[#540e1b] hover:from-[#24050b] hover:to-[#380812] disabled:opacity-60 text-amber-200 font-bold py-3.5 px-6 rounded-2xl shadow-lg transition-all text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer border border-amber-400/30 hover:scale-[1.01]"
           >
-            <Users className="w-4 h-4 text-amber-300" />
-            {t('Publish Family Details & Unlock All Biodatas', 'पारिवारिक विवरण प्रकाशित करें और सभी बायोडाटा अनलॉक करें')}
+            {isSubmitting ? (
+              <RefreshCw className="w-4 h-4 animate-spin text-amber-300" />
+            ) : (
+              <Users className="w-4 h-4 text-amber-300" />
+            )}
+            <span>
+              {isSubmitting
+                ? t('Publishing Live to Cloud Database...', 'लाइव डेटाबेस में सेव हो रहा है...')
+                : t('Publish Family Details & Unlock All Biodatas', 'पारिवारिक विवरण प्रकाशित करें और सभी बायोडाटा अनलॉक करें')}
+            </span>
           </button>
 
           <button

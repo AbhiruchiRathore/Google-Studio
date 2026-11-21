@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Lock, ShieldCheck, AlertCircle, Star, Sparkles, Tag } from 'lucide-react';
+import { Lock, AlertCircle, Star, Sparkles, Tag, RefreshCw } from 'lucide-react';
 import { BusinessAd, TabType, AuthSession } from '../types';
 import { GoogleSignInModal } from './GoogleSignInModal';
 import {
@@ -16,7 +16,7 @@ import { ImageUploadField } from './ImageUploadField';
 interface AdvertiseShopTabProps {
   authSession: AuthSession | null;
   onLogin: (session: AuthSession, redirectTab?: TabType) => void;
-  onAddAd: (ad: BusinessAd) => void;
+  onAddAd: (ad: BusinessAd) => Promise<{ ok: boolean; error?: string }> | { ok: boolean; error?: string } | void;
   onNavigateTab: (tab: TabType) => void;
 }
 
@@ -29,6 +29,8 @@ export const AdvertiseShopTab: React.FC<AdvertiseShopTabProps> = ({
   const { lang, t } = useLanguage();
   const { config } = useAdminConfig();
   const [showGoogleModal, setShowGoogleModal] = useState(false);
+  const [googleErrorCode, setGoogleErrorCode] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
 
@@ -87,11 +89,13 @@ export const AdvertiseShopTab: React.FC<AdvertiseShopTabProps> = ({
 
   const handleGoogleSuccess = (session: AuthSession) => {
     setShowGoogleModal(false);
+    setGoogleErrorCode(null);
     onLogin(session, 'advertise-shop');
     setFormData(prev => ({ ...prev, owner: session.name || prev.owner }));
   };
 
   const handleDirectGoogleClick = async () => {
+    setGoogleErrorCode(null);
     const existing = getExistingDeviceGoogleSession();
     if (existing) {
       onLogin(existing, 'advertise-shop');
@@ -104,13 +108,15 @@ export const AdvertiseShopTab: React.FC<AdvertiseShopTabProps> = ({
       } else {
         await signInWithDesktopBrowser((s) => onLogin(s, 'advertise-shop'));
       }
-    } catch {
+    } catch (err: any) {
+      setGoogleErrorCode(err?.code || null);
       setShowGoogleModal(true);
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setFormError(null);
 
     if (!formData.name.trim() || !formData.owner.trim() || !formData.category.trim() || !formData.address.trim()) {
@@ -172,8 +178,24 @@ export const AdvertiseShopTab: React.FC<AdvertiseShopTabProps> = ({
       createdAt: new Date().toISOString()
     };
 
-    onAddAd(newAd);
-    onNavigateTab('directory');
+    setIsSubmitting(true);
+    try {
+      const result = await onAddAd(newAd);
+      if (result && typeof result === 'object' && !result.ok) {
+        setFormError(
+          result.error ||
+            t(
+              'Could not publish ad to the live database. Please check your login and internet connection.',
+              'विज्ञापन लाइव डेटाबेस में प्रकाशित नहीं हो सका। कृपया लॉगिन व इंटरनेट जांचें।'
+            )
+        );
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
+      }
+      onNavigateTab('directory');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (!authSession) {
@@ -183,6 +205,11 @@ export const AdvertiseShopTab: React.FC<AdvertiseShopTabProps> = ({
           isOpen={showGoogleModal}
           onClose={() => setShowGoogleModal(false)}
           onSuccess={handleGoogleSuccess}
+          errorCode={googleErrorCode}
+          onUseEmailAuth={() => {
+            setShowGoogleModal(false);
+            onNavigateTab('signup');
+          }}
         />
 
         <div className="bg-white p-6 md:p-8 rounded-2xl border border-amber-200 shadow-xl space-y-6 text-center">
@@ -242,15 +269,7 @@ export const AdvertiseShopTab: React.FC<AdvertiseShopTabProps> = ({
       <div className="bg-white p-6 sm:p-8 rounded-3xl border border-stone-200/90 shadow-sm space-y-5">
         <div className="flex justify-between items-center border-b border-stone-100 pb-3">
           <div>
-            <div className="flex items-center gap-2">
-              <span className="bg-emerald-50 text-emerald-800 text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1 border border-emerald-200">
-                <ShieldCheck className="w-3 h-3 text-emerald-600" /> {t('Signed In', 'लॉग इन सक्रिय')}
-              </span>
-              <span className="text-xs text-stone-500">
-                {authSession.name || `+91 ${authSession.phone}`}
-              </span>
-            </div>
-            <h2 className="text-2xl font-serif font-bold text-stone-900 mt-1">
+            <h2 className="text-2xl font-serif font-bold text-stone-900">
               {t('Advertise Your Business', 'अपने व्यापार का विज्ञापन दें')}
             </h2>
             <p className="text-xs text-stone-500 font-light">
@@ -536,11 +555,17 @@ export const AdvertiseShopTab: React.FC<AdvertiseShopTabProps> = ({
 
           <button 
             type="submit" 
-            className="w-full bg-gradient-to-r from-[#380812] to-[#540e1b] hover:from-[#24050b] hover:to-[#380812] text-amber-200 font-bold py-3.5 rounded-xl text-xs sm:text-sm shadow-md transition-all cursor-pointer border border-amber-400/30 hover:scale-[1.01]"
+            disabled={isSubmitting}
+            className="w-full bg-gradient-to-r from-[#380812] to-[#540e1b] hover:from-[#24050b] hover:to-[#380812] disabled:opacity-60 text-amber-200 font-bold py-3.5 rounded-xl text-xs sm:text-sm shadow-md transition-all cursor-pointer border border-amber-400/30 hover:scale-[1.01] flex items-center justify-center gap-2"
           >
-            {config.adsMonetizationEnabled && selectedTierPrice > 0
-              ? t(`Publish Shop Ad (₹${selectedTierPrice} / ${cycleLabel})`, `विज्ञापन प्रकाशित करें (₹${selectedTierPrice} / ${cycleLabel})`)
-              : t('Publish Business Ad to Directory', 'व्यापार विज्ञापन प्रकाशित करें')}
+            {isSubmitting && <RefreshCw className="w-4 h-4 animate-spin text-amber-300" />}
+            <span>
+              {isSubmitting
+                ? t('Publishing Ad Live...', 'विज्ञापन लाइव प्रकाशित हो रहा है...')
+                : config.adsMonetizationEnabled && selectedTierPrice > 0
+                  ? t(`Publish Shop Ad (₹${selectedTierPrice} / ${cycleLabel})`, `विज्ञापन प्रकाशित करें (₹${selectedTierPrice} / ${cycleLabel})`)
+                  : t('Publish Business Ad to Directory', 'व्यापार विज्ञापन प्रकाशित करें')}
+            </span>
           </button>
         </form>
       </div>

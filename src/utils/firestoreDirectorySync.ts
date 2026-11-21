@@ -28,6 +28,22 @@ const DEFAULT_AD_IDS = new Set(INITIAL_ADS.map((a) => String(a.id)));
 const DEFAULT_EVENT_IDS = new Set(
   INITIAL_EVENTS.map((e, idx) => String(e.id || idx))
 );
+const DEFAULT_EVENT_TITLES = new Set(
+  INITIAL_EVENTS.map((e) => e.title.trim().toLowerCase())
+);
+
+export function extractReadableFirestoreError(error: unknown): string {
+  if (error instanceof Error) {
+    try {
+      const parsed = JSON.parse(error.message) as { error?: string };
+      if (parsed?.error) return parsed.error;
+    } catch {
+      // not JSON
+    }
+    if (error.message) return error.message;
+  }
+  return 'Database connection error. Please check your internet and try again.';
+}
 
 const resolvedPrivateContacts = new Map<string, { phone: string; contact: string }>();
 
@@ -931,9 +947,9 @@ export async function backfillLocalOwnedItemsToFirestore(
 ): Promise<void> {
   if (!session || !authUser || !sessionOwnerKey) return;
   if (backfilledUsers.has(authUser.uid)) return;
-  backfilledUsers.add(authUser.uid);
 
   const ownerName = session.name || session.username || session.email || 'Member';
+  let hadFailure = false;
 
   try {
     const rawProfiles = localStorage.getItem('samaj_profiles');
@@ -946,15 +962,23 @@ export async function backfillLocalOwnedItemsToFirestore(
           if (!isProfileOwnedBySession(prof, session)) continue;
 
           const existing = await getDoc(doc(db, 'profiles', docId)).catch(() => null);
-          if (existing && !existing.exists()) {
+          if (!existing) {
+            hadFailure = true;
+            continue;
+          }
+          if (!existing.exists()) {
             await saveProfileToFirestore(prof, authUser, sessionOwnerKey, ownerName, false).catch(
-              (err) => console.warn('Profile backfill skipped:', err)
+              (err) => {
+                hadFailure = true;
+                console.warn('Profile backfill skipped:', err);
+              }
             );
           }
         }
       }
     }
   } catch (err) {
+    hadFailure = true;
     console.warn('Local profile backfill error:', err);
   }
 
@@ -969,15 +993,23 @@ export async function backfillLocalOwnedItemsToFirestore(
           if (!isAdOwnedBySession(ad, session)) continue;
 
           const existing = await getDoc(doc(db, 'ads', docId)).catch(() => null);
-          if (existing && !existing.exists()) {
+          if (!existing) {
+            hadFailure = true;
+            continue;
+          }
+          if (!existing.exists()) {
             await saveAdToFirestore(ad, authUser, sessionOwnerKey, ownerName).catch(
-              (err) => console.warn('Ad backfill skipped:', err)
+              (err) => {
+                hadFailure = true;
+                console.warn('Ad backfill skipped:', err);
+              }
             );
           }
         }
       }
     }
   } catch (err) {
+    hadFailure = true;
     console.warn('Local ad backfill error:', err);
   }
 
@@ -988,17 +1020,30 @@ export async function backfillLocalOwnedItemsToFirestore(
       if (Array.isArray(parsed)) {
         for (const ev of parsed) {
           const docId = toValidDocId(ev.id);
-          if (!ev.id || DEFAULT_EVENT_IDS.has(docId)) continue;
+          const titleKey = (ev.title || '').trim().toLowerCase();
+          if (!ev.id || DEFAULT_EVENT_IDS.has(docId) || DEFAULT_EVENT_TITLES.has(titleKey)) continue;
           const existing = await getDoc(doc(db, 'events', docId)).catch(() => null);
-          if (existing && !existing.exists()) {
+          if (!existing) {
+            hadFailure = true;
+            continue;
+          }
+          if (!existing.exists()) {
             await saveEventToFirestore(ev, authUser).catch(
-              (err) => console.warn('Event backfill skipped:', err)
+              (err) => {
+                hadFailure = true;
+                console.warn('Event backfill skipped:', err);
+              }
             );
           }
         }
       }
     }
   } catch (err) {
+    hadFailure = true;
     console.warn('Local event backfill error:', err);
+  }
+
+  if (!hadFailure) {
+    backfilledUsers.add(authUser.uid);
   }
 }

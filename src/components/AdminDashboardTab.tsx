@@ -11,12 +11,14 @@ import { useAdminConfig, DEFAULT_ADMIN_CONFIG } from '../context/AdminConfigCont
 
 export { DEFAULT_ADMIN_CONFIG };
 
+type AdminMutationResult = Promise<{ ok: boolean; error?: string }> | { ok: boolean; error?: string } | void;
+
 interface AdminDashboardTabProps {
   profiles: MatrimonyProfile[];
   ads: BusinessAd[];
-  onUpdateProfile: (profile: MatrimonyProfile) => void;
+  onUpdateProfile: (profile: MatrimonyProfile) => AdminMutationResult;
   onDeleteProfile: (id: number | string) => void;
-  onUpdateAd: (ad: BusinessAd) => void;
+  onUpdateAd: (ad: BusinessAd) => AdminMutationResult;
   onDeleteAd: (id: number | string) => void;
   onNavigateTab: (tab: TabType) => void;
 }
@@ -56,6 +58,7 @@ export const AdminDashboardTab: React.FC<AdminDashboardTabProps> = ({
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [authError, setAuthError] = useState('');
+  const [moderationError, setModerationError] = useState<string | null>(null);
 
   const [activeAdminTab, setActiveAdminTab] = useState<'flags' | 'monetization' | 'profiles' | 'ads'>('flags');
   const [saveToast, setSaveToast] = useState(false);
@@ -1131,6 +1134,13 @@ export const AdminDashboardTab: React.FC<AdminDashboardTabProps> = ({
             </div>
           </div>
 
+          {moderationError && (
+            <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
+              <span>{moderationError}</span>
+            </div>
+          )}
+
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
@@ -1181,7 +1191,13 @@ export const AdminDashboardTab: React.FC<AdminDashboardTabProps> = ({
                       <td className="py-3 px-3">
                         <button
                           type="button"
-                          onClick={() => onUpdateProfile({ ...p, verified: !isVerified })}
+                          onClick={async () => {
+                            setModerationError(null);
+                            const res = await onUpdateProfile({ ...p, verified: !isVerified });
+                            if (res && typeof res === 'object' && !res.ok) {
+                              setModerationError(res.error || t('Failed to update verification.', 'सत्यापन अपडेट नहीं हो सका।'));
+                            }
+                          }}
                           className={`inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full cursor-pointer transition-colors ${
                             isVerified
                               ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
@@ -1284,6 +1300,13 @@ export const AdminDashboardTab: React.FC<AdminDashboardTabProps> = ({
             </div>
           </div>
 
+          {moderationError && (
+            <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl text-xs flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" />
+              <span>{moderationError}</span>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {ads.map((ad) => {
               const isConfirming = confirmDeleteAdId === ad.id;
@@ -1318,7 +1341,13 @@ export const AdminDashboardTab: React.FC<AdminDashboardTabProps> = ({
                   <div className="pt-2 border-t border-stone-200 flex flex-wrap justify-between items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => onUpdateAd({ ...ad, isFeatured: !ad.isFeatured })}
+                      onClick={async () => {
+                        setModerationError(null);
+                        const res = await onUpdateAd({ ...ad, isFeatured: !ad.isFeatured });
+                        if (res && typeof res === 'object' && !res.ok) {
+                          setModerationError(res.error || t('Failed to update ad.', 'विज्ञापन अपडेट नहीं हो सका।'));
+                        }
+                      }}
                       className="text-amber-900 font-bold hover:underline cursor-pointer text-left"
                     >
                       {ad.isFeatured ? t('Demote to Standard', 'सामान्य श्रेणी में करें') : t('Make Featured Banner', 'प्रमुख बैनर बनाएं')}

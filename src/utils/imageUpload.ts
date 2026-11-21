@@ -2,9 +2,11 @@ export interface ImageCompressOptions {
   maxDimension?: number;
   quality?: number;
   maxSourceBytes?: number;
+  maxOutputChars?: number;
 }
 
 const IMAGE_EXT_REGEX = /\.(jpe?g|png|webp|gif|bmp|heic|heif|avif|svg)$/i;
+const DEFAULT_MAX_OUTPUT_CHARS = 260_000;
 
 function isLikelyImageFile(file: File): boolean {
   const mime = (file.type || '').trim().toLowerCase();
@@ -56,8 +58,8 @@ async function compressImageElement(
 
 /**
  * Reads an image File selected by the user (from device gallery, file picker, or mobile camera)
- * and resizes/compresses it via HTML5 Canvas into a compact JPEG Data URL so it fits reliably
- * in browser/WebView localStorage and Firestore documents across Android, iOS, and Web.
+ * and resizes/compresses it via HTML5 Canvas into a compact JPEG Data URL guaranteed to fit
+ * in browser/WebView localStorage and Cloud Firestore documents across Android, iOS, and Web.
  */
 export async function compressAndReadImageFile(
   file: File,
@@ -67,6 +69,7 @@ export async function compressAndReadImageFile(
     maxDimension = 840,
     quality = 0.82,
     maxSourceBytes = 20 * 1024 * 1024, // 20 MB guard
+    maxOutputChars = DEFAULT_MAX_OUTPUT_CHARS,
   } = options;
 
   if (!isLikelyImageFile(file)) {
@@ -99,12 +102,30 @@ export async function compressAndReadImageFile(
       image.src = rawDataUrl;
     });
 
-    try {
-      return await compressImageElement(img, rawDataUrl, maxDimension, quality);
-    } catch {
-      // Retry at smaller dimension on constrained Android WebView memory
-      return await compressImageElement(img, rawDataUrl, Math.min(480, maxDimension), 0.72);
+    const attempts: Array<{ dim: number; q: number }> = [
+      { dim: maxDimension, q: quality },
+      { dim: Math.min(640, maxDimension), q: Math.min(0.72, quality) },
+      { dim: Math.min(480, maxDimension), q: 0.62 },
+      { dim: 360, q: 0.52 },
+    ];
+
+    let bestResult = rawDataUrl;
+    for (const attempt of attempts) {
+      try {
+        const candidate = await compressImageElement(img, rawDataUrl, attempt.dim, attempt.q);
+        bestResult = candidate;
+        if (candidate.length <= maxOutputChars) {
+          return candidate;
+        }
+      } catch {
+        // try smaller attempt on constrained WebView memory
+      }
     }
+
+    if (bestResult.startsWith('data:image/') && bestResult.length <= 340_000) {
+      return bestResult;
+    }
+    throw new Error('DECODE_FAILED');
   } catch {
     // Fallback to raw data URL if it is a valid image payload within size limits
     if (rawDataUrl.startsWith('data:image/') && rawDataUrl.length < 340_000) {

@@ -52,7 +52,7 @@ if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
         .then((keys) =>
           Promise.all(
             keys
-              .filter((key) => key.startsWith('rathore-rishtey-pwa-') && key !== 'rathore-rishtey-pwa-v2')
+              .filter((key) => key.startsWith('rathore-rishtey-pwa-') && key !== 'rathore-rishtey-pwa-v3')
               .map((key) => caches.delete(key))
           )
         )

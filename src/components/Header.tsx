@@ -251,7 +251,8 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
 
             {authSession ? (
               <div className="flex items-center gap-2">
-                {authSession.username === 'AdminAbhi' && (
+                {(authSession.username === 'AdminAbhi' ||
+                  (authSession.email || '').trim().toLowerCase() === 'abhiruchirathore97@gmail.com') && (
                   <button
                     onClick={() => handleTabClick('admin')}
                     title={t('Open Admin Dashboard', 'एडमिन डैशबोर्ड खोलें')}
@@ -274,7 +275,6 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
                       : 'bg-emerald-500/15 text-amber-100 hover:bg-emerald-500/25 border-emerald-400/50'
                   }`}
                 >
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
                   <UserCheck className={`w-3.5 h-3.5 shrink-0 ${currentTab === 'dashboard' ? 'text-[#4c0d1b]' : 'text-emerald-300'}`} />
                   <span className="max-w-[110px] truncate">{authSession.name || `+91 ${authSession.phone}`}</span>
                   <span className={`text-[10px] font-bold uppercase tracking-wide pl-1 border-l ${
@@ -320,7 +320,7 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
                     : 'bg-emerald-500/20 text-amber-50 border-emerald-400/60 hover:bg-emerald-500/30'
                 }`}
               >
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0"></span>
+                <UserCheck className={`w-3.5 h-3.5 shrink-0 ${currentTab === 'dashboard' ? 'text-[#4c0d1b]' : 'text-emerald-300'}`} />
                 <span className="truncate">{(authSession.name || authSession.username || 'Member').split(' ')[0]}</span>
                 <LayoutDashboard className={`w-3.5 h-3.5 shrink-0 ${currentTab === 'dashboard' ? 'text-[#4c0d1b]' : 'text-amber-300'}`} />
               </button>
@@ -481,19 +481,14 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
           {/* Member actions in mobile menu if logged in */}
           {authSession ? (
             <div className="pt-2 border-t border-rose-900/60 space-y-2">
-              <div className="px-3 py-2 bg-black/20 rounded-xl text-xs text-amber-200 flex items-center justify-between">
-                <span className="truncate">👤 {authSession.name || `+91 ${authSession.phone}`}</span>
-                <span className="text-[10px] bg-emerald-700/60 text-emerald-100 px-2 py-0.5 rounded-full font-bold">
-                  {t('Verified', 'सत्यापित')}
-                </span>
-              </div>
               <button 
                 onClick={() => handleTabClick('dashboard')} 
                 className="w-full bg-gradient-to-r from-amber-300 to-amber-400 text-[#4c0d1b] font-bold py-2.5 rounded-xl text-xs text-center flex items-center justify-center gap-1.5 shadow"
               >
                 <LayoutDashboard className="w-4 h-4" /> {t('Member Dashboard', 'सदस्य डैशबोर्ड')}
               </button>
-              {authSession.username === 'AdminAbhi' && (
+              {(authSession.username === 'AdminAbhi' ||
+                (authSession.email || '').trim().toLowerCase() === 'abhiruchirathore97@gmail.com') && (
                 <button 
                   onClick={() => handleTabClick('admin')} 
                   className="w-full bg-amber-400/20 border border-amber-300/50 text-amber-100 font-bold py-2.5 rounded-xl text-xs text-center flex items-center justify-center gap-1.5"

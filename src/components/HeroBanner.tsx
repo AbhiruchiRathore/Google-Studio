@@ -1,5 +1,5 @@
 import React from 'react';
-import { Users, BookOpen, Sparkles, ArrowRight, HeartHandshake, LayoutDashboard } from 'lucide-react';
+import { Users, BookOpen, Sparkles, ArrowRight, HeartHandshake } from 'lucide-react';
 import { TabType, AuthSession } from '../types';
 import { useLanguage } from '../context/LanguageContext';
 import { useAdminConfig } from '../context/AdminConfigContext';
@@ -84,16 +84,6 @@ export const HeroBanner: React.FC<HeroBannerProps> = ({ onNavigateTab, authSessi
               >
                 <HeartHandshake className="w-4 h-4 text-amber-300" />
                 <span>{t('Create Profile', 'अपना बायोडाटा बनाएं')}</span>
-              </button>
-            )}
-
-            {authSession && (
-              <button
-                onClick={() => onNavigateTab && onNavigateTab('dashboard')}
-                className="w-full sm:w-auto bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-100 border border-emerald-400/50 font-semibold px-5 py-2.5 rounded-xl text-xs sm:text-sm transition-all flex items-center justify-center gap-2 cursor-pointer backdrop-blur-xs"
-              >
-                <LayoutDashboard className="w-4 h-4 text-emerald-300" />
-                <span>{t('Member Dashboard', 'सदस्य डैशबोर्ड')}</span>
               </button>
             )}
 

@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "Rathore Rishtey - Matrimony & Directory",
-  "short_name": "Rathore",
+  "name": "Rathore Rishtey",
+  "short_name": "Rathore Rishtey",
   "description": "Digital matrimony biodata directory, community business network, e-booklet and events portal for Rathore Samaj.",
   "start_url": "/",
   "scope": "/",
@@ -11,6 +11,12 @@
   "background_color": "#FAF8F5",
   "categories": ["social", "lifestyle", "business"],
   "icons": [
+    {
+      "src": "/pwa-144x144.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any"
+    },
     {
       "src": "/pwa-192x192.png",
       "sizes": "192x192",
@@ -28,6 +34,12 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    },
+    {
+      "src": "/favicon.ico",
+      "sizes": "48x48 32x32 16x16",
+      "type": "image/x-icon",
+      "purpose": "any"
     }
   ]
 }

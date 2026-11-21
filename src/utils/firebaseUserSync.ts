@@ -136,7 +136,7 @@ export async function syncUserProfileToFirestore(
     (async () => {
       try {
         const existingSnap = await getDoc(userRef);
-        if (!existingSnap.exists() || extra.isNewUser) {
+        if (!existingSnap.exists()) {
           await setDoc(userRef, {
             uid: user.uid,
             email: cleanEmail,
