@@ -58,137 +58,42 @@ export async function copyTextToClipboard(text: string): Promise<boolean> {
   }
 }
 
-export interface ShareModalRequest {
-  text: string;
-  phone?: string;
-  title?: string;
-  waMeUrl: string;
-  apiUrl: string;
-  copied: boolean;
-  isWebView: boolean;
-}
-
-type ShareModalListener = (request: ShareModalRequest) => void;
-const shareModalListeners = new Set<ShareModalListener>();
-
-export function subscribeShareModal(listener: ShareModalListener): () => void {
-  shareModalListeners.add(listener);
-  return () => {
-    shareModalListeners.delete(listener);
-  };
-}
-
-function notifyShareModal(request: ShareModalRequest): boolean {
-  if (shareModalListeners.size === 0) return false;
-  shareModalListeners.forEach((listener) => listener(request));
-  return true;
-}
-
-export function isAndroidWebView(): boolean {
-  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
-  const ua = navigator.userAgent || '';
-  const win = window as unknown as Record<string, unknown>;
-  const hasNativeBridge = Boolean(
-    win.Android ||
-      win.AndroidBridge ||
-      win.ReactNativeWebView ||
-      win.Capacitor ||
-      win.cordova ||
-      win.webkit
-  );
-  // Android WebView standard UA contains "; wv)" or "Version/x.x Chrome/"
-  const hasWebViewUa =
-    /;\s*wv\)/i.test(ua) ||
-    (/Android/i.test(ua) && /Version\/\d+\.\d+/i.test(ua) && /Chrome\//i.test(ua));
-  return hasWebViewUa || (/Android/i.test(ua) && hasNativeBridge);
-}
-
 export function getWhatsAppLinkProps(text: string, phone?: string): {
   href: string;
-  target?: '_blank';
-  rel?: string;
+  target: '_blank';
+  rel: string;
 } {
-  const { apiUrl } = buildWhatsAppUrls(text, phone);
+  const { waMeUrl } = buildWhatsAppUrls(text, phone);
   return {
-    href: apiUrl,
+    href: waMeUrl,
     target: '_blank',
     rel: 'noopener noreferrer'
   };
 }
 
-export interface ShareViaWhatsAppOptions {
-  title?: string;
-  url?: string;
-}
-
 /**
- * Cross-platform WhatsApp/Portal Share handler:
- * 1. Tries native Web Share API (`navigator.share`) when sharing general content
- *    so Android Chrome / TWA / iOS / supported WebViews open the native OS share sheet.
- * 2. Copies formatted text to clipboard cleanly (works in Android WebView, PWAs, desktop).
- * 3. Opens the in-app ShareFallbackModal instead of redirecting the current WebView frame
- *    to `https://api.whatsapp.com/send` (which triggers `whatsapp://` and crashes Android
- *    WebView with `net::ERR_UNKNOWN_URL_SCHEME`).
+ * Direct WhatsApp share: synchronously opens WhatsApp (`https://wa.me/...`) in a new
+ * browsing context (`target="_blank"`) so WhatsApp launches directly to the contact
+ * picker with the pre-filled message ready to send.
  */
 export async function shareViaWhatsApp(
   text: string,
-  phone?: string,
-  options?: ShareViaWhatsAppOptions
+  phone?: string
 ): Promise<WhatsAppSharePayload> {
   const { waMeUrl, apiUrl } = buildWhatsAppUrls(text, phone);
-  const webView = isAndroidWebView();
-  const title = options?.title || 'Rathore Rishtey';
 
-  // When no specific recipient phone number is targeted, prefer native OS share sheet first.
-  if (!phone && typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
-    try {
-      const shareData: ShareData = { title, text };
-      if (options?.url) {
-        shareData.url = options.url;
-      }
-      await navigator.share(shareData);
-      return {
-        text,
-        phone,
-        waMeUrl,
-        apiUrl,
-        copied: false
-      };
-    } catch (err) {
-      // User explicitly dismissed the native share sheet — do not show a fallback popup.
-      if (err instanceof Error && err.name === 'AbortError') {
-        return {
-          text,
-          phone,
-          waMeUrl,
-          apiUrl,
-          copied: false
-        };
-      }
-      // Otherwise (e.g. NotAllowedError in preview iframe or unsupported WebView), continue to fallback modal.
-    }
-  }
-
-  const copied = await copyTextToClipboard(text);
-
-  const handledByModal = notifyShareModal({
-    text,
-    phone,
-    title,
-    waMeUrl,
-    apiUrl,
-    copied,
-    isWebView: webView
-  });
-
-  // Fallback only if ShareFallbackModal is somehow not mounted and not in an Android WebView
-  if (!handledByModal && !webView && typeof document !== 'undefined') {
+  if (typeof document !== 'undefined') {
     const link = document.createElement('a');
-    link.href = apiUrl;
+    link.href = waMeUrl;
     link.target = '_blank';
     link.rel = 'noopener noreferrer';
     link.style.position = 'fixed';
-    link.style.left = '-9999px';
+    link.style.left = '0';
+    link.style.top = '0';
+    link.style.width = '1px';
+    link.style.height = '1px';
+    link.style.opacity = '0.01';
+    link.style.pointerEvents = 'none';
     document.body.appendChild(link);
     link.click();
     setTimeout(() => {
@@ -203,7 +108,7 @@ export async function shareViaWhatsApp(
     phone,
     waMeUrl,
     apiUrl,
-    copied
+    copied: false
   };
 }
 

@@ -9,7 +9,7 @@ import { MatrimonyProfile, GenderType, TabType, AuthSession, ProfileAdmirer } fr
 import { ChatModal } from './ChatModal';
 import { useLanguage } from '../context/LanguageContext';
 import { useAdminConfig } from '../context/AdminConfigContext';
-import { shareViaWhatsApp } from '../utils/shareAndPrint';
+import { getWhatsAppLinkProps } from '../utils/shareAndPrint';
 import { UserLocationData } from '../hooks/useUserLocation';
 import {
   ProfileWithDistance,
@@ -1246,20 +1246,15 @@ _Powered by Svayaa_`;
                         )}
 
                         {config.featureWhatsAppShareEnabled && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void shareViaWhatsApp(buildProfileShareText(p), undefined, {
-                                title: `${p.name} - Rathore Rishtey`
-                              });
-                            }}
+                          <a
+                            {...getWhatsAppLinkProps(buildProfileShareText(p))}
+                            onClick={(e) => e.stopPropagation()}
                             title={t('Share biodata on WhatsApp', 'व्हाट्सएप पर शेयर करें')}
                             className="flex-1 min-w-[68px] bg-emerald-50 hover:bg-emerald-100 active:scale-95 border border-emerald-300 text-emerald-800 text-[11px] font-semibold py-2 px-2 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1 whitespace-nowrap touch-manipulation select-none"
                           >
                             <Share2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                             <span>{t('Share', 'शेयर')}</span>
-                          </button>
+                          </a>
                         )}
 
                         {authSession && onBlockProfile && (
@@ -1513,20 +1508,15 @@ _Powered by Svayaa_`;
                       )}
 
                       {config.featureWhatsAppShareEnabled && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            void shareViaWhatsApp(buildProfileShareText(activeProfile), undefined, {
-                              title: `${activeProfile.name} - Rathore Rishtey`
-                            });
-                          }}
+                        <a
+                          {...getWhatsAppLinkProps(buildProfileShareText(activeProfile))}
+                          onClick={(e) => e.stopPropagation()}
                           className="bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-semibold px-3 py-2 rounded-lg text-xs flex items-center justify-center gap-1.5 shadow-xs cursor-pointer transition-colors touch-manipulation select-none"
                           title={t('Share on WhatsApp', 'व्हाट्सएप पर शेयर करें')}
                         >
                           <Share2 className="w-3.5 h-3.5" />
                           <span>{t('WhatsApp', 'व्हाट्सएप')}</span>
-                        </button>
+                        </a>
                       )}
 
                       <a 

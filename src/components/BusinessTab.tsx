@@ -4,7 +4,7 @@ import { BusinessAd, BusinessContact, TabType, AuthSession } from '../types';
 import { sanitizePhoneInput, validatePhoneNumber } from '../utils/validation';
 import { useLanguage } from '../context/LanguageContext';
 import { useAdminConfig } from '../context/AdminConfigContext';
-import { shareViaWhatsApp } from '../utils/shareAndPrint';
+import { getWhatsAppLinkProps } from '../utils/shareAndPrint';
 import { ImageUploadField } from './ImageUploadField';
 
 function getAdContacts(ad: BusinessAd): BusinessContact[] {
@@ -471,20 +471,15 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({
                     )}
 
                     {config.featureWhatsAppShareEnabled && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          void shareViaWhatsApp(buildAdShareText(ad), undefined, {
-                            title: ad.title
-                          });
-                        }}
+                      <a
+                        {...getWhatsAppLinkProps(buildAdShareText(ad))}
+                        onClick={(e) => e.stopPropagation()}
                         title={t('Share business ad on WhatsApp', 'व्हाट्सऐप पर साझा करें')}
                         className="flex-1 min-w-[140px] bg-emerald-50 hover:bg-emerald-100 active:scale-95 border border-emerald-300 text-emerald-800 text-xs font-semibold py-2 px-3 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap touch-manipulation select-none"
                       >
                         <Share2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                         <span>{t('Share on WhatsApp', 'व्हाट्सऐप शेयर')}</span>
-                      </button>
+                      </a>
                     )}
                   </div>
                 )}
