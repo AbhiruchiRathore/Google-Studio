@@ -16,6 +16,11 @@ import {
 } from 'lucide-react';
 import { TabType } from '../types';
 import { useLanguage } from '../context/LanguageContext';
+import {
+  buildGmailComposeUrl,
+  isAndroidDevice,
+  isAndroidWebView
+} from '../utils/shareAndPrint';
 
 const SAFETY_CONTACT_EMAIL = 'abhiruchirathore97@gmail.com';
 
@@ -32,20 +37,25 @@ export const ChildSafetyTab: React.FC<ChildSafetyTabProps> = ({ onNavigateTab })
       ? `${window.location.origin}/child-safety`
       : '/child-safety';
 
-  const mailtoSubject = encodeURIComponent('Urgent: Child Safety / CSAE Report - Rathore Rishtey');
-  const mailtoBody = encodeURIComponent(
-    [
-      'Hello Rathore Rishtey Child Safety & Moderation Team,',
-      '',
-      'I would like to report a child safety concern, suspected minor profile, or policy violation:',
-      '',
-      'Profile Name / ID (if known): ',
-      'Description of Concern: ',
-      '',
-      'Please review and take immediate action.'
-    ].join('\n')
-  );
-  const mailtoHref = `mailto:${SAFETY_CONTACT_EMAIL}?subject=${mailtoSubject}&body=${mailtoBody}`;
+  const emailSubjectText = 'Urgent: Child Safety / CSAE Report - Rathore Rishtey';
+  const emailBodyText = [
+    'Hello Rathore Rishtey Child Safety & Moderation Team,',
+    '',
+    'I would like to report a child safety concern, suspected minor profile, or policy violation:',
+    '',
+    'Profile Name / ID (if known): ',
+    'Description of Concern: ',
+    '',
+    'Please review and take immediate action.'
+  ].join('\n');
+  const mailtoHref = `mailto:${SAFETY_CONTACT_EMAIL}?subject=${encodeURIComponent(emailSubjectText)}&body=${encodeURIComponent(emailBodyText)}`;
+  const isAndroid = isAndroidDevice() || isAndroidWebView();
+  const primaryEmailHref = isAndroid
+    ? buildGmailComposeUrl({ to: SAFETY_CONTACT_EMAIL, subject: emailSubjectText, body: emailBodyText })
+    : mailtoHref;
+  const directEmailHref = isAndroid
+    ? buildGmailComposeUrl({ to: SAFETY_CONTACT_EMAIL })
+    : `mailto:${SAFETY_CONTACT_EMAIL}`;
 
   const handleCopy = async (value: string, field: 'url' | 'email') => {
     try {
@@ -317,7 +327,12 @@ export const ChildSafetyTab: React.FC<ChildSafetyTabProps> = ({ onNavigateTab })
               </p>
               <p className="font-semibold text-[#6e1628]">
                 Email:{' '}
-                <a href={`mailto:${SAFETY_CONTACT_EMAIL}`} className="underline hover:text-[#851834]">
+                <a
+                  href={directEmailHref}
+                  target={isAndroid ? '_blank' : undefined}
+                  rel={isAndroid ? 'noopener noreferrer' : undefined}
+                  className="underline hover:text-[#851834]"
+                >
                   {SAFETY_CONTACT_EMAIL}
                 </a>
               </p>
@@ -334,7 +349,9 @@ export const ChildSafetyTab: React.FC<ChildSafetyTabProps> = ({ onNavigateTab })
               </button>
 
               <a
-                href={mailtoHref}
+                href={primaryEmailHref}
+                target={isAndroid ? '_blank' : undefined}
+                rel={isAndroid ? 'noopener noreferrer' : undefined}
                 className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#6e1628] to-[#851834] text-amber-100 font-bold text-xs shadow-xs hover:opacity-95 transition-opacity"
               >
                 <Flag className="w-3.5 h-3.5" />

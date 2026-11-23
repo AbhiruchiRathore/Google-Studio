@@ -23,6 +23,7 @@ export interface ResolvedSharePayload {
   telegramUrl: string;
   twitterUrl: string;
   mailtoUrl: string;
+  gmailComposeUrl: string;
   instagramUrl: string;
 }
 
@@ -88,6 +89,18 @@ export function buildWhatsAppUrls(text: string, phone?: string) {
   return { waMeUrl, apiUrl, cleanPhone };
 }
 
+export function buildGmailComposeUrl(options: {
+  to?: string;
+  subject?: string;
+  body?: string;
+}): string {
+  const params: string[] = ['view=cm', 'fs=1'];
+  if (options.to) params.push(`to=${encodeURIComponent(options.to)}`);
+  if (options.subject) params.push(`su=${encodeURIComponent(options.subject)}`);
+  if (options.body) params.push(`body=${encodeURIComponent(options.body)}`);
+  return `https://mail.google.com/mail/?${params.join('&')}`;
+}
+
 export function resolveSharePayload(payload: SharePayload): ResolvedSharePayload {
   const title = payload.title?.trim() || 'Rathore Rishtey';
   const summary = payload.text?.trim() || '';
@@ -115,6 +128,7 @@ export function resolveSharePayload(payload: SharePayload): ResolvedSharePayload
   const telegramUrl = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(titleAndSummary)}`;
   const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(titleAndSummary)}&url=${encodeURIComponent(url)}`;
   const mailtoUrl = `mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(fullText)}`;
+  const gmailComposeUrl = buildGmailComposeUrl({ subject: title, body: fullText });
 
   return {
     title,
@@ -126,6 +140,7 @@ export function resolveSharePayload(payload: SharePayload): ResolvedSharePayload
     telegramUrl,
     twitterUrl,
     mailtoUrl,
+    gmailComposeUrl,
     instagramUrl: 'https://www.instagram.com/'
   };
 }
@@ -179,10 +194,16 @@ export function isAndroidWebView(): boolean {
   return hasWebViewUa || (/Android/i.test(ua) && hasNativeBridge);
 }
 
+export function isAndroidDevice(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return /Android/i.test(navigator.userAgent || '');
+}
+
 export function isMobileBrowserContext(): boolean {
   if (typeof navigator === 'undefined') return false;
-  const ua = navigator.userAgent || '';
-  return /Android|iPhone|iPad|iPod/i.test(ua) && !isAndroidWebView();
+  return isAndroidDevice() && !isAndroidWebView()
+    ? true
+    : /iPhone|iPad|iPod/i.test(navigator.userAgent || '');
 }
 
 type ShareModalListener = (request: ResolvedSharePayload) => void;

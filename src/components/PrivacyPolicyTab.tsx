@@ -2,6 +2,13 @@ import React from 'react';
 import { ShieldCheck, ArrowLeft, Lock, Database, Trash2, Mail, Users } from 'lucide-react';
 import { TabType } from '../types';
 import { useLanguage } from '../context/LanguageContext';
+import {
+  buildGmailComposeUrl,
+  isAndroidDevice,
+  isAndroidWebView
+} from '../utils/shareAndPrint';
+
+const PRIVACY_SUPPORT_EMAIL = 'abhiruchirathore97@gmail.com';
 
 interface PrivacyPolicyTabProps {
   onNavigateTab: (tab: TabType) => void;
@@ -9,6 +16,10 @@ interface PrivacyPolicyTabProps {
 
 export const PrivacyPolicyTab: React.FC<PrivacyPolicyTabProps> = ({ onNavigateTab }) => {
   const { t } = useLanguage();
+  const isAndroid = isAndroidDevice() || isAndroidWebView();
+  const supportEmailHref = isAndroid
+    ? buildGmailComposeUrl({ to: PRIVACY_SUPPORT_EMAIL })
+    : `mailto:${PRIVACY_SUPPORT_EMAIL}`;
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-200">
@@ -155,8 +166,13 @@ export const PrivacyPolicyTab: React.FC<PrivacyPolicyTabProps> = ({ onNavigateTa
           </p>
           <p className="text-xs sm:text-sm font-semibold text-[#6e1628]">
             Email:{' '}
-            <a href="mailto:abhiruchirathore97@gmail.com" className="underline hover:text-[#851834]">
-              abhiruchirathore97@gmail.com
+            <a
+              href={supportEmailHref}
+              target={isAndroid ? '_blank' : undefined}
+              rel={isAndroid ? 'noopener noreferrer' : undefined}
+              className="underline hover:text-[#851834]"
+            >
+              {PRIVACY_SUPPORT_EMAIL}
             </a>
           </p>
           <div className="pt-2 flex flex-wrap gap-4 text-xs">

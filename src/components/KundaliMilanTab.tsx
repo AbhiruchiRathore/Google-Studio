@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { MatrimonyProfile, TabType, AuthSession } from '../types';
 import { 
-  NAKSHATRAS, performKundaliMilan, inferRashiIndex, deriveBirthChartIndices,
+  RASHIS, NAKSHATRAS, performKundaliMilan, inferRashiIndex, deriveBirthChartIndices,
   KundaliMilanReport 
 } from '../utils/kundaliMilan';
 import { useLanguage } from '../context/LanguageContext';
@@ -65,27 +65,25 @@ export const KundaliMilanTab: React.FC<KundaliMilanTabProps> = ({
     );
   }, [brides, girlSearch]);
 
-  // Selected profile IDs
-  const [selectedBoyId, setSelectedBoyId] = useState<number | string>(() => {
-    if (preselectedBoyId) return preselectedBoyId;
-    return grooms[0]?.id || 1;
+  // Selected profile IDs (empty until user selects or deep-linked from a profile)
+  const [selectedBoyId, setSelectedBoyId] = useState<number | string | null>(() => {
+    return preselectedBoyId ?? null;
   });
 
-  const [selectedGirlId, setSelectedGirlId] = useState<number | string>(() => {
-    if (preselectedGirlId) return preselectedGirlId;
-    return brides[0]?.id || 8;
+  const [selectedGirlId, setSelectedGirlId] = useState<number | string | null>(() => {
+    return preselectedGirlId ?? null;
   });
 
-  // Custom Form State (Name, DOB, Birth Time, Birth Place)
+  // Custom Form State (Name, DOB, Birth Time, Birth Place) — empty by default
   const [customBoyName, setCustomBoyName] = useState('');
-  const [customBoyDob, setCustomBoyDob] = useState('1996-05-15');
-  const [customBoyTime, setCustomBoyTime] = useState('10:30');
-  const [customBoyPlace, setCustomBoyPlace] = useState('Indore');
+  const [customBoyDob, setCustomBoyDob] = useState('');
+  const [customBoyTime, setCustomBoyTime] = useState('');
+  const [customBoyPlace, setCustomBoyPlace] = useState('');
 
   const [customGirlName, setCustomGirlName] = useState('');
-  const [customGirlDob, setCustomGirlDob] = useState('1998-08-20');
-  const [customGirlTime, setCustomGirlTime] = useState('14:15');
-  const [customGirlPlace, setCustomGirlPlace] = useState('Nanded');
+  const [customGirlDob, setCustomGirlDob] = useState('');
+  const [customGirlTime, setCustomGirlTime] = useState('');
+  const [customGirlPlace, setCustomGirlPlace] = useState('');
 
   // Sync preselected candidates if provided
   useEffect(() => {
@@ -93,18 +91,44 @@ export const KundaliMilanTab: React.FC<KundaliMilanTabProps> = ({
     if (preselectedGirlId) setSelectedGirlId(preselectedGirlId);
   }, [preselectedBoyId, preselectedGirlId]);
 
-  // Get active groom and bride
+  // Get active groom and bride (no automatic fallback selection)
   const activeGroom = useMemo(() => {
-    return grooms.find(g => g.id.toString() === selectedBoyId.toString()) || grooms[0];
+    if (selectedBoyId === null || selectedBoyId === undefined || selectedBoyId === '') return null;
+    return grooms.find(g => g.id.toString() === selectedBoyId.toString()) || null;
   }, [grooms, selectedBoyId]);
 
   const activeBride = useMemo(() => {
-    return brides.find(b => b.id.toString() === selectedGirlId.toString()) || brides[0];
+    if (selectedGirlId === null || selectedGirlId === undefined || selectedGirlId === '') return null;
+    return brides.find(b => b.id.toString() === selectedGirlId.toString()) || null;
   }, [brides, selectedGirlId]);
 
-  // Compute Report
-  const report: KundaliMilanReport = useMemo(() => {
-    if (matchMode === 'samaj' && activeGroom && activeBride) {
+  const activeGroomRashi = useMemo(() => {
+    if (!activeGroom) return null;
+    return RASHIS[inferRashiIndex(activeGroom.about || activeGroom.name) % 12];
+  }, [activeGroom]);
+
+  const activeBrideRashi = useMemo(() => {
+    if (!activeBride) return null;
+    return RASHIS[inferRashiIndex(activeBride.about || activeBride.name) % 12];
+  }, [activeBride]);
+
+  const isCustomBoyComplete = Boolean(
+    customBoyName.trim() && customBoyDob.trim() && customBoyTime.trim() && customBoyPlace.trim()
+  );
+  const isCustomGirlComplete = Boolean(
+    customGirlName.trim() && customGirlDob.trim() && customGirlTime.trim() && customGirlPlace.trim()
+  );
+  const isCustomReady = isCustomBoyComplete && isCustomGirlComplete;
+  const hasAnyCustomInput = Boolean(
+    customBoyName.trim() || customBoyDob.trim() || customBoyTime.trim() || customBoyPlace.trim() ||
+    customGirlName.trim() || customGirlDob.trim() || customGirlTime.trim() || customGirlPlace.trim()
+  );
+
+  // Compute Report ONLY when user has provided required details for both Groom & Bride
+  const report: KundaliMilanReport | null = useMemo(() => {
+    if (matchMode === 'samaj') {
+      if (!activeGroom || !activeBride) return null;
+
       const boyRashiIdx = inferRashiIndex(activeGroom.about || activeGroom.name);
       const girlRashiIdx = inferRashiIndex(activeBride.about || activeBride.name);
 
@@ -128,6 +152,8 @@ export const KundaliMilanTab: React.FC<KundaliMilanTabProps> = ({
         isGirlManglik
       );
     } else {
+      if (!isCustomReady) return null;
+
       const boyChart = deriveBirthChartIndices(
         customBoyName,
         customBoyDob,
@@ -142,8 +168,8 @@ export const KundaliMilanTab: React.FC<KundaliMilanTabProps> = ({
       );
 
       return performKundaliMilan(
-        customBoyName.trim() || t('Groom Candidate', 'वर (प्रत्याशी)'),
-        customGirlName.trim() || t('Bride Candidate', 'वधू (प्रत्याशी)'),
+        customBoyName.trim(),
+        customGirlName.trim(),
         boyChart.rashiIndex,
         girlChart.rashiIndex,
         boyChart.nakshatraIndex,
@@ -156,6 +182,7 @@ export const KundaliMilanTab: React.FC<KundaliMilanTabProps> = ({
     matchMode,
     activeGroom,
     activeBride,
+    isCustomReady,
     customBoyName,
     customBoyDob,
     customBoyTime,
@@ -163,11 +190,22 @@ export const KundaliMilanTab: React.FC<KundaliMilanTabProps> = ({
     customGirlName,
     customGirlDob,
     customGirlTime,
-    customGirlPlace,
-    lang
+    customGirlPlace
   ]);
 
+  const handleResetCustomDetails = () => {
+    setCustomBoyName('');
+    setCustomBoyDob('');
+    setCustomBoyTime('');
+    setCustomBoyPlace('');
+    setCustomGirlName('');
+    setCustomGirlDob('');
+    setCustomGirlTime('');
+    setCustomGirlPlace('');
+  };
+
   const handleShareWhatsApp = () => {
+    if (!report) return;
     const text = lang === 'hi'
       ? `🚩 *वैदिक कुंडली मिलान रिपोर्ट* 🚩
 *राठौर रिश्ते मैट्रिमोनियल नेटवर्क*
@@ -227,8 +265,8 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
     });
   };
 
-  const buildCertificatePrintOptions = () => {
-    const kootaRows = Object.values(report.kootas)
+  const buildCertificatePrintOptions = (targetReport: KundaliMilanReport) => {
+    const kootaRows = Object.values(targetReport.kootas)
       .map(
         (k) => `
         <tr>
@@ -243,19 +281,19 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
       <div class="meta-grid">
         <div class="meta-box">
           <span class="meta-label">${escapeHtml(t('Groom', 'वर'))}</span>
-          <span class="meta-value">${escapeHtml(report.boyName)} (${escapeHtml(lang === 'hi' ? report.boyRashi.hindiName : report.boyRashi.name)})</span>
+          <span class="meta-value">${escapeHtml(targetReport.boyName)} (${escapeHtml(lang === 'hi' ? targetReport.boyRashi.hindiName : targetReport.boyRashi.name)})</span>
         </div>
         <div class="meta-box">
           <span class="meta-label">${escapeHtml(t('Bride', 'वधू'))}</span>
-          <span class="meta-value">${escapeHtml(report.girlName)} (${escapeHtml(lang === 'hi' ? report.girlRashi.hindiName : report.girlRashi.name)})</span>
+          <span class="meta-value">${escapeHtml(targetReport.girlName)} (${escapeHtml(lang === 'hi' ? targetReport.girlRashi.hindiName : targetReport.girlRashi.name)})</span>
         </div>
         <div class="meta-box">
           <span class="meta-label">${escapeHtml(t('Total Score', 'कुल गुण'))}</span>
-          <span class="meta-value">${report.totalGunas} / 36 (${report.percentage}%)</span>
+          <span class="meta-value">${targetReport.totalGunas} / 36 (${targetReport.percentage}%)</span>
         </div>
         <div class="meta-box">
           <span class="meta-label">${escapeHtml(t('Verdict', 'निष्कर्ष'))}</span>
-          <span class="meta-value">${escapeHtml(report.verdict.grade)} - ${escapeHtml(lang === 'hi' ? report.verdict.hindiTitle : report.verdict.title)}</span>
+          <span class="meta-value">${escapeHtml(targetReport.verdict.grade)} - ${escapeHtml(lang === 'hi' ? targetReport.verdict.hindiTitle : targetReport.verdict.title)}</span>
         </div>
       </div>
       <table>
@@ -271,24 +309,25 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
       <div style="margin-top: 16px; padding: 12px; border: 1px solid #d6d3d1; border-radius: 8px; background: #faf8f5; font-size: 12px;">
         <strong>${escapeHtml(t('Dosha Summary:', 'दोष विवरण:'))}</strong>
         <ul style="margin: 6px 0 0 18px; padding: 0;">
-          <li>${escapeHtml(report.doshaSummary.nadiDosha ? t('Nadi Dosha Present', 'नाड़ी दोष उपस्थित') : t('Nadi Compatible (No Dosha)', 'नाड़ी अनुकूल (कोई दोष नहीं)'))}</li>
-          <li>${escapeHtml(report.doshaSummary.bhakootDosha ? t('Bhakoot Dosha Present', 'भकूट दोष उपस्थित') : t('Bhakoot Auspicious (No Dosha)', 'भकूट शुभ (कोई दोष नहीं)'))}</li>
-          <li>${escapeHtml(lang === 'hi' ? report.doshaSummary.manglikCheck.hindiStatus : report.doshaSummary.manglikCheck.status)}</li>
+          <li>${escapeHtml(targetReport.doshaSummary.nadiDosha ? t('Nadi Dosha Present', 'नाड़ी दोष उपस्थित') : t('Nadi Compatible (No Dosha)', 'नाड़ी अनुकूल (कोई दोष नहीं)'))}</li>
+          <li>${escapeHtml(targetReport.doshaSummary.bhakootDosha ? t('Bhakoot Dosha Present', 'भकूट दोष उपस्थित') : t('Bhakoot Auspicious (No Dosha)', 'भकूट शुभ (कोई दोष नहीं)'))}</li>
+          <li>${escapeHtml(lang === 'hi' ? targetReport.doshaSummary.manglikCheck.hindiStatus : targetReport.doshaSummary.manglikCheck.status)}</li>
         </ul>
       </div>
     `;
 
     return {
-      title: `${report.boyName} & ${report.girlName} - Vedic Kundali Milan`,
+      title: `${targetReport.boyName} & ${targetReport.girlName} - Vedic Kundali Milan`,
       subtitle: t('Vedic Ashtakoot 36-Guna Matching Certificate', 'वैदिक अष्टकूट 36-गुण मिलान प्रमाणपत्र'),
       bodyHtml,
-      filename: `kundali-milan-${report.boyName.replace(/\s+/g, '-').toLowerCase()}-${report.girlName.replace(/\s+/g, '-').toLowerCase()}`
+      filename: `kundali-milan-${targetReport.boyName.replace(/\s+/g, '-').toLowerCase()}-${targetReport.girlName.replace(/\s+/g, '-').toLowerCase()}`
     };
   };
 
   const handlePrint = () => {
+    if (!report) return;
     setShowPrintModal(true);
-    printHtmlDocument(buildCertificatePrintOptions());
+    printHtmlDocument(buildCertificatePrintOptions(report));
   };
 
   if (!authSession) {
@@ -440,23 +479,7 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
               <input
                 type="text"
                 value={boySearch}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setBoySearch(val);
-                  const q = val.toLowerCase().trim();
-                  if (q) {
-                    const matches = grooms.filter(g =>
-                      g.name.toLowerCase().includes(q) ||
-                      g.gotra.toLowerCase().includes(q) ||
-                      g.city.toLowerCase().includes(q) ||
-                      (g.education && g.education.toLowerCase().includes(q)) ||
-                      (g.profession && g.profession.toLowerCase().includes(q))
-                    );
-                    if (matches.length > 0 && !matches.some(m => m.id.toString() === selectedBoyId.toString())) {
-                      setSelectedBoyId(matches[0].id);
-                    }
-                  }
-                }}
+                onChange={(e) => setBoySearch(e.target.value)}
                 placeholder={t('Search groom by name, gotra, city...', 'नाम, गोत्र या शहर से वर खोजें...')}
                 className="w-full pl-8 pr-8 py-2.5 rounded-xl border border-stone-200 text-xs text-stone-800 focus:ring-2 focus:ring-amber-500/60 focus:border-amber-500 outline-none bg-white"
               />
@@ -483,7 +506,7 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
                 </div>
               ) : (
                 filteredGrooms.map((g) => {
-                  const isSelected = g.id.toString() === selectedBoyId.toString();
+                  const isSelected = selectedBoyId !== null && g.id.toString() === selectedBoyId.toString();
                   return (
                     <button
                       key={g.id}
@@ -532,7 +555,7 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
               </div>
             )}
 
-            {activeGroom && (
+            {activeGroom && activeGroomRashi && (
               <div className="bg-stone-50 rounded-2xl p-4 border border-stone-200/80 flex items-center gap-4">
                 <img
                   src={activeGroom.photo || "/KiranKumar.png"}
@@ -540,11 +563,20 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
                   className="w-16 h-16 rounded-xl object-cover object-top border border-stone-300 shrink-0 shadow-xs"
                 />
                 <div className="min-w-0 flex-1 text-xs space-y-0.5">
-                  <p className="font-bold text-stone-900 text-sm truncate">{activeGroom.name}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-bold text-stone-900 text-sm truncate">{activeGroom.name}</p>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedBoyId(null)}
+                      className="text-[11px] font-semibold text-stone-500 hover:text-rose-700 shrink-0 cursor-pointer"
+                    >
+                      {t('Clear', 'हटाएं')}
+                    </button>
+                  </div>
                   <p className="text-stone-600">{activeGroom.age} {t('Yrs', 'वर्ष')} · {activeGroom.height || "5' 6\""} · {activeGroom.city}</p>
                   <p className="text-amber-900 font-semibold text-[11px]">{t('Gotra', 'गोत्र')}: {activeGroom.gotra}</p>
                   <p className="text-stone-500 text-[11px]">
-                    {t('Rashi', 'राशि')}: <strong className="text-stone-800">{lang === 'hi' ? report.boyRashi.hindiName : report.boyRashi.name}</strong>
+                    {t('Rashi', 'राशि')}: <strong className="text-stone-800">{lang === 'hi' ? activeGroomRashi.hindiName : activeGroomRashi.name}</strong>
                   </p>
                 </div>
               </div>
@@ -571,23 +603,7 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
               <input
                 type="text"
                 value={girlSearch}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  setGirlSearch(val);
-                  const q = val.toLowerCase().trim();
-                  if (q) {
-                    const matches = brides.filter(b =>
-                      b.name.toLowerCase().includes(q) ||
-                      b.gotra.toLowerCase().includes(q) ||
-                      b.city.toLowerCase().includes(q) ||
-                      (b.education && b.education.toLowerCase().includes(q)) ||
-                      (b.profession && b.profession.toLowerCase().includes(q))
-                    );
-                    if (matches.length > 0 && !matches.some(m => m.id.toString() === selectedGirlId.toString())) {
-                      setSelectedGirlId(matches[0].id);
-                    }
-                  }
-                }}
+                onChange={(e) => setGirlSearch(e.target.value)}
                 placeholder={t('Search bride by name, gotra, city...', 'नाम, गोत्र या शहर से वधू खोजें...')}
                 className="w-full pl-8 pr-8 py-2.5 rounded-xl border border-stone-200 text-xs text-stone-800 focus:ring-2 focus:ring-amber-500/60 focus:border-amber-500 outline-none bg-white"
               />
@@ -614,7 +630,7 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
                 </div>
               ) : (
                 filteredBrides.map((b) => {
-                  const isSelected = b.id.toString() === selectedGirlId.toString();
+                  const isSelected = selectedGirlId !== null && b.id.toString() === selectedGirlId.toString();
                   return (
                     <button
                       key={b.id}
@@ -663,7 +679,7 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
               </div>
             )}
 
-            {activeBride && (
+            {activeBride && activeBrideRashi && (
               <div className="bg-stone-50 rounded-2xl p-4 border border-stone-200/80 flex items-center gap-4">
                 <img
                   src={activeBride.photo || "/IshikaRathore.png"}
@@ -671,11 +687,20 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
                   className="w-16 h-16 rounded-xl object-cover object-top border border-stone-300 shrink-0 shadow-xs"
                 />
                 <div className="min-w-0 flex-1 text-xs space-y-0.5">
-                  <p className="font-bold text-stone-900 text-sm truncate">{activeBride.name}</p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-bold text-stone-900 text-sm truncate">{activeBride.name}</p>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedGirlId(null)}
+                      className="text-[11px] font-semibold text-stone-500 hover:text-rose-700 shrink-0 cursor-pointer"
+                    >
+                      {t('Clear', 'हटाएं')}
+                    </button>
+                  </div>
                   <p className="text-stone-600">{activeBride.age} {t('Yrs', 'वर्ष')} · {activeBride.height || "5' 5\""} · {activeBride.city}</p>
                   <p className="text-amber-900 font-semibold text-[11px]">{t('Gotra', 'गोत्र')}: {activeBride.gotra}</p>
                   <p className="text-stone-500 text-[11px]">
-                    {t('Rashi', 'राशि')}: <strong className="text-stone-800">{lang === 'hi' ? report.girlRashi.hindiName : report.girlRashi.name}</strong>
+                    {t('Rashi', 'राशि')}: <strong className="text-stone-800">{lang === 'hi' ? activeBrideRashi.hindiName : activeBrideRashi.name}</strong>
                   </p>
                 </div>
               </div>
@@ -684,112 +709,128 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
         </div>
       ) : (
         /* CUSTOM BIRTH DETAILS FORM — Name, DOB, Birth Time, Birth Place only */
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white p-6 sm:p-7 rounded-3xl border border-stone-200 shadow-sm text-xs">
-          {/* BOY FORM */}
-          <div className="space-y-3.5">
-            <h3 className="font-serif font-bold text-stone-900 text-sm pb-2 border-b border-stone-100 flex items-center gap-2">
-              <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-800 flex items-center justify-center font-bold text-xs">1</span>
-              <span>{t('Groom Details', 'वर का विवरण')}</span>
-            </h3>
+        <div className="bg-white p-6 sm:p-7 rounded-3xl border border-stone-200 shadow-sm text-xs space-y-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* BOY FORM */}
+            <div className="space-y-3.5">
+              <h3 className="font-serif font-bold text-stone-900 text-sm pb-2 border-b border-stone-100 flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-800 flex items-center justify-center font-bold text-xs">1</span>
+                <span>{t('Groom Details', 'वर का विवरण')}</span>
+              </h3>
 
-            <div>
-              <label className="font-bold text-stone-700 block mb-1">{t('Name', 'नाम')}</label>
-              <input
-                type="text"
-                value={customBoyName}
-                onChange={(e) => setCustomBoyName(e.target.value)}
-                placeholder={t('Enter groom name', 'वर का नाम दर्ज करें')}
-                className="w-full p-2.5 rounded-xl border border-stone-300 bg-stone-50 focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 outline-none"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <div>
-                <label className="font-bold text-stone-700 block mb-1">{t('DOB (Date of Birth)', 'जन्म तिथि')}</label>
+                <label className="font-bold text-stone-700 block mb-1">{t('Name', 'नाम')} *</label>
                 <input
-                  type="date"
-                  value={customBoyDob}
-                  onChange={(e) => setCustomBoyDob(e.target.value)}
+                  type="text"
+                  value={customBoyName}
+                  onChange={(e) => setCustomBoyName(e.target.value)}
+                  placeholder={t('Enter groom name', 'वर का नाम दर्ज करें')}
                   className="w-full p-2.5 rounded-xl border border-stone-300 bg-stone-50 focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 outline-none"
                 />
               </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label className="font-bold text-stone-700 block mb-1">{t('DOB (Date of Birth)', 'जन्म तिथि')} *</label>
+                  <input
+                    type="date"
+                    value={customBoyDob}
+                    onChange={(e) => setCustomBoyDob(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border border-stone-300 bg-stone-50 focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-stone-700 block mb-1">{t('Birth Time', 'जन्म समय')} *</label>
+                  <input
+                    type="time"
+                    value={customBoyTime}
+                    onChange={(e) => setCustomBoyTime(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border border-stone-300 bg-stone-50 focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 outline-none"
+                  />
+                </div>
+              </div>
+
               <div>
-                <label className="font-bold text-stone-700 block mb-1">{t('Birth Time', 'जन्म समय')}</label>
+                <label className="font-bold text-stone-700 block mb-1">{t('Birth Place', 'जन्म स्थान')} *</label>
                 <input
-                  type="time"
-                  value={customBoyTime}
-                  onChange={(e) => setCustomBoyTime(e.target.value)}
+                  type="text"
+                  value={customBoyPlace}
+                  onChange={(e) => setCustomBoyPlace(e.target.value)}
+                  placeholder={t('Enter birth city / place (e.g., Indore)', 'जन्म स्थान दर्ज करें (जैसे: इंदौर)')}
                   className="w-full p-2.5 rounded-xl border border-stone-300 bg-stone-50 focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 outline-none"
                 />
               </div>
             </div>
 
-            <div>
-              <label className="font-bold text-stone-700 block mb-1">{t('Birth Place', 'जन्म स्थान')}</label>
-              <input
-                type="text"
-                value={customBoyPlace}
-                onChange={(e) => setCustomBoyPlace(e.target.value)}
-                placeholder={t('Enter birth city / place (e.g., Indore)', 'जन्म स्थान दर्ज करें (जैसे: इंदौर)')}
-                className="w-full p-2.5 rounded-xl border border-stone-300 bg-stone-50 focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 outline-none"
-              />
+            {/* GIRL FORM */}
+            <div className="space-y-3.5">
+              <h3 className="font-serif font-bold text-stone-900 text-sm pb-2 border-b border-stone-100 flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-rose-100 text-rose-800 flex items-center justify-center font-bold text-xs">2</span>
+                <span>{t('Bride Details', 'वधू का विवरण')}</span>
+              </h3>
+
+              <div>
+                <label className="font-bold text-stone-700 block mb-1">{t('Name', 'नाम')} *</label>
+                <input
+                  type="text"
+                  value={customGirlName}
+                  onChange={(e) => setCustomGirlName(e.target.value)}
+                  placeholder={t('Enter bride name', 'वधू का नाम दर्ज करें')}
+                  className="w-full p-2.5 rounded-xl border border-stone-300 bg-stone-50 focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <label className="font-bold text-stone-700 block mb-1">{t('DOB (Date of Birth)', 'जन्म तिथि')} *</label>
+                  <input
+                    type="date"
+                    value={customGirlDob}
+                    onChange={(e) => setCustomGirlDob(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border border-stone-300 bg-stone-50 focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-stone-700 block mb-1">{t('Birth Time', 'जन्म समय')} *</label>
+                  <input
+                    type="time"
+                    value={customGirlTime}
+                    onChange={(e) => setCustomGirlTime(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border border-stone-300 bg-stone-50 focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="font-bold text-stone-700 block mb-1">{t('Birth Place', 'जन्म स्थान')} *</label>
+                <input
+                  type="text"
+                  value={customGirlPlace}
+                  onChange={(e) => setCustomGirlPlace(e.target.value)}
+                  placeholder={t('Enter birth city / place (e.g., Nanded)', 'जन्म स्थान दर्ज करें (जैसे: नांदेड़)')}
+                  className="w-full p-2.5 rounded-xl border border-stone-300 bg-stone-50 focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 outline-none"
+                />
+              </div>
             </div>
           </div>
 
-          {/* GIRL FORM */}
-          <div className="space-y-3.5">
-            <h3 className="font-serif font-bold text-stone-900 text-sm pb-2 border-b border-stone-100 flex items-center gap-2">
-              <span className="w-5 h-5 rounded-full bg-rose-100 text-rose-800 flex items-center justify-center font-bold text-xs">2</span>
-              <span>{t('Bride Details', 'वधू का विवरण')}</span>
-            </h3>
-
-            <div>
-              <label className="font-bold text-stone-700 block mb-1">{t('Name', 'नाम')}</label>
-              <input
-                type="text"
-                value={customGirlName}
-                onChange={(e) => setCustomGirlName(e.target.value)}
-                placeholder={t('Enter bride name', 'वधू का नाम दर्ज करें')}
-                className="w-full p-2.5 rounded-xl border border-stone-300 bg-stone-50 focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 outline-none"
-              />
+          {hasAnyCustomInput && (
+            <div className="pt-3 border-t border-stone-100 flex justify-end">
+              <button
+                type="button"
+                onClick={handleResetCustomDetails}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-stone-200 hover:bg-stone-100 text-stone-600 font-semibold text-xs cursor-pointer"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>{t('Clear Details', 'विवरण साफ़ करें')}</span>
+              </button>
             </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              <div>
-                <label className="font-bold text-stone-700 block mb-1">{t('DOB (Date of Birth)', 'जन्म तिथि')}</label>
-                <input
-                  type="date"
-                  value={customGirlDob}
-                  onChange={(e) => setCustomGirlDob(e.target.value)}
-                  className="w-full p-2.5 rounded-xl border border-stone-300 bg-stone-50 focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 outline-none"
-                />
-              </div>
-              <div>
-                <label className="font-bold text-stone-700 block mb-1">{t('Birth Time', 'जन्म समय')}</label>
-                <input
-                  type="time"
-                  value={customGirlTime}
-                  onChange={(e) => setCustomGirlTime(e.target.value)}
-                  className="w-full p-2.5 rounded-xl border border-stone-300 bg-stone-50 focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 outline-none"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="font-bold text-stone-700 block mb-1">{t('Birth Place', 'जन्म स्थान')}</label>
-              <input
-                type="text"
-                value={customGirlPlace}
-                onChange={(e) => setCustomGirlPlace(e.target.value)}
-                placeholder={t('Enter birth city / place (e.g., Nanded)', 'जन्म स्थान दर्ज करें (जैसे: नांदेड़)')}
-                className="w-full p-2.5 rounded-xl border border-stone-300 bg-stone-50 focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 outline-none"
-              />
-            </div>
-          </div>
+          )}
         </div>
       )}
 
-      {/* KUNDALI MILAN SCORECARD REPORT */}
+      {/* KUNDALI MILAN SCORECARD REPORT — Shown ONLY after details are filled */}
+      {report ? (
       <div className="bg-white rounded-3xl border-2 border-amber-300/80 shadow-xl overflow-hidden print:border-none print:shadow-none">
         {/* Certificate Top Banner */}
         <div className="bg-gradient-to-r from-[#4c0d1b] via-[#631024] to-[#4c0d1b] p-6 sm:p-8 text-white text-center border-b border-amber-400/40 relative">
@@ -1020,9 +1061,76 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
           </div>
         </div>
       </div>
+      ) : (
+        <div className="bg-white rounded-3xl border border-stone-200 shadow-sm p-7 sm:p-10 text-center space-y-4">
+          <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 flex items-center justify-center mx-auto">
+            <Compass className="w-6 h-6" />
+          </div>
+          <div className="space-y-1.5 max-w-lg mx-auto">
+            <h3 className="text-lg font-serif font-bold text-stone-900">
+              {matchMode === 'samaj'
+                ? t('Select Both Groom & Bride to Calculate Gunas', 'गुण मिलान देखने के लिए वर और वधू दोनों चुनें')
+                : t('Enter All Birth Details to Calculate Gunas', 'गुण मिलान गणना के लिए सभी जन्म विवरण दर्ज करें')}
+            </h3>
+            <p className="text-xs text-stone-600 leading-relaxed">
+              {matchMode === 'samaj'
+                ? t(
+                    'Please select one Groom and one Bride from the verified Samaj lists above to generate the 36-Guna Ashtakoot report.',
+                    '36-गुण अष्टकूट रिपोर्ट देखने के लिए ऊपर दी गई सूचियों में से एक वर और एक वधू का चयन करें।'
+                  )
+                : t(
+                    'Fill in Name, Date of Birth, Birth Time, and Birth Place for both Groom and Bride above. The 36-Guna Ashtakoot score will be calculated automatically once all details are entered.',
+                    'ऊपर वर और वधू दोनों के नाम, जन्म तिथि, जन्म समय और जन्म स्थान भरें। सभी विवरण भरते ही 36-गुण अष्टकूट मिलान रिपोर्ट स्वतः प्रदर्शित होगी।'
+                  )}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-center gap-2.5 pt-1 text-xs">
+            {matchMode === 'samaj' ? (
+              <>
+                <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border font-semibold ${
+                  activeGroom
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                    : 'bg-stone-50 border-stone-200 text-stone-600'
+                }`}>
+                  {activeGroom ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> : <Users className="w-3.5 h-3.5 text-stone-400" />}
+                  <span>{activeGroom ? `${t('Groom:', 'वर:')} ${activeGroom.name}` : t('1. Groom not selected', '1. वर चयन शेष')}</span>
+                </span>
+                <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border font-semibold ${
+                  activeBride
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                    : 'bg-stone-50 border-stone-200 text-stone-600'
+                }`}>
+                  {activeBride ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> : <Users className="w-3.5 h-3.5 text-stone-400" />}
+                  <span>{activeBride ? `${t('Bride:', 'वधू:')} ${activeBride.name}` : t('2. Bride not selected', '2. वधू चयन शेष')}</span>
+                </span>
+              </>
+            ) : (
+              <>
+                <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border font-semibold ${
+                  isCustomBoyComplete
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                    : 'bg-stone-50 border-stone-200 text-stone-600'
+                }`}>
+                  {isCustomBoyComplete ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> : <Info className="w-3.5 h-3.5 text-stone-400" />}
+                  <span>{isCustomBoyComplete ? t('Groom details complete', 'वर विवरण पूर्ण') : t('1. Groom details pending', '1. वर विवरण शेष')}</span>
+                </span>
+                <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border font-semibold ${
+                  isCustomGirlComplete
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                    : 'bg-stone-50 border-stone-200 text-stone-600'
+                }`}>
+                  {isCustomGirlComplete ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> : <Info className="w-3.5 h-3.5 text-stone-400" />}
+                  <span>{isCustomGirlComplete ? t('Bride details complete', 'वधू विवरण पूर्ण') : t('2. Bride details pending', '2. वधू विवरण शेष')}</span>
+                </span>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* PRINT & DOWNLOAD CERTIFICATE MODAL */}
-      {showPrintModal && (
+      {showPrintModal && report && (
         <div
           className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-start sm:items-center justify-center px-3 sm:px-4 pt-[calc(0.75rem+var(--sat))] pb-[calc(1rem+var(--sab))] overflow-y-auto"
           onClick={() => setShowPrintModal(false)}
@@ -1057,7 +1165,7 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
             <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
               <button
                 type="button"
-                onClick={() => printHtmlDocument(buildCertificatePrintOptions())}
+                onClick={() => printHtmlDocument(buildCertificatePrintOptions(report))}
                 className="flex-1 bg-[#380812] hover:bg-[#24050b] text-amber-200 font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <Printer className="w-4 h-4" />
@@ -1065,7 +1173,7 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
               </button>
               <button
                 type="button"
-                onClick={() => downloadPrintableHtml(buildCertificatePrintOptions())}
+                onClick={() => downloadPrintableHtml(buildCertificatePrintOptions(report))}
                 className="flex-1 bg-amber-100 hover:bg-amber-200 text-amber-950 border border-amber-300 font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <Download className="w-4 h-4" />

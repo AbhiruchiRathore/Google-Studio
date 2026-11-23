@@ -16,6 +16,11 @@ import {
 } from 'lucide-react';
 import { AuthSession, TabType } from '../types';
 import { useLanguage } from '../context/LanguageContext';
+import {
+  buildGmailComposeUrl,
+  isAndroidDevice,
+  isAndroidWebView
+} from '../utils/shareAndPrint';
 
 export const SUPPORT_EMAIL = 'abhiruchirathore97@gmail.com';
 
@@ -38,21 +43,26 @@ export const DeleteAccountTab: React.FC<DeleteAccountTabProps> = ({
       ? `${window.location.origin}/delete-account`
       : '/delete-account';
 
-  const mailtoSubject = encodeURIComponent('Delete Account Request');
-  const mailtoBody = encodeURIComponent(
-    [
-      'Hello Rathore Rishtey Support Team,',
-      '',
-      'Please permanently delete my Rathore Rishtey account and all associated personal data (profile, messages, and photos).',
-      '',
-      'Registered Email Address: ',
-      'Username ID (if known): ',
-      'Mobile Number (if linked): ',
-      '',
-      'Thank you.'
-    ].join('\n')
-  );
-  const mailtoHref = `mailto:${SUPPORT_EMAIL}?subject=${mailtoSubject}&body=${mailtoBody}`;
+  const emailSubjectText = 'Delete Account Request';
+  const emailBodyText = [
+    'Hello Rathore Rishtey Support Team,',
+    '',
+    'Please permanently delete my Rathore Rishtey account and all associated personal data (profile, messages, and photos).',
+    '',
+    'Registered Email Address: ',
+    'Username ID (if known): ',
+    'Mobile Number (if linked): ',
+    '',
+    'Thank you.'
+  ].join('\n');
+  const mailtoHref = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(emailSubjectText)}&body=${encodeURIComponent(emailBodyText)}`;
+  const isAndroid = isAndroidDevice() || isAndroidWebView();
+  const primaryEmailHref = isAndroid
+    ? buildGmailComposeUrl({ to: SUPPORT_EMAIL, subject: emailSubjectText, body: emailBodyText })
+    : mailtoHref;
+  const supportEmailHref = isAndroid
+    ? buildGmailComposeUrl({ to: SUPPORT_EMAIL })
+    : `mailto:${SUPPORT_EMAIL}`;
 
   const handleCopy = async (value: string, field: 'url' | 'email' | 'subject') => {
     try {
@@ -240,7 +250,12 @@ export const DeleteAccountTab: React.FC<DeleteAccountTabProps> = ({
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <span className="text-stone-400 font-medium">{t('Support Email:', 'सहायता ईमेल:')} </span>
-                  <a href={`mailto:${SUPPORT_EMAIL}`} className="font-mono font-bold text-[#6e1628] underline">
+                  <a
+                    href={supportEmailHref}
+                    target={isAndroid ? '_blank' : undefined}
+                    rel={isAndroid ? 'noopener noreferrer' : undefined}
+                    className="font-mono font-bold text-[#6e1628] underline"
+                  >
                     {SUPPORT_EMAIL}
                   </a>
                 </div>
@@ -277,7 +292,9 @@ export const DeleteAccountTab: React.FC<DeleteAccountTabProps> = ({
 
             <div>
               <a
-                href={mailtoHref}
+                href={primaryEmailHref}
+                target={isAndroid ? '_blank' : undefined}
+                rel={isAndroid ? 'noopener noreferrer' : undefined}
                 className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-100 hover:bg-amber-200 border border-amber-300 text-[#380812] font-bold text-xs transition-colors"
               >
                 <Mail className="w-3.5 h-3.5" />

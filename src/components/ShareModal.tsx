@@ -14,6 +14,8 @@ import {
 import { useLanguage } from '../context/LanguageContext';
 import {
   copyTextToClipboard,
+  isAndroidDevice,
+  isAndroidWebView,
   ResolvedSharePayload,
   subscribeShareModal
 } from '../utils/shareAndPrint';
@@ -24,6 +26,7 @@ export const ShareModal: React.FC = () => {
   const [linkCopied, setLinkCopied] = useState(false);
   const [messageCopied, setMessageCopied] = useState(false);
   const [instagramCopiedNotice, setInstagramCopiedNotice] = useState(false);
+  const [emailCopiedNotice, setEmailCopiedNotice] = useState(false);
 
   useEffect(() => {
     return subscribeShareModal((next) => {
@@ -31,6 +34,7 @@ export const ShareModal: React.FC = () => {
       setLinkCopied(false);
       setMessageCopied(false);
       setInstagramCopiedNotice(false);
+      setEmailCopiedNotice(false);
     });
   }, []);
 
@@ -70,8 +74,31 @@ export const ShareModal: React.FC = () => {
   };
 
   const handleInstagramShare = async () => {
-    const ok = await copyTextToClipboard(request.fullText);
-    setInstagramCopiedNotice(ok || true);
+    await copyTextToClipboard(request.fullText);
+    setEmailCopiedNotice(false);
+    setInstagramCopiedNotice(true);
+  };
+
+  const handleEmailShare = async () => {
+    await copyTextToClipboard(request.fullText);
+    setInstagramCopiedNotice(false);
+    setEmailCopiedNotice(true);
+
+    // Avoid navigating Android WebView directly to mailto: (prevents net::ERR_UNKNOWN_URL_SCHEME)
+    if (isAndroidDevice() || isAndroidWebView()) {
+      return;
+    }
+
+    try {
+      const a = document.createElement('a');
+      a.href = request.mailtoUrl;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch {
+      // Clipboard copy & Gmail HTTPS compose banner remain shown as safe fallback
+    }
   };
 
   const handleNativeDeviceShare = async () => {
@@ -171,6 +198,31 @@ export const ShareModal: React.FC = () => {
             </div>
           )}
 
+          {/* Email Android-Safe Notice & Gmail HTTPS Compose Banner */}
+          {emailCopiedNotice && (
+            <div className="bg-amber-50/90 border border-amber-300 rounded-2xl p-3.5 space-y-2.5">
+              <div className="flex items-start gap-2 text-xs text-stone-900 font-semibold">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                <span>
+                  {t(
+                    'Message copied! Tap below to open Gmail compose or paste into any Email app.',
+                    'संदेश कॉपी हो गया! नीचे से Gmail खोलें या अपने ईमेल ऐप में पेस्ट करें।'
+                  )}
+                </span>
+              </div>
+              <a
+                href={request.gmailComposeUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full min-h-[44px] bg-[#380812] hover:bg-[#540e1b] text-amber-200 font-bold py-2 px-4 rounded-xl text-xs flex items-center justify-center gap-2 shadow-sm transition-colors"
+              >
+                <Mail className="w-4 h-4 text-amber-300 shrink-0" />
+                <span>{t('Compose in Gmail', 'Gmail में ईमेल लिखें')}</span>
+                <ExternalLink className="w-3.5 h-3.5 opacity-80 shrink-0" />
+              </a>
+            </div>
+          )}
+
           {/* Share Destinations Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
             {/* WhatsApp */}
@@ -222,14 +274,15 @@ export const ShareModal: React.FC = () => {
               <span>{t('X / Twitter', 'X / ट्विटर')}</span>
             </a>
 
-            {/* Email */}
-            <a
-              href={request.mailtoUrl}
+            {/* Email (Android-safe button avoiding WebView mailto: ERR_UNKNOWN_URL_SCHEME) */}
+            <button
+              type="button"
+              onClick={handleEmailShare}
               className="min-h-[48px] bg-amber-100 hover:bg-amber-200 active:scale-[0.98] text-[#380812] border border-amber-300 font-bold px-3.5 py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
             >
               <Mail className="w-4 h-4 text-[#6e1628] shrink-0" />
               <span>{t('Email', 'ईमेल')}</span>
-            </a>
+            </button>
 
             {/* Copy Link */}
             <button
