@@ -10,7 +10,8 @@ import { sanitizePhoneInput, validatePhoneNumber } from '../utils/validation';
 import { useLanguage } from '../context/LanguageContext';
 import { useAdminConfig } from '../context/AdminConfigContext';
 import {
-  shareViaWhatsApp,
+  buildAppShareUrl,
+  shareContent,
   printHtmlDocument,
   downloadPrintableHtml,
   downloadCsvFile,
@@ -404,9 +405,13 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({ authSession, onNavig
       text += `   ${t('Status:', 'स्थिति:')} ${g.status === 'Confirmed' ? '✅ Confirmed' : g.status === 'Card Sent' ? '✉️ Card Sent' : '⏳ Pending'}\n\n`;
     });
 
-    text += `_Rathore Rishtey Guest Planner_\nhttps://svayaa.com/`;
+    text += `_Rathore Rishtey Guest Planner_`;
 
-    shareViaWhatsApp(text);
+    void shareContent({
+      title: `${activeOccasion.title} — Guest List`,
+      text,
+      url: buildAppShareUrl('guest-list')
+    });
   };
 
   const handleSendPersonalInviteWhatsApp = (guest: GuestItem) => {
@@ -414,7 +419,12 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({ authSession, onNavig
       ? `जय माताजी की!\n\nआदरणीय *${guest.name}* जी,\n\nसप्रेम नमस्कार! आपको एवं आपके पूरे परिवार को *${activeOccasion.title}* के शुभ अवसर पर सपरिवार पधारने का स्नेहभरा निमंत्रण है।\n\n📅 दिनांक: ${activeOccasion.date || 'शीघ्र घोषित'}\n📍 स्थान: ${activeOccasion.venue || 'कार्यक्रम स्थल'}\n\nआपकी उपस्थिति से हमारा समारोह गौरवान्वित होगा।\n\nभवदीय,\nराठौड़ परिवार\nसंपर्क: +91 9826012345`
       : `Jai Mataji Ki!\n\nDear *${guest.name}*,\n\nPlease accept our warm regards and cordial invitation. You and your family are cordially invited to celebrate the auspicious occasion of *${activeOccasion.title}* with us.\n\n📅 Date: ${activeOccasion.date || 'To be announced'}\n📍 Venue: ${activeOccasion.venue || 'Event Venue'}\n\nYour presence and blessings will make this celebration truly special.\n\nWarm regards,\nRathore Family\nContact: +91 9826012345`;
 
-    shareViaWhatsApp(text, guest.phone);
+    void shareContent({
+      title: `${activeOccasion.title} — Invitation for ${guest.name}`,
+      text,
+      url: buildAppShareUrl('guest-list'),
+      phone: guest.phone
+    });
   };
 
   const buildGuestListPrintOptions = () => {
@@ -706,11 +716,12 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({ authSession, onNavig
 
             {config.featureWhatsAppShareEnabled && (
               <button
+                type="button"
                 onClick={handleShareListWhatsApp}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3.5 py-2 rounded-xl text-xs flex items-center gap-1.5 shadow-xs cursor-pointer transition-colors"
               >
                 <Share2 className="w-3.5 h-3.5" />
-                <span>{t('Share List on WhatsApp', 'व्हाट्सऐप पर सूची साझा करें')}</span>
+                <span>{t('Share Guest List', 'अतिथि सूची साझा करें')}</span>
               </button>
             )}
 
@@ -1321,7 +1332,7 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({ authSession, onNavig
                   className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <Share2 className="w-4 h-4" />
-                  <span>{t('Share WhatsApp', 'व्हाट्सऐप शेयर')}</span>
+                  <span>{t('Share List', 'सूची साझा करें')}</span>
                 </button>
               )}
             </div>

@@ -4,7 +4,7 @@ import { BusinessAd, BusinessContact, TabType, AuthSession } from '../types';
 import { sanitizePhoneInput, validatePhoneNumber } from '../utils/validation';
 import { useLanguage } from '../context/LanguageContext';
 import { useAdminConfig } from '../context/AdminConfigContext';
-import { getWhatsAppLinkProps } from '../utils/shareAndPrint';
+import { buildAppShareUrl, shareContent } from '../utils/shareAndPrint';
 import { ImageUploadField } from './ImageUploadField';
 
 function getAdContacts(ad: BusinessAd): BusinessContact[] {
@@ -117,8 +117,8 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({
     const ownersLabel = adContacts.length > 1 ? adContacts.map((c) => c.name).join(' & ') : ad.owner;
 
     return lang === 'hi'
-      ? `🛍️ *राठौड़ समाज व्यापार डायरेक्टरी* 🛍️\n\n*${ad.title}*\n*श्रेणी:* ${ad.category}\n*संचालक:* ${ownersLabel} ${ad.city ? `(${ad.city})` : ''}\n${ad.tagline || ad.description ? `*विवरण:* ${ad.tagline || ad.description}\n` : ''}${ad.offer ? `🎁 *विशेष ऑफर:* ${ad.offer}\n` : ''}${ad.address ? `📍 *पता:* ${ad.address}\n` : ''}${contactsText ? `📞 *संपर्क:* ${contactsText}\n` : ''}\n✨ *राठौड़ समाज व्यापार डायरेक्टरी से जुड़ें:*\nhttps://svayaa.com/`
-      : `🛍️ *Rathore Samaj Business Directory* 🛍️\n\n*${ad.title}*\n*Category:* ${ad.category}\n*Owner(s):* ${ownersLabel} ${ad.city ? `(${ad.city})` : ''}\n${ad.tagline || ad.description ? `*About:* ${ad.tagline || ad.description}\n` : ''}${ad.offer ? `🎁 *Special Offer:* ${ad.offer}\n` : ''}${ad.address ? `📍 *Address:* ${ad.address}\n` : ''}${contactsText ? `📞 *Contact:* ${contactsText}\n` : ''}\n✨ *Connect with Rathore Samaj businesses on our community portal:*\nhttps://svayaa.com/\n_Powered by Svayaa_`;
+      ? `🛍️ *राठौड़ समाज व्यापार डायरेक्टरी* 🛍️\n\n*${ad.title}*\n*श्रेणी:* ${ad.category}\n*संचालक:* ${ownersLabel} ${ad.city ? `(${ad.city})` : ''}\n${ad.tagline || ad.description ? `*विवरण:* ${ad.tagline || ad.description}\n` : ''}${ad.offer ? `🎁 *विशेष ऑफर:* ${ad.offer}\n` : ''}${ad.address ? `📍 *पता:* ${ad.address}\n` : ''}${contactsText ? `📞 *संपर्क:* ${contactsText}` : ''}`.trim()
+      : `🛍️ *Rathore Samaj Business Directory* 🛍️\n\n*${ad.title}*\n*Category:* ${ad.category}\n*Owner(s):* ${ownersLabel} ${ad.city ? `(${ad.city})` : ''}\n${ad.tagline || ad.description ? `*About:* ${ad.tagline || ad.description}\n` : ''}${ad.offer ? `🎁 *Special Offer:* ${ad.offer}\n` : ''}${ad.address ? `📍 *Address:* ${ad.address}\n` : ''}${contactsText ? `📞 *Contact:* ${contactsText}` : ''}`.trim();
   };
 
   const categories = [
@@ -471,15 +471,22 @@ export const BusinessTab: React.FC<BusinessTabProps> = ({
                     )}
 
                     {config.featureWhatsAppShareEnabled && (
-                      <a
-                        {...getWhatsAppLinkProps(buildAdShareText(ad))}
-                        onClick={(e) => e.stopPropagation()}
-                        title={t('Share business ad on WhatsApp', 'व्हाट्सऐप पर साझा करें')}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void shareContent({
+                            title: `${ad.title} — ${ad.category}`,
+                            text: buildAdShareText(ad),
+                            url: buildAppShareUrl('directory', { ad: ad.id })
+                          });
+                        }}
+                        title={t('Share business listing', 'व्यापार विवरण साझा करें')}
                         className="flex-1 min-w-[140px] bg-emerald-50 hover:bg-emerald-100 active:scale-95 border border-emerald-300 text-emerald-800 text-xs font-semibold py-2 px-3 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap touch-manipulation select-none"
                       >
                         <Share2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        <span>{t('Share on WhatsApp', 'व्हाट्सऐप शेयर')}</span>
-                      </a>
+                        <span>{t('Share Listing', 'साझा करें')}</span>
+                      </button>
                     )}
                   </div>
                 )}

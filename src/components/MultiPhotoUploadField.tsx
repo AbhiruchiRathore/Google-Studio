@@ -1,6 +1,6 @@
-import React, { useId, useState } from 'react';
+import React, { useId, useRef, useState } from 'react';
 import { Camera, Upload, Trash2, Link2, RefreshCw, AlertCircle, Star, Plus } from 'lucide-react';
-import { compressAndReadImageFile } from '../utils/imageUpload';
+import { compressAndReadImageFile, formatImageUploadError } from '../utils/imageUpload';
 import { useLanguage } from '../context/LanguageContext';
 
 interface MultiPhotoUploadFieldProps {
@@ -22,17 +22,28 @@ export const MultiPhotoUploadField: React.FC<MultiPhotoUploadFieldProps> = ({
 }) => {
   const { t } = useLanguage();
   const inputId = useId();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [showUrlBox, setShowUrlBox] = useState(false);
   const [urlInput, setUrlInput] = useState('');
+  const [brokenUrls, setBrokenUrls] = useState<Record<string, boolean>>({});
+
+  const triggerFilePicker = () => {
+    if (isProcessing || photos.length >= maxPhotos) return;
+    const input = fileInputRef.current;
+    if (!input) return;
+    // Clear previous selection so re-selecting or cancelling always triggers cleanly
+    input.value = '';
+    input.click();
+  };
 
   const handleFilesSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const fileList = e.target.files;
-    if (!fileList || fileList.length === 0) return;
-
-    const files: File[] = Array.from(fileList);
+    const files: File[] = fileList ? Array.from(fileList) : [];
+    // Always reset input value even on empty/cancel
     e.target.value = '';
+    if (files.length === 0) return;
 
     const remainingSlots = maxPhotos - photos.length;
     if (remainingSlots <= 0) {
@@ -48,49 +59,56 @@ export const MultiPhotoUploadField: React.FC<MultiPhotoUploadFieldProps> = ({
     setUploadError(null);
     setIsProcessing(true);
 
-    const filesToProcess = files.slice(0, remainingSlots);
-    const newlyUploaded: string[] = [];
-    let failedCount = 0;
+    try {
+      const filesToProcess = files.slice(0, remainingSlots);
+      const newlyUploaded: string[] = [];
+      let failedCount = 0;
+      let lastError: unknown = null;
 
-    for (const file of filesToProcess) {
-      try {
-        const compressed = await compressAndReadImageFile(file, {
-          maxDimension,
-          quality: 0.78,
-          maxOutputChars: 160_000,
-        });
-        if (!photos.includes(compressed) && !newlyUploaded.includes(compressed)) {
-          newlyUploaded.push(compressed);
+      for (const file of filesToProcess) {
+        try {
+          const compressed = await compressAndReadImageFile(file, {
+            maxDimension,
+            quality: 0.78,
+            maxOutputChars: 160_000,
+          });
+          if (!photos.includes(compressed) && !newlyUploaded.includes(compressed)) {
+            newlyUploaded.push(compressed);
+          }
+        } catch (err) {
+          failedCount++;
+          lastError = err;
         }
-      } catch {
-        failedCount++;
       }
-    }
 
-    if (newlyUploaded.length > 0) {
-      onChange([...photos, ...newlyUploaded]);
-    }
+      if (newlyUploaded.length > 0) {
+        onChange([...photos, ...newlyUploaded]);
+      }
 
-    if (files.length > remainingSlots) {
-      setUploadError(
-        t(
-          `Added ${newlyUploaded.length} photo(s). Maximum ${maxPhotos} photos allowed.`,
-          `${newlyUploaded.length} फ़ोटो जोड़ी गईं। अधिकतम ${maxPhotos} फ़ोटो की अनुमति है।`
-        )
-      );
-    } else if (failedCount > 0) {
-      setUploadError(
-        t(
-          `${failedCount} file(s) could not be read. Please choose valid JPG, PNG, or WEBP images.`,
-          `${failedCount} फ़ाइल खोली नहीं जा सकी। कृपया मान्य JPG, PNG या WEBP फ़ोटो चुनें।`
-        )
-      );
+      if (files.length > remainingSlots) {
+        setUploadError(
+          t(
+            `Added ${newlyUploaded.length} photo(s). Maximum ${maxPhotos} photos allowed.`,
+            `${newlyUploaded.length} फ़ोटो जोड़ी गईं। अधिकतम ${maxPhotos} फ़ोटो की अनुमति है।`
+          )
+        );
+      } else if (failedCount > 0) {
+        setUploadError(
+          failedCount === 1 && lastError
+            ? formatImageUploadError(lastError, t)
+            : t(
+                `${failedCount} file(s) could not be read. Please choose valid JPG, PNG, or WEBP images under 20 MB.`,
+                `${failedCount} फ़ाइल खोली नहीं जा सकी। कृपया 20 MB से कम की मान्य JPG, PNG या WEBP फ़ोटो चुनें।`
+              )
+        );
+      }
+    } finally {
+      setIsProcessing(false);
     }
-
-    setIsProcessing(false);
   };
 
   const handleRemovePhoto = (index: number) => {
+    setUploadError(null);
     onChange(photos.filter((_, i) => i !== index));
   };
 
@@ -123,11 +141,29 @@ export const MultiPhotoUploadField: React.FC<MultiPhotoUploadFieldProps> = ({
 
   return (
     <div className="space-y-2.5 text-xs">
+      {/* Persistent off-screen multi-file input triggered via ref.click() for Web & Android WebView */}
+      <input
+        ref={fileInputRef}
+        id={inputId}
+        type="file"
+        accept="image/*"
+        multiple
+        disabled={isProcessing}
+        onChange={handleFilesSelect}
+        className="sr-only"
+        tabIndex={-1}
+        aria-label={label}
+      />
+
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <label htmlFor={inputId} className="block font-bold text-slate-700 cursor-pointer">
+          <button
+            type="button"
+            onClick={triggerFilePicker}
+            className="block font-bold text-slate-700 hover:text-[#380812] text-left cursor-pointer"
+          >
             {label}
-          </label>
+          </button>
           <span className="text-[10px] font-bold bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full border border-amber-200">
             {photos.length}/{maxPhotos}
           </span>
@@ -156,12 +192,19 @@ export const MultiPhotoUploadField: React.FC<MultiPhotoUploadFieldProps> = ({
                 idx === 0 ? 'border-amber-500 ring-2 ring-amber-400/40' : 'border-stone-200'
               }`}
             >
-              <div className="aspect-square w-full overflow-hidden bg-stone-100">
-                <img
-                  src={photoUrl}
-                  alt={`Profile photo ${idx + 1}`}
-                  className="w-full h-full object-cover object-top"
-                />
+              <div className="aspect-square w-full overflow-hidden bg-stone-100 flex items-center justify-center">
+                {brokenUrls[photoUrl] ? (
+                  <span className="p-2 text-center text-[10px] text-rose-700 font-medium">
+                    {t('Preview unavailable', 'प्रीव्यू उपलब्ध नहीं')}
+                  </span>
+                ) : (
+                  <img
+                    src={photoUrl}
+                    alt={`Profile photo ${idx + 1}`}
+                    onError={() => setBrokenUrls((prev) => ({ ...prev, [photoUrl]: true }))}
+                    className="w-full h-full object-cover object-top"
+                  />
+                )}
               </div>
 
               {/* Top-left Primary or Index Badge */}
@@ -203,55 +246,41 @@ export const MultiPhotoUploadField: React.FC<MultiPhotoUploadFieldProps> = ({
 
           {/* Add More Tile inside grid if under limit */}
           {photos.length < maxPhotos && (
-            <label
-              htmlFor={inputId}
-              className={`relative overflow-hidden aspect-square rounded-xl border-2 border-dashed border-amber-300 hover:border-[#851834] bg-white/80 hover:bg-amber-50 flex flex-col items-center justify-center gap-1.5 p-2 text-center cursor-pointer transition-all select-none focus-within:ring-2 focus-within:ring-amber-500 ${
+            <button
+              type="button"
+              disabled={isProcessing}
+              onClick={triggerFilePicker}
+              className={`aspect-square rounded-xl border-2 border-dashed border-amber-300 hover:border-[#851834] bg-white/80 hover:bg-amber-50 flex flex-col items-center justify-center gap-1.5 p-2 text-center cursor-pointer transition-all select-none focus:outline-none focus:ring-2 focus:ring-amber-500 ${
                 isProcessing ? 'opacity-65 pointer-events-none' : ''
               }`}
             >
-              <input
-                id={inputId}
-                type="file"
-                accept="image/*"
-                multiple
-                disabled={isProcessing}
-                onChange={handleFilesSelect}
-                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                aria-label={t('Add More Photos', 'और फ़ोटो जोड़ें')}
-              />
               {isProcessing ? (
                 <RefreshCw className="w-5 h-5 animate-spin text-amber-700" />
               ) : (
                 <Plus className="w-6 h-6 text-[#851834]" />
               )}
               <span className="font-bold text-[11px] text-stone-800">
-                {t('Add More Photos', 'और फ़ोटो जोड़ें')}
+                {isProcessing
+                  ? t('Uploading...', 'अपलोड...')
+                  : t('Add More Photos', 'और फ़ोटो जोड़ें')}
               </span>
               <span className="text-[10px] text-stone-500">
                 {t(`${maxPhotos - photos.length} left`, `${maxPhotos - photos.length} शेष`)}
               </span>
-            </label>
+            </button>
           )}
         </div>
       )}
 
       {photos.length === 0 && (
-        <label
-          htmlFor={inputId}
-          className={`relative overflow-hidden w-full border-2 border-dashed border-amber-300 hover:border-[#851834] bg-amber-50/40 hover:bg-amber-50/80 rounded-2xl p-4 sm:p-5 text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-1.5 group select-none focus-within:ring-2 focus-within:ring-amber-500 ${
+        <button
+          type="button"
+          disabled={isProcessing}
+          onClick={triggerFilePicker}
+          className={`w-full border-2 border-dashed border-amber-300 hover:border-[#851834] bg-amber-50/40 hover:bg-amber-50/80 rounded-2xl p-4 sm:p-5 text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-1.5 group select-none focus:outline-none focus:ring-2 focus:ring-amber-500 ${
             isProcessing ? 'opacity-65 pointer-events-none' : ''
           }`}
         >
-          <input
-            id={inputId}
-            type="file"
-            accept="image/*"
-            multiple
-            disabled={isProcessing}
-            onChange={handleFilesSelect}
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-            aria-label={label}
-          />
           <div className="w-10 h-10 rounded-xl bg-white border border-amber-200 shadow-2xs flex items-center justify-center text-[#851834] group-hover:scale-105 transition-transform">
             {isProcessing ? (
               <RefreshCw className="w-5 h-5 animate-spin text-amber-700" />
@@ -272,7 +301,7 @@ export const MultiPhotoUploadField: React.FC<MultiPhotoUploadFieldProps> = ({
                 'गैलरी या कैमरे से एक से अधिक फ़ोटो चुनें'
               )}
           </span>
-        </label>
+        </button>
       )}
 
       {showUrlBox && (

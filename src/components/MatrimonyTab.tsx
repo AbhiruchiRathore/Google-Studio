@@ -9,7 +9,7 @@ import { MatrimonyProfile, GenderType, TabType, AuthSession, ProfileAdmirer } fr
 import { ChatModal } from './ChatModal';
 import { useLanguage } from '../context/LanguageContext';
 import { useAdminConfig } from '../context/AdminConfigContext';
-import { getWhatsAppLinkProps } from '../utils/shareAndPrint';
+import { buildAppShareUrl, shareContent } from '../utils/shareAndPrint';
 import { UserLocationData } from '../hooks/useUserLocation';
 import {
   ProfileWithDistance,
@@ -178,11 +178,7 @@ export const MatrimonyTab: React.FC<MatrimonyTabProps> = ({
 *शहर एवं राज्य:* ${p.city}, ${p.state || 'भारत'}
 *शिक्षा:* ${p.education}
 ${p.profession ? `*व्यवसाय:* ${p.profession}\n` : ''}${p.income ? `*मासिक/वार्षिक आय:* ${p.income}\n` : ''}*पारिवारिक विवरण:* ${p.familyDetails || 'प्रतिष्ठित राठौर समाज परिवार'}
-${p.about ? `*अतिरिक्त जानकारी:* ${p.about}\n` : ''}*संपर्क सूत्र:* ${p.contact}
-
-✨ *राठौर रिश्ते पोर्टल पर पूरा प्रोफ़ाइल और कुंडली मिलान देखें:*
-https://svayaa.com/
-_Powered by Svayaa_`
+${p.about ? `*अतिरिक्त जानकारी:* ${p.about}\n` : ''}${p.contact ? `*संपर्क सूत्र:* ${p.contact}` : ''}`.trim()
       : `🚩 *Rathore Rishtey - Matrimonial Biodata* 🚩
 
 *Candidate:* ${p.name}
@@ -191,15 +187,10 @@ _Powered by Svayaa_`
 *City & State:* ${p.city}, ${p.state || 'India'}
 *Education:* ${p.education}
 ${p.profession ? `*Profession:* ${p.profession}\n` : ''}${p.income ? `*Income:* ${p.income}\n` : ''}*Family:* ${p.familyDetails || 'Reputed Rathore Samaj Family'}
-${p.about ? `*About:* ${p.about}\n` : ''}*Contact:* ${p.contact}
-
-✨ *View full profile & Kundali Milan on Rathore Rishtey Portal:*
-https://svayaa.com/
-_Powered by Svayaa_`;
+${p.about ? `*About:* ${p.about}\n` : ''}${p.contact ? `*Contact:* ${p.contact}` : ''}`.trim();
 
   // Selected Profile for Biodata Modal
   const [selectedProfileId, setSelectedProfileId] = useState<number | string | null>(null);
-  const [cardPhotoIndex, setCardPhotoIndex] = useState<Record<string, number>>({});
   const [modalPhotoIndex, setModalPhotoIndex] = useState<number>(0);
 
   const effectiveViewMode = config.featureLikesEnabled ? viewMode : 'all';
@@ -696,8 +687,8 @@ _Powered by Svayaa_`;
 
       {/* SEARCH & FILTERS SECTION (WHEN IN ALL OR LIKED VIEW) */}
       {viewMode !== 'who_liked_me' && (
-      <div className="bg-white rounded-2xl shadow-sm border border-stone-200/90 p-5 sm:p-6 space-y-4">
-        <div className="flex flex-col lg:flex-row gap-4 justify-between items-stretch lg:items-center">
+      <div className="bg-white rounded-2xl shadow-sm border border-stone-200/90 p-3.5 sm:p-5 space-y-3">
+        <div className="flex flex-col lg:flex-row gap-3 sm:gap-4 justify-between items-stretch lg:items-center">
           
           {/* Search bar */}
           <div className="relative w-full lg:w-88">
@@ -1034,245 +1025,118 @@ _Powered by Svayaa_`;
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-5">
           {filteredProfiles.map((p) => {
             const candidatePhotos = getCandidatePhotos(p);
-            const activePhotoIdx = (cardPhotoIndex[p.id.toString()] || 0) % candidatePhotos.length;
-            const photoUrl = candidatePhotos[activePhotoIdx];
-
-            const stepCardPhoto = (delta: number, e: React.MouseEvent) => {
-              e.stopPropagation();
-              setCardPhotoIndex((prev) => ({
-                ...prev,
-                [p.id.toString()]: (activePhotoIdx + delta + candidatePhotos.length) % candidatePhotos.length
-              }));
-            };
-
-            const hasSecondaryOptions =
-              config.featureChatEnabled ||
-              (config.featureKundaliEnabled && !!onSelectKundaliProfile) ||
-              config.featureLikesEnabled ||
-              config.featureWhatsAppShareEnabled ||
-              Boolean(authSession && onBlockProfile);
+            const photoUrl = candidatePhotos[0];
+            const distLabel = formatDistanceLabel(distanceMap.get(p.id.toString()));
+            const isLiked = likedProfiles.has(p.id.toString());
 
             return (
-              <div 
+              <div
                 key={p.id}
-                className="bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 border border-stone-200/80 hover:border-amber-400/50 overflow-hidden flex flex-col sm:flex-row group"
+                onClick={() => handleOpenProfile(p.id)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleOpenProfile(p.id);
+                  }
+                }}
+                className="bg-white rounded-2xl shadow-sm hover:shadow-lg transition-all duration-200 border border-stone-200/90 hover:border-amber-400/60 p-3 sm:p-4 flex flex-row items-stretch gap-3.5 sm:gap-4 group cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-500/60"
               >
-                {/* Photo Column */}
-                <div className="sm:w-[38%] relative h-60 sm:h-auto sm:min-h-[260px] bg-stone-100 overflow-hidden shrink-0">
-                  <img 
-                    src={photoUrl} 
-                    alt={p.name} 
-                    className="w-full h-full object-cover object-top group-hover:scale-103 transition-transform duration-500"
+                {/* Uncropped Portrait Photo Frame */}
+                <div className="relative w-[104px] sm:w-[132px] aspect-[3/4] rounded-xl overflow-hidden bg-stone-100 border border-stone-200/80 shrink-0 self-center">
+                  {/* Subtle blurred color-matched backdrop prevents harsh letterboxing without cropping */}
+                  <img
+                    src={photoUrl}
+                    alt=""
+                    aria-hidden="true"
+                    className="absolute inset-0 w-full h-full object-cover scale-110 blur-md opacity-25 pointer-events-none"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
+                  <img
+                    src={photoUrl}
+                    alt={p.name}
+                    referrerPolicy="no-referrer"
+                    className="relative z-10 w-full h-full object-contain object-center transition-transform duration-300 group-hover:scale-[1.02]"
                     onError={(e) => {
                       (e.currentTarget as HTMLImageElement).src = p.gender === 'Female'
                         ? "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80"
                         : "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80";
                     }}
                   />
-                  {/* Verified Badge */}
-                  <div className="absolute top-3 left-3 max-w-[calc(100%-5.5rem)] bg-[#24050b]/90 text-amber-300 text-[11px] font-semibold px-2.5 py-1 rounded-md shadow-sm border border-amber-500/30 flex items-center gap-1 backdrop-blur-xs">
-                    <ShieldCheck className="w-3 h-3 text-amber-400 shrink-0" />
-                    <span className="truncate">{t('Gotra:', 'गोत्र:')} {p.gotra}</span>
-                  </div>
 
-                  {/* Quick Floating Like Button on Photo */}
-                  {config.featureLikesEnabled && (
-                    <button
-                      onClick={(e) => toggleLikeProfile(p.id, e)}
-                      className="absolute top-3 right-3 bg-white/90 hover:bg-white text-stone-800 p-1.5 rounded-full shadow-md backdrop-blur-xs transition-transform hover:scale-110 cursor-pointer flex items-center gap-1 text-[11px] font-bold px-2"
-                      title={likedProfiles.has(p.id.toString()) ? t('Liked', 'पसंद किया') : t('Like profile', 'प्रोफ़ाइल पसंद करें')}
-                    >
-                      <Heart className={`w-3.5 h-3.5 ${likedProfiles.has(p.id.toString()) ? 'fill-rose-500 text-rose-500' : 'text-stone-600'}`} />
-                      <span className={likedProfiles.has(p.id.toString()) ? 'text-rose-600' : 'text-stone-700'}>{getProfileLikes(p.id)}</span>
-                    </button>
-                  )}
-
-                  {/* Multi-Photo Carousel Controls when candidate has > 1 photo */}
                   {candidatePhotos.length > 1 && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={(e) => stepCardPhoto(-1, e)}
-                        aria-label="Previous photo"
-                        className="absolute left-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/55 hover:bg-black/80 text-white flex items-center justify-center shadow cursor-pointer transition-colors"
-                      >
-                        <ChevronLeft className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => stepCardPhoto(1, e)}
-                        aria-label="Next photo"
-                        className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/55 hover:bg-black/80 text-white flex items-center justify-center shadow cursor-pointer transition-colors"
-                      >
-                        <ChevronRight className="w-4 h-4" />
-                      </button>
-
-                      <div className="absolute bottom-2.5 inset-x-2.5 flex items-center justify-between gap-2 pointer-events-none">
-                        <span className="bg-black/70 text-amber-200 text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 backdrop-blur-xs">
-                          <Camera className="w-3 h-3 text-amber-300" />
-                          {activePhotoIdx + 1}/{candidatePhotos.length}
-                        </span>
-                        <div className="flex items-center gap-1 pointer-events-auto bg-black/45 px-1.5 py-1 rounded-full backdrop-blur-xs">
-                          {candidatePhotos.map((_, dotIdx) => (
-                            <button
-                              key={dotIdx}
-                              type="button"
-                              aria-label={`View photo ${dotIdx + 1}`}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setCardPhotoIndex((prev) => ({
-                                  ...prev,
-                                  [p.id.toString()]: dotIdx
-                                }));
-                              }}
-                              className={`h-1.5 rounded-full transition-all cursor-pointer ${
-                                dotIdx === activePhotoIdx
-                                  ? 'w-3.5 bg-amber-300'
-                                  : 'w-1.5 bg-white/60 hover:bg-white'
-                              }`}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                    </>
+                    <span className="absolute bottom-1.5 right-1.5 z-20 bg-black/70 text-amber-200 text-[10px] font-bold px-1.5 py-0.5 rounded-md flex items-center gap-1 backdrop-blur-xs">
+                      <Camera className="w-2.5 h-2.5 text-amber-300" />
+                      {candidatePhotos.length}
+                    </span>
                   )}
                 </div>
 
-                {/* Content Column */}
-                <div className="p-4 sm:p-5 sm:w-[62%] min-w-0 flex-1 flex flex-col justify-between gap-4">
-                  <div className="min-w-0">
-                    {/* Header */}
-                    <div className="flex justify-between items-start gap-2">
-                      <div className="min-w-0">
-                        <h3 className="text-lg font-serif font-bold text-stone-900 group-hover:text-[#380812] transition-colors leading-snug break-words">
-                          {p.name}
-                        </h3>
-                        {/* ZERO PILL METADATA DISCIPLINE */}
-                        <p className="text-xs text-stone-600 font-medium mt-1 break-words">
-                          {p.age} {t('Yrs', 'वर्ष')} · {p.height || "5' 6\""} · {p.city}, {p.state || t('India', 'भारत')}
-                          {(() => {
-                            const distLabel = formatDistanceLabel(distanceMap.get(p.id.toString()));
-                            return distLabel ? (
-                              <span className="text-emerald-800 font-semibold"> · {distLabel}</span>
-                            ) : null;
-                          })()}
-                        </p>
-                      </div>
+                {/* Compact Basic Details & Single Primary CTA */}
+                <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5 gap-2.5">
+                  <div className="min-w-0 space-y-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="text-base sm:text-lg font-serif font-bold text-stone-900 group-hover:text-[#380812] transition-colors leading-snug line-clamp-1">
+                        {p.name}
+                      </h3>
+                      <ShieldCheck
+                        className="w-4 h-4 text-amber-600 shrink-0 mt-0.5"
+                        aria-label={t('Verified Samaj Biodata', 'सत्यापित समाज बायोडाटा')}
+                      />
                     </div>
 
-                    {/* Education & Profession */}
-                    <div className="mt-3.5 space-y-2 text-xs text-stone-600">
-                      {p.education && p.education.trim() !== '' && (
-                        <div className="flex items-center gap-2 min-w-0">
-                          <GraduationCap className="w-4 h-4 text-amber-700 shrink-0" />
-                          <span className="line-clamp-1 font-medium text-stone-700">{p.education}</span>
-                        </div>
-                      )}
-                      {p.profession && p.profession.trim() !== '' && p.profession !== '---' && p.profession !== 'Not specified' && (
-                        <div className="flex items-center gap-2 min-w-0">
-                          <Briefcase className="w-4 h-4 text-amber-700 shrink-0" />
-                          <span className="line-clamp-1 font-medium text-stone-700">{p.profession}</span>
-                        </div>
-                      )}
-                      {p.income && p.income.trim() !== '' && p.income !== '---' && p.income !== 'Not specified' && (
-                        <div className="text-[11px] text-emerald-800 font-semibold pl-6 break-words">
-                          {t('Income:', 'आय:')} {p.income}
-                        </div>
-                      )}
-                    </div>
+                    <p className="text-xs text-stone-700 font-medium truncate">
+                      {p.age} {t('Yrs', 'वर्ष')} · {p.height || "5' 6\""} · {t('Gotra:', 'गोत्र:')} {p.gotra}
+                    </p>
+
+                    <p className="text-xs text-stone-500 flex items-center gap-1 min-w-0">
+                      <MapPin className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                      <span className="truncate">
+                        {p.city}{p.state ? `, ${p.state}` : ''}
+                      </span>
+                    </p>
+
+                    {distLabel && (
+                      <p className="text-[11px] text-emerald-700 font-semibold truncate">
+                        {distLabel}
+                      </p>
+                    )}
                   </div>
 
-                  {/* Actions Bar — Structured into primary CTA + wrapping options row to prevent cropping */}
-                  <div className="pt-3 border-t border-stone-100 space-y-2">
-                    <button 
-                      onClick={() => handleOpenProfile(p.id)}
-                      className="w-full bg-gradient-to-r from-[#380812] to-[#540e1b] hover:from-[#24050b] hover:to-[#380812] text-amber-200 text-xs font-semibold py-2.5 px-3 rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer border border-amber-500/20 whitespace-nowrap"
+                  <div className="flex items-center gap-2 pt-2 border-t border-stone-100 mt-auto">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenProfile(p.id);
+                      }}
+                      className="flex-1 min-h-[40px] bg-gradient-to-r from-[#380812] to-[#540e1b] hover:from-[#24050b] hover:to-[#380812] text-amber-200 text-xs font-semibold py-2 px-3 rounded-xl shadow-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer border border-amber-500/20 whitespace-nowrap"
                     >
                       <Eye className="w-3.5 h-3.5 text-amber-300 shrink-0" />
                       <span>{t('View Biodata', 'बायोडाटा देखें')}</span>
                     </button>
 
-                    {hasSecondaryOptions && (
-                      <div className="flex flex-wrap items-center gap-1.5 w-full">
-                        {/* Direct Interactive Chat Button */}
-                        {config.featureChatEnabled && (
-                          <button
-                            onClick={() => {
-                              if (!isProfileAccessible(p.id)) {
-                                if (config.subscriptionEnabled && isStrictPaywallActive) {
-                                  setShowSubscriptionModal(true);
-                                } else {
-                                  handleOpenProfile(p.id);
-                                }
-                              } else {
-                                setActiveChatProfile(p);
-                              }
-                            }}
-                            title={`${t('Chat with family', 'परिवार से चैट करें')} (${p.name})`}
-                            className="flex-1 min-w-[66px] bg-amber-100/80 hover:bg-amber-200 text-[#380812] border border-amber-300/80 text-[11px] font-semibold py-2 px-2 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1 whitespace-nowrap"
-                          >
-                            <MessageCircle className="w-3.5 h-3.5 text-amber-900 shrink-0" />
-                            <span>{t('Chat', 'चैट')}</span>
-                          </button>
-                        )}
-
-                        {config.featureKundaliEnabled && onSelectKundaliProfile && (
-                          <button
-                            onClick={() => onSelectKundaliProfile(p.id, p.gender)}
-                            title={t('Kundali Milan (36 Gun)', 'कुंडली मिलान (३६ गुण)')}
-                            className="flex-1 min-w-[66px] bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300/80 text-[11px] font-semibold py-2 px-2 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1 whitespace-nowrap"
-                          >
-                            <Compass className="w-3.5 h-3.5 text-amber-700 shrink-0" />
-                            <span>{t('Milan', 'मिलान')}</span>
-                          </button>
-                        )}
-
-                        {config.featureLikesEnabled && (
-                          <button
-                            onClick={(e) => toggleLikeProfile(p.id, e)}
-                            title={likedProfiles.has(p.id.toString()) ? t('Liked', 'पसंद किया') : t('Like biodata', 'बायोडाटा पसंद करें')}
-                            className={`flex-1 min-w-[58px] py-2 px-2 rounded-xl border text-[11px] font-semibold flex items-center justify-center gap-1 transition-all cursor-pointer whitespace-nowrap ${
-                              likedProfiles.has(p.id.toString())
-                                ? 'bg-rose-50 border-rose-300 text-rose-700'
-                                : 'bg-stone-50 hover:bg-stone-100 border-stone-200 text-stone-700'
-                            }`}
-                          >
-                            <Heart className={`w-3.5 h-3.5 shrink-0 ${likedProfiles.has(p.id.toString()) ? 'fill-rose-500 text-rose-500' : 'text-stone-500'}`} />
-                            <span>{getProfileLikes(p.id)}</span>
-                          </button>
-                        )}
-
-                        {config.featureWhatsAppShareEnabled && (
-                          <a
-                            {...getWhatsAppLinkProps(buildProfileShareText(p))}
-                            onClick={(e) => e.stopPropagation()}
-                            title={t('Share biodata on WhatsApp', 'व्हाट्सएप पर शेयर करें')}
-                            className="flex-1 min-w-[68px] bg-emerald-50 hover:bg-emerald-100 active:scale-95 border border-emerald-300 text-emerald-800 text-[11px] font-semibold py-2 px-2 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1 whitespace-nowrap touch-manipulation select-none"
-                          >
-                            <Share2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                            <span>{t('Share', 'शेयर')}</span>
-                          </a>
-                        )}
-
-                        {authSession && onBlockProfile && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setPendingBlockProfile(p);
-                            }}
-                            title={t(`Block ${p.name}`, `${p.name} को ब्लॉक करें`)}
-                            aria-label={t(`Block ${p.name}`, `${p.name} को ब्लॉक करें`)}
-                            className="bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-[11px] font-semibold py-2 px-2.5 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1 whitespace-nowrap shrink-0"
-                          >
-                            <Ban className="w-3.5 h-3.5 shrink-0" />
-                            <span>{t('Block', 'ब्लॉक')}</span>
-                          </button>
-                        )}
-                      </div>
+                    {config.featureLikesEnabled && (
+                      <button
+                        type="button"
+                        onClick={(e) => toggleLikeProfile(p.id, e)}
+                        title={isLiked ? t('Liked', 'पसंद किया') : t('Like biodata', 'बायोडाटा पसंद करें')}
+                        aria-label={isLiked ? t('Unlike biodata', 'पसंद हटाएं') : t('Like biodata', 'बायोडाटा पसंद करें')}
+                        className={`min-h-[40px] px-2.5 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1 transition-all cursor-pointer shrink-0 ${
+                          isLiked
+                            ? 'bg-rose-50 border-rose-300 text-rose-700'
+                            : 'bg-stone-50 hover:bg-stone-100 border-stone-200 text-stone-700'
+                        }`}
+                      >
+                        <Heart className={`w-3.5 h-3.5 shrink-0 ${isLiked ? 'fill-rose-500 text-rose-500' : 'text-stone-500'}`} />
+                        <span className="tabular-nums">{getProfileLikes(p.id)}</span>
+                      </button>
                     )}
                   </div>
                 </div>
@@ -1289,12 +1153,12 @@ _Powered by Svayaa_`;
           onClick={handleDismissModal}
         >
           <div 
-            className="bg-white rounded-3xl max-w-xl w-full p-5 sm:p-7 shadow-2xl border border-amber-300/80 relative my-auto"
+            className="bg-white rounded-3xl max-w-xl w-full p-5 sm:p-7 shadow-2xl border border-amber-300/80 relative my-auto max-h-[90dvh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <button 
               onClick={handleDismissModal} 
-              className="absolute top-4 right-4 text-stone-400 hover:text-stone-700 p-1 rounded-full transition-colors cursor-pointer"
+              className="absolute top-4 right-4 text-stone-400 hover:text-stone-700 p-1 rounded-full transition-colors cursor-pointer z-20"
               aria-label="Close"
             >
               <X className="w-5 h-5" />
@@ -1322,7 +1186,7 @@ _Powered by Svayaa_`;
                   <span className="text-stone-500 hidden sm:inline text-[11px]">{t('Rathore Samaj Verified', 'राठौर समाज सत्यापित')}</span>
                 </div>
 
-                {/* Profile Header with Multi-Photo Viewer */}
+                {/* Profile Header with Uncropped Multi-Photo Viewer */}
                 {(() => {
                   const modalPhotos = getCandidatePhotos(activeProfile);
                   const safeIdx = modalPhotoIndex % modalPhotos.length;
@@ -1331,11 +1195,21 @@ _Powered by Svayaa_`;
                   return (
                     <div className="space-y-3 pt-1">
                       <div className="flex flex-col sm:flex-row gap-4 sm:gap-5 items-center sm:items-start">
-                        <div className="relative w-32 h-36 sm:w-32 sm:h-36 rounded-2xl overflow-hidden border-2 border-amber-400 shadow-md shrink-0 bg-stone-100">
+                        <div className="relative w-44 sm:w-40 aspect-[3/4] rounded-2xl overflow-hidden border-2 border-amber-400 shadow-md shrink-0 bg-stone-100">
+                          <img
+                            src={activePhotoUrl}
+                            alt=""
+                            aria-hidden="true"
+                            className="absolute inset-0 w-full h-full object-cover scale-110 blur-md opacity-25 pointer-events-none"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                            }}
+                          />
                           <img 
                             src={activePhotoUrl} 
-                            alt={activeProfile.name} 
-                            className="w-full h-full object-cover object-top"
+                            alt={activeProfile.name}
+                            referrerPolicy="no-referrer"
+                            className="relative z-10 w-full h-full object-contain object-center"
                             onError={(e) => {
                               (e.currentTarget as HTMLImageElement).src = activeProfile.gender === 'Female'
                                 ? "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80"
@@ -1348,19 +1222,19 @@ _Powered by Svayaa_`;
                                 type="button"
                                 onClick={() => setModalPhotoIndex((safeIdx - 1 + modalPhotos.length) % modalPhotos.length)}
                                 aria-label="Previous candidate photo"
-                                className="absolute left-1 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center cursor-pointer"
+                                className="absolute left-1.5 top-1/2 -translate-y-1/2 z-20 w-7 h-7 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center cursor-pointer"
                               >
-                                <ChevronLeft className="w-3.5 h-3.5" />
+                                <ChevronLeft className="w-4 h-4" />
                               </button>
                               <button
                                 type="button"
                                 onClick={() => setModalPhotoIndex((safeIdx + 1) % modalPhotos.length)}
                                 aria-label="Next candidate photo"
-                                className="absolute right-1 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center cursor-pointer"
+                                className="absolute right-1.5 top-1/2 -translate-y-1/2 z-20 w-7 h-7 rounded-full bg-black/60 hover:bg-black/80 text-white flex items-center justify-center cursor-pointer"
                               >
-                                <ChevronRight className="w-3.5 h-3.5" />
+                                <ChevronRight className="w-4 h-4" />
                               </button>
-                              <span className="absolute bottom-1.5 right-1.5 bg-black/70 text-amber-200 text-[10px] font-bold px-1.5 py-0.5 rounded-md">
+                              <span className="absolute bottom-1.5 right-1.5 z-20 bg-black/70 text-amber-200 text-[10px] font-bold px-1.5 py-0.5 rounded-md">
                                 {safeIdx + 1}/{modalPhotos.length}
                               </span>
                             </>
@@ -1394,7 +1268,7 @@ _Powered by Svayaa_`;
                               key={thumbIdx}
                               type="button"
                               onClick={() => setModalPhotoIndex(thumbIdx)}
-                              className={`relative w-14 h-14 rounded-xl overflow-hidden border-2 shrink-0 cursor-pointer transition-all ${
+                              className={`relative w-14 h-16 rounded-xl overflow-hidden border-2 shrink-0 cursor-pointer transition-all bg-stone-100 ${
                                 thumbIdx === safeIdx
                                   ? 'border-[#380812] ring-2 ring-amber-400 scale-102'
                                   : 'border-stone-200 opacity-75 hover:opacity-100'
@@ -1403,7 +1277,7 @@ _Powered by Svayaa_`;
                               <img
                                 src={thumbUrl}
                                 alt={`${activeProfile.name} photo ${thumbIdx + 1}`}
-                                className="w-full h-full object-cover object-top"
+                                className="w-full h-full object-contain object-center"
                               />
                             </button>
                           ))}
@@ -1414,16 +1288,22 @@ _Powered by Svayaa_`;
                 })()}
 
                 {/* Details box */}
-                <div className="space-y-3 border-t border-stone-100 pt-3 text-xs max-h-[45dvh] overflow-y-auto pr-1">
+                <div className="space-y-3 border-t border-stone-100 pt-3 text-xs">
                   <div className={`grid grid-cols-1 ${activeProfile.profession && activeProfile.profession.trim() !== '' && activeProfile.profession !== '---' && activeProfile.profession !== 'Not specified' ? 'sm:grid-cols-2' : ''} gap-2.5 bg-stone-50 p-3.5 rounded-xl border border-stone-200/80`}>
-                    <div>
-                      <span className="text-stone-500 font-medium">{t('Education:', 'शिक्षा:')}</span>
-                      <p className="font-semibold text-stone-800 mt-0.5">{activeProfile.education}</p>
+                    <div className="flex items-start gap-2">
+                      <GraduationCap className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                      <div>
+                        <span className="text-stone-500 font-medium">{t('Education:', 'शिक्षा:')}</span>
+                        <p className="font-semibold text-stone-800 mt-0.5">{activeProfile.education}</p>
+                      </div>
                     </div>
                     {activeProfile.profession && activeProfile.profession.trim() !== '' && activeProfile.profession !== '---' && activeProfile.profession !== 'Not specified' && (
-                      <div>
-                        <span className="text-stone-500 font-medium">{t('Profession:', 'व्यवसाय:')}</span>
-                        <p className="font-semibold text-stone-800 mt-0.5">{activeProfile.profession}</p>
+                      <div className="flex items-start gap-2">
+                        <Briefcase className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                        <div>
+                          <span className="text-stone-500 font-medium">{t('Profession:', 'व्यवसाय:')}</span>
+                          <p className="font-semibold text-stone-800 mt-0.5">{activeProfile.profession}</p>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -1508,15 +1388,22 @@ _Powered by Svayaa_`;
                       )}
 
                       {config.featureWhatsAppShareEnabled && (
-                        <a
-                          {...getWhatsAppLinkProps(buildProfileShareText(activeProfile))}
-                          onClick={(e) => e.stopPropagation()}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void shareContent({
+                              title: `${activeProfile.name} · ${activeProfile.gotra} Gotra — Rathore Rishtey`,
+                              text: buildProfileShareText(activeProfile),
+                              url: buildAppShareUrl('matrimony', { profile: activeProfile.id })
+                            });
+                          }}
                           className="bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-semibold px-3 py-2 rounded-lg text-xs flex items-center justify-center gap-1.5 shadow-xs cursor-pointer transition-colors touch-manipulation select-none"
-                          title={t('Share on WhatsApp', 'व्हाट्सएप पर शेयर करें')}
+                          title={t('Share biodata', 'बायोडाटा साझा करें')}
                         >
                           <Share2 className="w-3.5 h-3.5" />
-                          <span>{t('WhatsApp', 'व्हाट्सएप')}</span>
-                        </a>
+                          <span>{t('Share', 'साझा करें')}</span>
+                        </button>
                       )}
 
                       <a 

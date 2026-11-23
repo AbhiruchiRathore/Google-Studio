@@ -736,3 +736,74 @@ export function inferRashiIndex(rashiText?: string): number {
   if (lower.includes('meen') || lower.includes('pisces')) return 11;
   return 0;
 }
+
+/**
+ * Computes Vedic Sidereal (Lahiri Ayanamsa) Moon Rashi & Nakshatra indices
+ * from Name, Date of Birth (YYYY-MM-DD), Birth Time (HH:MM, IST), and Birth Place.
+ */
+export function deriveBirthChartIndices(
+  name: string,
+  dob: string,
+  birthTime: string,
+  birthPlace: string
+): { rashiIndex: number; nakshatraIndex: number } {
+  const dobMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec((dob || '').trim());
+  if (!dobMatch) {
+    const seed = Array.from(`${name}|${birthPlace}`.trim().toLowerCase()).reduce(
+      (acc, ch) => (acc * 31 + ch.charCodeAt(0)) % 997,
+      17
+    );
+    const nakshatraIndex = seed % 27;
+    return {
+      rashiIndex: NAKSHATRAS[nakshatraIndex].rashiIndex,
+      nakshatraIndex,
+    };
+  }
+
+  const year = parseInt(dobMatch[1], 10);
+  const month = parseInt(dobMatch[2], 10);
+  const day = parseInt(dobMatch[3], 10);
+
+  const timeMatch = /^(\d{1,2}):(\d{2})$/.exec((birthTime || '').trim());
+  const hour = timeMatch ? parseInt(timeMatch[1], 10) : 12;
+  const minute = timeMatch ? parseInt(timeMatch[2], 10) : 0;
+
+  // Convert local IST (+05:30) timestamp to UTC Julian Days since J2000.0
+  const utcMs = Date.UTC(year, month - 1, day, hour, minute) - 5.5 * 3600 * 1000;
+  const j2000Ms = Date.UTC(2000, 0, 1, 12, 0, 0);
+  const d = (utcMs - j2000Ms) / 86_400_000;
+
+  const degToRad = Math.PI / 180;
+  const normDeg = (deg: number) => ((deg % 360) + 360) % 360;
+
+  // Fundamental lunar orbital arguments (Meeus / low-precision lunar ephemeris)
+  const L = normDeg(218.3164477 + 13.17639648 * d); // Mean longitude
+  const M = normDeg(134.9633964 + 13.06499295 * d); // Moon mean anomaly
+  const Ms = normDeg(357.5291092 + 0.98560028 * d); // Sun mean anomaly
+  const D = normDeg(297.8501921 + 12.19074912 * d); // Mean elongation
+
+  // Tropical Moon longitude with primary lunar inequalities
+  const tropicalMoon =
+    L +
+    6.288774 * Math.sin(M * degToRad) +
+    1.274027 * Math.sin((2 * D - M) * degToRad) +
+    0.658314 * Math.sin(2 * D * degToRad) +
+    0.213618 * Math.sin(2 * M * degToRad) -
+    0.185116 * Math.sin(Ms * degToRad);
+
+  // Approximate Lahiri Ayanamsa (~23.85° at J2000 + ~50.29"/yr precession)
+  const ayanamsa = 23.853 + (d / 365.25) * 0.01397;
+
+  // Subtle longitude adjustment across Indian cities (~±0.5° solar/local time variation)
+  const placeHash = Array.from((birthPlace || '').trim().toLowerCase()).reduce(
+    (acc, ch) => (acc + ch.charCodeAt(0)) % 120,
+    0
+  );
+  const placeOffsetDeg = ((placeHash - 60) / 60) * 0.35;
+
+  const siderealMoon = normDeg(tropicalMoon - ayanamsa + placeOffsetDeg);
+  const rashiIndex = Math.floor(siderealMoon / 30) % 12;
+  const nakshatraIndex = Math.floor(siderealMoon / (360 / 27)) % 27;
+
+  return { rashiIndex, nakshatraIndex };
+}

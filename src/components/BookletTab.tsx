@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { BookOpen, FileText, Search, ChevronLeft, ChevronRight, CheckCircle2, Lock, AlertCircle } from 'lucide-react';
+import { BookOpen, FileText, Search, ChevronLeft, ChevronRight, CheckCircle2, Lock, AlertCircle, Share2 } from 'lucide-react';
 import { BusinessAd, MatrimonyProfile, TabType } from '../types';
 import { BOOKLET_PAGES, INITIAL_ADS, INITIAL_PROFILES } from '../data/mockData';
 import { useLanguage } from '../context/LanguageContext';
 import { useAdminConfig } from '../context/AdminConfigContext';
 import { generateAndDownloadBookletPdf } from '../utils/bookletPdfGenerator';
+import { buildAppShareUrl, shareContent } from '../utils/shareAndPrint';
 
 interface BookletTabProps {
   onNavigateTab: (tab: TabType, options?: { replace?: boolean; scrollToId?: string }) => void;
@@ -134,6 +135,29 @@ export const BookletTab: React.FC<BookletTabProps> = ({
             >
               <Search className="w-4 h-4 text-amber-400" /> {t('Search Digitized Records', 'डिजिटल बायोडाटा खोजें')}
             </button>
+
+            {config.featureWhatsAppShareEnabled && (
+              <button
+                type="button"
+                onClick={() => {
+                  void shareContent({
+                    title: t(
+                      'Rathore Samaj Patrika 2026 (Digital Edition)',
+                      'राठौर समाज पत्रिका 2026 (डिजिटल संस्करण)'
+                    ),
+                    text: t(
+                      `Read the digital Samaj Patrika (${profiles.length} Matrimonial Profiles & ${ads.length} Local Businesses). Currently viewing Page ${currentPage + 1} of ${BOOKLET_PAGES.length}.`,
+                      `डिजिटल राठौर समाज पत्रिका पढ़ें (${profiles.length} वैवाहिक बायोडाटा एवं ${ads.length} स्थानीय व्यापार)। पृष्ठ ${currentPage + 1} / ${BOOKLET_PAGES.length}।`
+                    ),
+                    url: buildAppShareUrl('booklet', { page: currentPage + 1 })
+                  });
+                }}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-5 py-2.5 rounded-xl transition-all flex items-center gap-2 cursor-pointer shadow"
+              >
+                <Share2 className="w-4 h-4 shrink-0" />
+                <span>{t('Share E-Patrika', 'ई-पत्रिका साझा करें')}</span>
+              </button>
+            )}
           </div>
 
           {downloadError && (

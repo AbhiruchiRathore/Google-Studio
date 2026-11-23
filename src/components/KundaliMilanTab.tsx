@@ -6,12 +6,12 @@ import {
 } from 'lucide-react';
 import { MatrimonyProfile, TabType, AuthSession } from '../types';
 import { 
-  RASHIS, NAKSHATRAS, performKundaliMilan, inferRashiIndex, 
+  NAKSHATRAS, performKundaliMilan, inferRashiIndex, deriveBirthChartIndices,
   KundaliMilanReport 
 } from '../utils/kundaliMilan';
 import { useLanguage } from '../context/LanguageContext';
 import { useAdminConfig } from '../context/AdminConfigContext';
-import { shareViaWhatsApp, printHtmlDocument, downloadPrintableHtml, escapeHtml } from '../utils/shareAndPrint';
+import { buildAppShareUrl, shareContent, printHtmlDocument, downloadPrintableHtml, escapeHtml } from '../utils/shareAndPrint';
 
 interface KundaliMilanTabProps {
   authSession: AuthSession | null;
@@ -76,22 +76,16 @@ export const KundaliMilanTab: React.FC<KundaliMilanTabProps> = ({
     return brides[0]?.id || 8;
   });
 
-  // Custom Form State
+  // Custom Form State (Name, DOB, Birth Time, Birth Place)
   const [customBoyName, setCustomBoyName] = useState('');
   const [customBoyDob, setCustomBoyDob] = useState('1996-05-15');
   const [customBoyTime, setCustomBoyTime] = useState('10:30');
   const [customBoyPlace, setCustomBoyPlace] = useState('Indore');
-  const [customBoyRashi, setCustomBoyRashi] = useState<number>(0); // Aries
-  const [customBoyNakshatra, setCustomBoyNakshatra] = useState<number>(0); // Ashwini
-  const [customBoyManglik, setCustomBoyManglik] = useState(false);
 
   const [customGirlName, setCustomGirlName] = useState('');
   const [customGirlDob, setCustomGirlDob] = useState('1998-08-20');
   const [customGirlTime, setCustomGirlTime] = useState('14:15');
   const [customGirlPlace, setCustomGirlPlace] = useState('Nanded');
-  const [customGirlRashi, setCustomGirlRashi] = useState<number>(4); // Leo
-  const [customGirlNakshatra, setCustomGirlNakshatra] = useState<number>(9); // Magha
-  const [customGirlManglik, setCustomGirlManglik] = useState(false);
 
   // Sync preselected candidates if provided
   useEffect(() => {
@@ -134,29 +128,42 @@ export const KundaliMilanTab: React.FC<KundaliMilanTabProps> = ({
         isGirlManglik
       );
     } else {
+      const boyChart = deriveBirthChartIndices(
+        customBoyName,
+        customBoyDob,
+        customBoyTime,
+        customBoyPlace
+      );
+      const girlChart = deriveBirthChartIndices(
+        customGirlName,
+        customGirlDob,
+        customGirlTime,
+        customGirlPlace
+      );
+
       return performKundaliMilan(
         customBoyName.trim() || t('Groom Candidate', 'वर (प्रत्याशी)'),
         customGirlName.trim() || t('Bride Candidate', 'वधू (प्रत्याशी)'),
-        customBoyRashi,
-        customGirlRashi,
-        customBoyNakshatra,
-        customGirlNakshatra,
-        customBoyManglik,
-        customGirlManglik
+        boyChart.rashiIndex,
+        girlChart.rashiIndex,
+        boyChart.nakshatraIndex,
+        girlChart.nakshatraIndex,
+        false,
+        false
       );
     }
   }, [
-    matchMode, 
-    activeGroom, 
-    activeBride, 
-    customBoyName, 
-    customGirlName, 
-    customBoyRashi, 
-    customGirlRashi, 
-    customBoyNakshatra, 
-    customGirlNakshatra, 
-    customBoyManglik, 
-    customGirlManglik,
+    matchMode,
+    activeGroom,
+    activeBride,
+    customBoyName,
+    customBoyDob,
+    customBoyTime,
+    customBoyPlace,
+    customGirlName,
+    customGirlDob,
+    customGirlTime,
+    customGirlPlace,
     lang
   ]);
 
@@ -213,7 +220,11 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
 
 🌐 *Check live Kundali Milan & verified Rathore Samaj profiles on Rathore Rishtey Portal*`;
 
-    shareViaWhatsApp(text);
+    void shareContent({
+      title: `${report.boyName} & ${report.girlName} — ${report.totalGunas}/36 Gunas Kundali Milan`,
+      text,
+      url: buildAppShareUrl('kundali')
+    });
   };
 
   const buildCertificatePrintOptions = () => {
@@ -672,34 +683,34 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
           </div>
         </div>
       ) : (
-        /* CUSTOM BIRTH DETAILS FORM */
+        /* CUSTOM BIRTH DETAILS FORM — Name, DOB, Birth Time, Birth Place only */
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white p-6 sm:p-7 rounded-3xl border border-stone-200 shadow-sm text-xs">
           {/* BOY FORM */}
-          <div className="space-y-3">
+          <div className="space-y-3.5">
             <h3 className="font-serif font-bold text-stone-900 text-sm pb-2 border-b border-stone-100 flex items-center gap-2">
               <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-800 flex items-center justify-center font-bold text-xs">1</span>
               <span>{t('Groom Details', 'वर का विवरण')}</span>
             </h3>
 
             <div>
-              <label className="font-bold text-stone-700 block mb-1">{t('Groom Name', 'वर का नाम')}</label>
+              <label className="font-bold text-stone-700 block mb-1">{t('Name', 'नाम')}</label>
               <input
                 type="text"
                 value={customBoyName}
                 onChange={(e) => setCustomBoyName(e.target.value)}
                 placeholder={t('Enter groom name', 'वर का नाम दर्ज करें')}
-                className="w-full p-2.5 rounded-xl border border-stone-300 bg-stone-50"
+                className="w-full p-2.5 rounded-xl border border-stone-300 bg-stone-50 focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 outline-none"
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <div>
-                <label className="font-bold text-stone-700 block mb-1">{t('Date of Birth', 'जन्म तिथि')}</label>
+                <label className="font-bold text-stone-700 block mb-1">{t('DOB (Date of Birth)', 'जन्म तिथि')}</label>
                 <input
                   type="date"
                   value={customBoyDob}
                   onChange={(e) => setCustomBoyDob(e.target.value)}
-                  className="w-full p-2.5 rounded-xl border border-stone-300 bg-stone-50"
+                  className="w-full p-2.5 rounded-xl border border-stone-300 bg-stone-50 focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 outline-none"
                 />
               </div>
               <div>
@@ -708,89 +719,49 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
                   type="time"
                   value={customBoyTime}
                   onChange={(e) => setCustomBoyTime(e.target.value)}
-                  className="w-full p-2.5 rounded-xl border border-stone-300 bg-stone-50"
+                  className="w-full p-2.5 rounded-xl border border-stone-300 bg-stone-50 focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 outline-none"
                 />
               </div>
             </div>
 
-            <div className="space-y-3">
-              <div>
-                <label className="font-bold text-stone-700 block mb-1.5">{t('Rashi (Zodiac)', 'राशि')}</label>
-                <div className="max-h-32 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-1.5 p-2 rounded-xl border border-stone-200 bg-stone-50">
-                  {RASHIS.map((r) => (
-                    <button
-                      key={r.index}
-                      type="button"
-                      onClick={() => setCustomBoyRashi(r.index)}
-                      className={`px-2 py-1.5 rounded-lg text-[11px] font-semibold text-left truncate transition-colors cursor-pointer ${
-                        customBoyRashi === r.index
-                          ? 'bg-[#380812] text-amber-200 shadow-2xs'
-                          : 'bg-white text-stone-700 border border-stone-200 hover:bg-amber-50'
-                      }`}
-                    >
-                      {lang === 'hi' ? r.hindiName : r.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="font-bold text-stone-700 block mb-1.5">{t('Nakshatra', 'नक्षत्र')}</label>
-                <div className="max-h-32 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-1.5 p-2 rounded-xl border border-stone-200 bg-stone-50">
-                  {NAKSHATRAS.map((n) => (
-                    <button
-                      key={n.index}
-                      type="button"
-                      onClick={() => setCustomBoyNakshatra(n.index)}
-                      className={`px-2 py-1.5 rounded-lg text-[11px] font-semibold text-left truncate transition-colors cursor-pointer ${
-                        customBoyNakshatra === n.index
-                          ? 'bg-[#380812] text-amber-200 shadow-2xs'
-                          : 'bg-white text-stone-700 border border-stone-200 hover:bg-amber-50'
-                      }`}
-                    >
-                      {lang === 'hi' ? n.hindiName : n.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <label className="flex items-center gap-2 p-2.5 bg-stone-50 rounded-xl border border-stone-200 cursor-pointer">
+            <div>
+              <label className="font-bold text-stone-700 block mb-1">{t('Birth Place', 'जन्म स्थान')}</label>
               <input
-                type="checkbox"
-                checked={customBoyManglik}
-                onChange={(e) => setCustomBoyManglik(e.target.checked)}
-                className="rounded border-stone-300 text-amber-700 focus:ring-amber-500"
+                type="text"
+                value={customBoyPlace}
+                onChange={(e) => setCustomBoyPlace(e.target.value)}
+                placeholder={t('Enter birth city / place (e.g., Indore)', 'जन्म स्थान दर्ज करें (जैसे: इंदौर)')}
+                className="w-full p-2.5 rounded-xl border border-stone-300 bg-stone-50 focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 outline-none"
               />
-              <span className="font-bold text-stone-800">{t('Boy is Manglik (Kuja Dosha)', 'वर मांगलिक है (मंगल दोष)')}</span>
-            </label>
+            </div>
           </div>
 
           {/* GIRL FORM */}
-          <div className="space-y-3">
+          <div className="space-y-3.5">
             <h3 className="font-serif font-bold text-stone-900 text-sm pb-2 border-b border-stone-100 flex items-center gap-2">
               <span className="w-5 h-5 rounded-full bg-rose-100 text-rose-800 flex items-center justify-center font-bold text-xs">2</span>
               <span>{t('Bride Details', 'वधू का विवरण')}</span>
             </h3>
 
             <div>
-              <label className="font-bold text-stone-700 block mb-1">{t('Bride Name', 'वधू का नाम')}</label>
+              <label className="font-bold text-stone-700 block mb-1">{t('Name', 'नाम')}</label>
               <input
                 type="text"
                 value={customGirlName}
                 onChange={(e) => setCustomGirlName(e.target.value)}
                 placeholder={t('Enter bride name', 'वधू का नाम दर्ज करें')}
-                className="w-full p-2.5 rounded-xl border border-stone-300 bg-stone-50"
+                className="w-full p-2.5 rounded-xl border border-stone-300 bg-stone-50 focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 outline-none"
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <div>
-                <label className="font-bold text-stone-700 block mb-1">{t('Date of Birth', 'जन्म तिथि')}</label>
+                <label className="font-bold text-stone-700 block mb-1">{t('DOB (Date of Birth)', 'जन्म तिथि')}</label>
                 <input
                   type="date"
                   value={customGirlDob}
                   onChange={(e) => setCustomGirlDob(e.target.value)}
-                  className="w-full p-2.5 rounded-xl border border-stone-300 bg-stone-50"
+                  className="w-full p-2.5 rounded-xl border border-stone-300 bg-stone-50 focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 outline-none"
                 />
               </div>
               <div>
@@ -799,61 +770,21 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
                   type="time"
                   value={customGirlTime}
                   onChange={(e) => setCustomGirlTime(e.target.value)}
-                  className="w-full p-2.5 rounded-xl border border-stone-300 bg-stone-50"
+                  className="w-full p-2.5 rounded-xl border border-stone-300 bg-stone-50 focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 outline-none"
                 />
               </div>
             </div>
 
-            <div className="space-y-3">
-              <div>
-                <label className="font-bold text-stone-700 block mb-1.5">{t('Rashi (Zodiac)', 'राशि')}</label>
-                <div className="max-h-32 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-1.5 p-2 rounded-xl border border-stone-200 bg-stone-50">
-                  {RASHIS.map((r) => (
-                    <button
-                      key={r.index}
-                      type="button"
-                      onClick={() => setCustomGirlRashi(r.index)}
-                      className={`px-2 py-1.5 rounded-lg text-[11px] font-semibold text-left truncate transition-colors cursor-pointer ${
-                        customGirlRashi === r.index
-                          ? 'bg-[#380812] text-amber-200 shadow-2xs'
-                          : 'bg-white text-stone-700 border border-stone-200 hover:bg-rose-50'
-                      }`}
-                    >
-                      {lang === 'hi' ? r.hindiName : r.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label className="font-bold text-stone-700 block mb-1.5">{t('Nakshatra', 'नक्षत्र')}</label>
-                <div className="max-h-32 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-1.5 p-2 rounded-xl border border-stone-200 bg-stone-50">
-                  {NAKSHATRAS.map((n) => (
-                    <button
-                      key={n.index}
-                      type="button"
-                      onClick={() => setCustomGirlNakshatra(n.index)}
-                      className={`px-2 py-1.5 rounded-lg text-[11px] font-semibold text-left truncate transition-colors cursor-pointer ${
-                        customGirlNakshatra === n.index
-                          ? 'bg-[#380812] text-amber-200 shadow-2xs'
-                          : 'bg-white text-stone-700 border border-stone-200 hover:bg-rose-50'
-                      }`}
-                    >
-                      {lang === 'hi' ? n.hindiName : n.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <label className="flex items-center gap-2 p-2.5 bg-stone-50 rounded-xl border border-stone-200 cursor-pointer">
+            <div>
+              <label className="font-bold text-stone-700 block mb-1">{t('Birth Place', 'जन्म स्थान')}</label>
               <input
-                type="checkbox"
-                checked={customGirlManglik}
-                onChange={(e) => setCustomGirlManglik(e.target.checked)}
-                className="rounded border-stone-300 text-amber-700 focus:ring-amber-500"
+                type="text"
+                value={customGirlPlace}
+                onChange={(e) => setCustomGirlPlace(e.target.value)}
+                placeholder={t('Enter birth city / place (e.g., Nanded)', 'जन्म स्थान दर्ज करें (जैसे: नांदेड़)')}
+                className="w-full p-2.5 rounded-xl border border-stone-300 bg-stone-50 focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 outline-none"
               />
-              <span className="font-bold text-stone-800">{t('Girl is Manglik (Kuja Dosha)', 'वधू मांगलिक है (मंगल दोष)')}</span>
-            </label>
+            </div>
           </div>
         </div>
       )}
@@ -913,11 +844,12 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
           <div className="flex items-center gap-2">
             {config.featureWhatsAppShareEnabled && (
               <button
+                type="button"
                 onClick={handleShareWhatsApp}
                 className="bg-emerald-700 hover:bg-emerald-800 text-white font-semibold px-4 py-2 rounded-xl flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
               >
                 <Share2 className="w-3.5 h-3.5" />
-                <span>{t('Share on WhatsApp', 'व्हाट्सएप पर साझा करें')}</span>
+                <span>{t('Share Report', 'रिपोर्ट साझा करें')}</span>
               </button>
             )}
             <button

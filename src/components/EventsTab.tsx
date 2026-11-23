@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Calendar, MapPin, ExternalLink, PlusCircle, X, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
+import { Calendar, MapPin, ExternalLink, PlusCircle, X, CheckCircle2, AlertCircle, RefreshCw, Share2 } from 'lucide-react';
 import { SamajEvent, AuthSession } from '../types';
 import { useLanguage } from '../context/LanguageContext';
 import { useAdminConfig } from '../context/AdminConfigContext';
+import { buildAppShareUrl, shareContent } from '../utils/shareAndPrint';
 
 interface EventsTabProps {
   authSession?: AuthSession | null;
@@ -149,8 +150,8 @@ export const EventsTab: React.FC<EventsTabProps> = ({ authSession, events, onAdd
                 dangerouslySetInnerHTML={{ __html: ev.description }}
               />
               
-              {ev.link && (
-                <div className="pt-2 flex flex-wrap gap-2">
+              <div className="pt-2 flex flex-wrap items-center gap-2">
+                {ev.link && (
                   <a 
                     href={ev.link} 
                     target="_blank" 
@@ -160,8 +161,33 @@ export const EventsTab: React.FC<EventsTabProps> = ({ authSession, events, onAdd
                     <ExternalLink className="w-3.5 h-3.5" />
                     {t('Register via Official Form Link', 'आधिकारिक पंजीकरण लिंक खोलें')}
                   </a>
-                </div>
-              )}
+                )}
+
+                {config.featureWhatsAppShareEnabled && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const cleanDesc = (ev.description || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+                      const summary = [
+                        `📅 ${ev.date}${ev.time ? ` (${ev.time})` : ''}`,
+                        `📍 ${ev.venue || ev.location}`,
+                        cleanDesc
+                      ]
+                        .filter(Boolean)
+                        .join('\n');
+                      void shareContent({
+                        title: ev.title,
+                        text: summary,
+                        url: ev.link || buildAppShareUrl('events', { event: ev.id })
+                      });
+                    }}
+                    className="text-xs bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 font-semibold px-3.5 py-2 rounded-xl inline-flex items-center gap-1.5 cursor-pointer transition-colors"
+                  >
+                    <Share2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>{t('Share Event', 'कार्यक्रम साझा करें')}</span>
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>

@@ -6,15 +6,25 @@ export interface ImageCompressOptions {
 }
 
 const IMAGE_EXT_REGEX = /\.(jpe?g|png|webp|gif|bmp|heic|heif|avif|svg)$/i;
+const KNOWN_NON_IMAGE_EXT_REGEX =
+  /\.(pdf|txt|csv|json|xml|html?|mp4|mov|avi|mkv|webm|mp3|wav|m4a|aac|zip|rar|7z|apk|docx?|xlsx?|pptx?)$/i;
+const SAFE_RASTER_DATA_URL_REGEX = /^data:image\/(jpe?g|png|webp|gif|bmp|avif);/i;
 const DEFAULT_MAX_OUTPUT_CHARS = 260_000;
 
 function isLikelyImageFile(file: File): boolean {
   const mime = (file.type || '').trim().toLowerCase();
   if (mime.startsWith('image/')) return true;
+
   // Android Photo Picker / content:// URIs often omit file.type or report application/octet-stream
+  // with extensionless numeric document names (e.g. "1000045123").
+  // Reject explicit non-image MIME types or obvious non-image file extensions, and let Image decoding verify the rest.
   if (!mime || mime === 'application/octet-stream') {
-    if (!file.name || IMAGE_EXT_REGEX.test(file.name)) return true;
+    const name = (file.name || '').trim();
+    if (!name || IMAGE_EXT_REGEX.test(name)) return true;
+    if (KNOWN_NON_IMAGE_EXT_REGEX.test(name)) return false;
+    return !name.includes('.');
   }
+
   return false;
 }
 
@@ -76,6 +86,10 @@ export async function compressAndReadImageFile(
     throw new Error('INVALID_TYPE');
   }
 
+  if (file.size <= 0) {
+    throw new Error('DECODE_FAILED');
+  }
+
   if (file.size > maxSourceBytes) {
     throw new Error('FILE_TOO_LARGE');
   }
@@ -83,7 +97,7 @@ export async function compressAndReadImageFile(
   const rawDataUrl = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
-      if (typeof reader.result === 'string') {
+      if (typeof reader.result === 'string' && reader.result.length > 0) {
         resolve(reader.result);
       } else {
         reject(new Error('READ_FAILED'));
@@ -93,7 +107,7 @@ export async function compressAndReadImageFile(
     reader.readAsDataURL(file);
   });
 
-  // Load into Image for resizing & JPEG compression
+  // Load into Image for decoding, resizing & JPEG compression
   try {
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {
       const image = new Image();
@@ -122,15 +136,53 @@ export async function compressAndReadImageFile(
       }
     }
 
-    if (bestResult.startsWith('data:image/') && bestResult.length <= 340_000) {
+    if (SAFE_RASTER_DATA_URL_REGEX.test(bestResult) && bestResult.length <= 340_000) {
       return bestResult;
     }
-    throw new Error('DECODE_FAILED');
-  } catch {
-    // Fallback to raw data URL if it is a valid image payload within size limits
-    if (rawDataUrl.startsWith('data:image/') && rawDataUrl.length < 340_000) {
+    throw new Error('FILE_TOO_LARGE');
+  } catch (err) {
+    if (err instanceof Error && err.message === 'FILE_TOO_LARGE') {
+      throw err;
+    }
+    // Fallback to raw data URL only if it is a safe raster image payload within size limits
+    if (SAFE_RASTER_DATA_URL_REGEX.test(rawDataUrl) && rawDataUrl.length < 340_000) {
       return rawDataUrl;
     }
     throw new Error('DECODE_FAILED');
   }
+}
+
+export function formatImageUploadError(
+  err: unknown,
+  t: (en: string, hi: string) => string
+): string {
+  const code = err instanceof Error ? err.message : '';
+  if (code === 'INVALID_TYPE') {
+    return t(
+      'Please choose a valid image file (JPG, PNG, or WEBP).',
+      'कृपया एक मान्य फोटो फ़ाइल चुनें (JPG, PNG या WEBP)।'
+    );
+  }
+  if (code === 'FILE_TOO_LARGE') {
+    return t(
+      'Image file is too large (max 20 MB). Please pick a smaller photo.',
+      'फ़ोटो का आकार बहुत बड़ा है (अधिकतम 20 MB)। कृपया दूसरी फ़ोटो चुनें।'
+    );
+  }
+  return t(
+    'Could not read this image. Please try another photo.',
+    'यह फ़ोटो खोली नहीं जा सकी। कृपया कोई दूसरी फ़ोटो चुनें।'
+  );
+}
+
+export function estimateMediaSizeLabel(urlOrDataUrl: string): string {
+  if (!urlOrDataUrl.startsWith('data:')) {
+    return 'URL Link';
+  }
+  const base64Part = urlOrDataUrl.split(',')[1] || '';
+  const approxBytes = Math.max(1024, Math.round((base64Part.length * 3) / 4));
+  if (approxBytes < 1024 * 1024) {
+    return `${Math.max(1, Math.round(approxBytes / 1024))} KB`;
+  }
+  return `${(approxBytes / (1024 * 1024)).toFixed(1)} MB`;
 }

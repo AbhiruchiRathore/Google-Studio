@@ -1,6 +1,6 @@
-import React, { useId, useState } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import { Camera, Upload, Trash2, Link2, RefreshCw, AlertCircle } from 'lucide-react';
-import { compressAndReadImageFile } from '../utils/imageUpload';
+import { compressAndReadImageFile, formatImageUploadError } from '../utils/imageUpload';
 import { useLanguage } from '../context/LanguageContext';
 
 interface ImageUploadFieldProps {
@@ -26,19 +26,35 @@ export const ImageUploadField: React.FC<ImageUploadFieldProps> = ({
 }) => {
   const { t } = useLanguage();
   const inputId = useId();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState(false);
   const [showUrlBox, setShowUrlBox] = useState(false);
 
   const isDataUrl = value.startsWith('data:image/');
 
+  useEffect(() => {
+    setPreviewError(false);
+  }, [value]);
+
+  const triggerFilePicker = () => {
+    if (isProcessing) return;
+    const input = fileInputRef.current;
+    if (!input) return;
+    // Reset value before opening picker so re-selecting or cancelling works reliably on Web & Android WebView
+    input.value = '';
+    input.click();
+  };
+
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    // Reset input so choosing the same file again still triggers onChange
+    // Reset input immediately after selection/cancellation so choosing the same file again still fires onChange
     e.target.value = '';
     if (!file) return;
 
     setUploadError(null);
+    setPreviewError(false);
     setIsProcessing(true);
 
     try {
@@ -49,40 +65,44 @@ export const ImageUploadField: React.FC<ImageUploadFieldProps> = ({
       onChange(compressedDataUrl);
       setShowUrlBox(false);
     } catch (err: unknown) {
-      const code = err instanceof Error ? err.message : '';
-      if (code === 'INVALID_TYPE') {
-        setUploadError(
-          t(
-            'Please choose a valid image file (JPG, PNG, or WEBP).',
-            'कृपया एक मान्य फोटो फ़ाइल चुनें (JPG, PNG या WEBP)।'
-          )
-        );
-      } else if (code === 'FILE_TOO_LARGE') {
-        setUploadError(
-          t(
-            'Image file is too large (max 20 MB). Please pick a smaller photo.',
-            'फ़ोटो का आकार बहुत बड़ा है (अधिकतम 20 MB)। कृपया दूसरी फ़ोटो चुनें।'
-          )
-        );
-      } else {
-        setUploadError(
-          t(
-            'Could not read this image. Please try another photo.',
-            'यह फ़ोटो खोली नहीं जा सकी। कृपया कोई दूसरी फ़ोटो चुनें।'
-          )
-        );
-      }
+      setUploadError(formatImageUploadError(err, t));
     } finally {
       setIsProcessing(false);
     }
   };
 
+  const handleRemove = () => {
+    setUploadError(null);
+    setPreviewError(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+    onChange('');
+  };
+
   return (
     <div className="space-y-2 text-xs">
+      {/* Persistent off-screen file input triggered via ref.click() for Web & Android WebView compatibility */}
+      <input
+        ref={fileInputRef}
+        id={inputId}
+        type="file"
+        accept="image/*"
+        disabled={isProcessing}
+        onChange={handleFileSelect}
+        className="sr-only"
+        tabIndex={-1}
+        aria-label={label}
+      />
+
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <label htmlFor={inputId} className="block font-bold text-slate-700 cursor-pointer">
+        <button
+          type="button"
+          onClick={triggerFilePicker}
+          className="block font-bold text-slate-700 hover:text-[#380812] text-left cursor-pointer"
+        >
           {label}
-        </label>
+        </button>
         {allowUrlInput && (
           <button
             type="button"
@@ -108,39 +128,41 @@ export const ImageUploadField: React.FC<ImageUploadFieldProps> = ({
           <div
             className={
               variant === 'banner'
-                ? 'w-full h-32 sm:h-36 rounded-xl overflow-hidden border border-stone-200 bg-white'
-                : 'w-20 h-20 rounded-2xl overflow-hidden border-2 border-amber-300 bg-white shrink-0 shadow-xs'
+                ? 'w-full h-32 sm:h-36 rounded-xl overflow-hidden border border-stone-200 bg-white flex items-center justify-center'
+                : 'w-20 h-20 rounded-2xl overflow-hidden border-2 border-amber-300 bg-white shrink-0 shadow-xs flex items-center justify-center'
             }
           >
-            <img
-              src={value}
-              alt={label}
-              className={`w-full h-full object-cover ${variant === 'avatar' ? 'object-top' : 'object-center'}`}
-            />
+            {previewError ? (
+              <div className="p-2 text-center text-[10px] text-rose-700 font-medium">
+                {t('Preview unavailable', 'प्रीव्यू उपलब्ध नहीं')}
+              </div>
+            ) : (
+              <img
+                src={value}
+                alt={label}
+                onError={() => setPreviewError(true)}
+                className={`w-full h-full object-cover ${variant === 'avatar' ? 'object-top' : 'object-center'}`}
+              />
+            )}
           </div>
 
           <div className={`min-w-0 ${variant === 'banner' ? 'flex flex-wrap items-center justify-between gap-2' : 'flex-1 space-y-2'}`}>
             <p className="text-[11px] text-stone-600 font-medium truncate">
-              {isDataUrl
+              {previewError
+                ? t('Image link could not be loaded — upload a photo or check URL', 'इमेज लोड नहीं हो सकी — दूसरी फ़ोटो चुनें या लिंक जांचें')
+                : isDataUrl
                 ? t('Photo uploaded from device', 'फ़ोटो डिवाइस से अपलोड की गई')
                 : t('Image preview ready', 'फ़ोटो प्रीव्यू तैयार है')}
             </p>
             <div className="flex flex-wrap items-center gap-2">
-              <label
-                htmlFor={inputId}
-                className={`relative overflow-hidden bg-white hover:bg-amber-100/70 text-[#380812] border border-amber-300 font-semibold px-3 py-1.5 rounded-xl text-[11px] inline-flex items-center gap-1.5 cursor-pointer transition-colors select-none focus-within:ring-2 focus-within:ring-amber-500 ${
+              <button
+                type="button"
+                disabled={isProcessing}
+                onClick={triggerFilePicker}
+                className={`bg-white hover:bg-amber-100/70 text-[#380812] border border-amber-300 font-semibold px-3 py-1.5 rounded-xl text-[11px] inline-flex items-center gap-1.5 cursor-pointer transition-colors select-none focus:outline-none focus:ring-2 focus:ring-amber-500 ${
                   isProcessing ? 'opacity-60 pointer-events-none' : ''
                 }`}
               >
-                <input
-                  id={inputId}
-                  type="file"
-                  accept="image/*"
-                  disabled={isProcessing}
-                  onChange={handleFileSelect}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                  aria-label={t('Change Photo', 'फोटो बदलें')}
-                />
                 {isProcessing ? (
                   <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-700 shrink-0" />
                 ) : (
@@ -151,11 +173,11 @@ export const ImageUploadField: React.FC<ImageUploadFieldProps> = ({
                     ? t('Uploading...', 'अपलोड हो रही है...')
                     : t('Change Photo', 'फोटो बदलें')}
                 </span>
-              </label>
+              </button>
 
               <button
                 type="button"
-                onClick={() => onChange('')}
+                onClick={handleRemove}
                 className="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-semibold px-2.5 py-1.5 rounded-xl text-[11px] flex items-center gap-1 cursor-pointer transition-colors"
               >
                 <Trash2 className="w-3.5 h-3.5" />
@@ -165,21 +187,14 @@ export const ImageUploadField: React.FC<ImageUploadFieldProps> = ({
           </div>
         </div>
       ) : (
-        <label
-          htmlFor={inputId}
-          className={`relative overflow-hidden w-full border-2 border-dashed border-amber-300 hover:border-[#851834] bg-amber-50/40 hover:bg-amber-50/80 rounded-2xl p-4 sm:p-5 text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-1.5 group select-none focus-within:ring-2 focus-within:ring-amber-500 ${
+        <button
+          type="button"
+          disabled={isProcessing}
+          onClick={triggerFilePicker}
+          className={`w-full border-2 border-dashed border-amber-300 hover:border-[#851834] bg-amber-50/40 hover:bg-amber-50/80 rounded-2xl p-4 sm:p-5 text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-1.5 group select-none focus:outline-none focus:ring-2 focus:ring-amber-500 ${
             isProcessing ? 'opacity-65 pointer-events-none' : ''
           }`}
         >
-          <input
-            id={inputId}
-            type="file"
-            accept="image/*"
-            disabled={isProcessing}
-            onChange={handleFileSelect}
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-            aria-label={label}
-          />
           <div className="w-10 h-10 rounded-xl bg-white border border-amber-200 shadow-2xs flex items-center justify-center text-[#851834] group-hover:scale-105 transition-transform">
             {isProcessing ? (
               <RefreshCw className="w-5 h-5 animate-spin text-amber-700" />
@@ -199,7 +214,7 @@ export const ImageUploadField: React.FC<ImageUploadFieldProps> = ({
                 'JPG, PNG, WEBP समर्थित • स्वतः ऑप्टिमाइज़ किया जाता है'
               )}
           </span>
-        </label>
+        </button>
       )}
 
       {showUrlBox && (
@@ -207,7 +222,10 @@ export const ImageUploadField: React.FC<ImageUploadFieldProps> = ({
           <input
             type="url"
             value={isDataUrl ? '' : value}
-            onChange={(e) => onChange(e.target.value)}
+            onChange={(e) => {
+              setUploadError(null);
+              onChange(e.target.value);
+            }}
             className="w-full border border-amber-300 rounded-xl p-2.5 text-xs bg-white focus:ring-2 focus:ring-amber-500"
             placeholder={urlPlaceholder}
           />

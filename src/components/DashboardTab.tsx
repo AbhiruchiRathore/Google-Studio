@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   LayoutDashboard, Users, Image as ImageIcon, Settings, Plus, Search, 
   Bell, ChevronDown, CheckCircle2, ShieldCheck, ExternalLink, Edit3, 
@@ -16,7 +16,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useAdminConfig } from '../context/AdminConfigContext';
 import { BrandLogo } from './BrandLogo';
 import { ImageUploadField } from './ImageUploadField';
-import { compressAndReadImageFile } from '../utils/imageUpload';
+import { compressAndReadImageFile, estimateMediaSizeLabel, formatImageUploadError } from '../utils/imageUpload';
 import { sanitizePhoneInput, validatePhoneNumber } from '../utils/validation';
 import {
   getSessionOwnerKey,
@@ -176,6 +176,9 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   const [profileFormError, setProfileFormError] = useState('');
   const [showGalleryAddInput, setShowGalleryAddInput] = useState(false);
   const [newGalleryUrlInput, setNewGalleryUrlInput] = useState('');
+  const galleryFileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadingGallery, setIsUploadingGallery] = useState(false);
+  const [galleryUploadError, setGalleryUploadError] = useState<string | null>(null);
 
   // Inline Business Ad Editor State
   const [isEditingAd, setIsEditingAd] = useState(false);
@@ -241,6 +244,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   const [newMediaTitle, setNewMediaTitle] = useState('');
   const [newMediaType, setNewMediaType] = useState<'avatar' | 'cover' | 'gallery' | 'document'>('gallery');
   const [newMediaUrl, setNewMediaUrl] = useState('');
+  const [mediaAssetError, setMediaAssetError] = useState<string | null>(null);
 
   // User Profile Settings state
   const [settingsSubTab, setSettingsSubTab] = useState<'preferences' | 'account'>('preferences');
@@ -613,28 +617,34 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   // Handler: Add Media Asset
   const handleAddMediaAsset = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMediaUrl) return;
+    const trimmedUrl = newMediaUrl.trim();
+    if (!trimmedUrl) return;
 
+    setMediaAssetError(null);
     const newAsset: UserMediaAsset = {
       id: `media-${Date.now()}`,
-      url: newMediaUrl,
-      title: newMediaTitle.trim() || 'New Uploaded Media Asset',
+      url: trimmedUrl,
+      title: newMediaTitle.trim() || t('New Uploaded Media Asset', 'नई अपलोड की गई फ़ोटो'),
       type: newMediaType,
-      uploadedAt: 'Just now',
-      size: '2.4 MB'
+      uploadedAt: t('Just now', 'अभी'),
+      size: estimateMediaSizeLabel(trimmedUrl)
     };
 
-    setMediaAssets(prev => {
-      const next = [newAsset, ...prev];
-      try {
-        localStorage.setItem(mediaStorageKey, JSON.stringify(next));
-      } catch (err) {
-        console.error(err);
-      }
-      return next;
-    });
-    setNewMediaTitle('');
-    setNewMediaUrl('');
+    const next = [newAsset, ...mediaAssets];
+    try {
+      localStorage.setItem(mediaStorageKey, JSON.stringify(next));
+      setMediaAssets(next);
+      setNewMediaTitle('');
+      setNewMediaUrl('');
+    } catch (err) {
+      console.error(err);
+      setMediaAssetError(
+        t(
+          'Storage limit reached on this device. Please remove an older media asset first.',
+          'डिवाइस पर स्टोरेज सीमा पूरी हो गई है। कृपया पहले कोई पुरानी मीडिया फ़ाइल हटाएं।'
+        )
+      );
+    }
   };
 
   // Handler: Delete Media Asset
@@ -1607,27 +1617,41 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                   </div>
 
                   {showGalleryAddInput && (
-                    <div className="flex flex-wrap gap-2 items-center bg-rose-50/40 p-2.5 rounded-xl border border-rose-100 text-xs">
-                      <label className="relative overflow-hidden bg-white hover:bg-amber-50 text-[#380812] border border-amber-300 px-3 py-2 rounded-lg font-bold cursor-pointer flex items-center gap-1.5 shrink-0 select-none">
-                        <input
-                          type="file"
-                          accept="image/*"
-                          multiple
-                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                          aria-label={t('Upload Photos (Multiple)', 'एक या अधिक फ़ोटो अपलोड करें')}
-                          onChange={async (e) => {
-                            const files: File[] = Array.from(e.target.files || []);
-                            e.target.value = '';
-                            if (files.length === 0) return;
+                    <div className="space-y-2 bg-rose-50/40 p-2.5 rounded-xl border border-rose-100 text-xs">
+                      <input
+                        ref={galleryFileInputRef}
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        disabled={isUploadingGallery}
+                        className="sr-only"
+                        tabIndex={-1}
+                        aria-label={t('Upload Photos (Multiple)', 'एक या अधिक फ़ोटो अपलोड करें')}
+                        onChange={async (e) => {
+                          const files: File[] = e.target.files ? Array.from(e.target.files) : [];
+                          e.target.value = '';
+                          if (files.length === 0) return;
+
+                          setGalleryUploadError(null);
+                          setIsUploadingGallery(true);
+                          try {
                             const uploaded: string[] = [];
+                            let failedCount = 0;
+                            let lastErr: unknown = null;
+
                             for (const file of files.slice(0, 6)) {
                               try {
-                                const dataUrl = await compressAndReadImageFile(file, { maxDimension: 840, quality: 0.82 });
+                                const dataUrl = await compressAndReadImageFile(file, {
+                                  maxDimension: 840,
+                                  quality: 0.82,
+                                });
                                 uploaded.push(dataUrl);
-                              } catch {
-                                // Skip unreadable files
+                              } catch (err) {
+                                failedCount++;
+                                lastErr = err;
                               }
                             }
+
                             if (uploaded.length > 0) {
                               setEditingProfile((prev) => {
                                 if (!prev) return prev;
@@ -1638,37 +1662,87 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                                   gallery: Array.from(new Set([...currentGallery, ...uploaded]))
                                 };
                               });
+                              if (failedCount === 0) {
+                                setShowGalleryAddInput(false);
+                              }
+                            }
+
+                            if (failedCount > 0) {
+                              setGalleryUploadError(
+                                failedCount === 1 && lastErr
+                                  ? formatImageUploadError(lastErr, t)
+                                  : t(
+                                      `${failedCount} file(s) could not be read. Please choose valid JPG, PNG, or WEBP photos under 20 MB.`,
+                                      `${failedCount} फ़ाइल खोली नहीं जा सकी। कृपया 20 MB से कम की मान्य JPG, PNG या WEBP फ़ोटो चुनें।`
+                                    )
+                              );
+                            }
+                          } finally {
+                            setIsUploadingGallery(false);
+                          }
+                        }}
+                      />
+
+                      <div className="flex flex-wrap gap-2 items-center">
+                        <button
+                          type="button"
+                          disabled={isUploadingGallery}
+                          onClick={() => {
+                            if (isUploadingGallery) return;
+                            setGalleryUploadError(null);
+                            if (galleryFileInputRef.current) {
+                              galleryFileInputRef.current.value = '';
+                              galleryFileInputRef.current.click();
+                            }
+                          }}
+                          className={`bg-white hover:bg-amber-50 text-[#380812] border border-amber-300 px-3 py-2 rounded-lg font-bold cursor-pointer flex items-center gap-1.5 shrink-0 select-none ${
+                            isUploadingGallery ? 'opacity-60 pointer-events-none' : ''
+                          }`}
+                        >
+                          {isUploadingGallery ? (
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin text-amber-700" />
+                          ) : (
+                            <Upload className="w-3.5 h-3.5 text-amber-700" />
+                          )}
+                          <span>
+                            {isUploadingGallery
+                              ? t('Uploading photos...', 'फ़ोटो अपलोड हो रही हैं...')
+                              : t('Upload Photos (Multiple)', 'एक या अधिक फ़ोटो अपलोड करें')}
+                          </span>
+                        </button>
+                        <input
+                          type="url"
+                          value={newGalleryUrlInput}
+                          onChange={(e) => setNewGalleryUrlInput(e.target.value)}
+                          placeholder={t('Or paste photo / Kundali URL (https://...)', 'या फ़ोटो / कुंडली URL डालें (https://...)')}
+                          className="flex-1 min-w-[160px] p-2 rounded-lg border border-stone-200 bg-white"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (newGalleryUrlInput.trim()) {
+                              const currentGallery = editingProfile.gallery || [];
+                              setEditingProfile({
+                                ...editingProfile,
+                                gallery: Array.from(new Set([...currentGallery, newGalleryUrlInput.trim()]))
+                              });
+                              setNewGalleryUrlInput('');
+                              setGalleryUploadError(null);
                               setShowGalleryAddInput(false);
                             }
                           }}
-                        />
-                        <Upload className="w-3.5 h-3.5 text-amber-700" />
-                        <span>{t('Upload Photos (Multiple)', 'एक या अधिक फ़ोटो अपलोड करें')}</span>
-                      </label>
-                      <input
-                        type="url"
-                        value={newGalleryUrlInput}
-                        onChange={(e) => setNewGalleryUrlInput(e.target.value)}
-                        placeholder={t('Or paste photo / Kundali URL (https://...)', 'या फ़ोटो / कुंडली URL डालें (https://...)')}
-                        className="flex-1 min-w-[160px] p-2 rounded-lg border border-stone-200 bg-white"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (newGalleryUrlInput.trim()) {
-                            const currentGallery = editingProfile.gallery || [];
-                            setEditingProfile({
-                              ...editingProfile,
-                              gallery: Array.from(new Set([...currentGallery, newGalleryUrlInput.trim()]))
-                            });
-                            setNewGalleryUrlInput('');
-                            setShowGalleryAddInput(false);
-                          }
-                        }}
-                        className="bg-[#851834] text-amber-100 px-3 py-2 rounded-lg font-bold cursor-pointer shrink-0"
-                      >
-                        {t('Add URL', 'लिंक जोड़ें')}
-                      </button>
+                          className="bg-[#851834] text-amber-100 px-3 py-2 rounded-lg font-bold cursor-pointer shrink-0"
+                        >
+                          {t('Add URL', 'लिंक जोड़ें')}
+                        </button>
+                      </div>
+
+                      {galleryUploadError && (
+                        <div className="p-2 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg text-[11px] flex items-center gap-1.5">
+                          <AlertCircle className="w-3.5 h-3.5 shrink-0 text-rose-600" />
+                          <span>{galleryUploadError}</span>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -2781,11 +2855,21 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                   <ImageUploadField
                     label={t('Select Photo from Device or Paste URL *', 'डिवाइस से फ़ोटो चुनें या लिंक डालें *')}
                     value={newMediaUrl}
-                    onChange={(url) => setNewMediaUrl(url)}
+                    onChange={(url) => {
+                      setMediaAssetError(null);
+                      setNewMediaUrl(url);
+                    }}
                     variant="banner"
                     maxDimension={900}
                     urlPlaceholder={t('Image URL (https://...)', 'फोटो URL (https://...)')}
                   />
+
+                  {mediaAssetError && (
+                    <div className="p-2.5 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl text-[11px] flex items-center gap-1.5">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0 text-rose-600" />
+                      <span>{mediaAssetError}</span>
+                    </div>
+                  )}
 
                   <div className="flex justify-end pt-1">
                     <button

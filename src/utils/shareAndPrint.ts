@@ -6,6 +6,26 @@ export interface WhatsAppSharePayload {
   copied: boolean;
 }
 
+export interface SharePayload {
+  title: string;
+  text?: string;
+  url?: string;
+  phone?: string;
+}
+
+export interface ResolvedSharePayload {
+  title: string;
+  text: string;
+  url: string;
+  fullText: string;
+  phone?: string;
+  waMeUrl: string;
+  telegramUrl: string;
+  twitterUrl: string;
+  mailtoUrl: string;
+  instagramUrl: string;
+}
+
 export function formatWhatsAppPhone(phone?: string): string {
   if (!phone) return '';
   const digits = phone.replace(/\D/g, '');
@@ -13,6 +33,44 @@ export function formatWhatsAppPhone(phone?: string): string {
   if (digits.length === 10) return `91${digits}`;
   if (digits.length === 11 && digits.startsWith('0')) return `91${digits.slice(1)}`;
   return digits;
+}
+
+export function resolveShareUrl(url?: string): string {
+  const trimmed = url?.trim();
+  if (trimmed) {
+    if (/^https?:\/\//i.test(trimmed)) {
+      return trimmed;
+    }
+    if (typeof window !== 'undefined' && window.location?.origin) {
+      const prefix = trimmed.startsWith('/') || trimmed.startsWith('#') || trimmed.startsWith('?') ? '' : '/';
+      return `${window.location.origin}${prefix}${trimmed}`;
+    }
+    return trimmed;
+  }
+  if (typeof window !== 'undefined' && window.location?.href) {
+    return window.location.href;
+  }
+  return 'https://svayaa.com/';
+}
+
+export function buildAppShareUrl(
+  tab?: string,
+  params?: Record<string, string | number | undefined>
+): string {
+  if (typeof window === 'undefined' || !window.location) {
+    return tab ? `https://svayaa.com/#${tab}` : 'https://svayaa.com/';
+  }
+  const { origin, pathname, href } = window.location;
+  if (!tab) return href;
+
+  const entries = params
+    ? Object.entries(params).filter(([, v]) => v !== undefined && v !== null && String(v).trim() !== '')
+    : [];
+  const query =
+    entries.length > 0
+      ? `?${entries.map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`).join('&')}`
+      : '';
+  return `${origin}${pathname}#${tab}${query}`;
 }
 
 export function buildWhatsAppUrls(text: string, phone?: string) {
@@ -30,32 +88,154 @@ export function buildWhatsAppUrls(text: string, phone?: string) {
   return { waMeUrl, apiUrl, cleanPhone };
 }
 
+export function resolveSharePayload(payload: SharePayload): ResolvedSharePayload {
+  const title = payload.title?.trim() || 'Rathore Rishtey';
+  const summary = payload.text?.trim() || '';
+  const url = resolveShareUrl(payload.url);
+
+  const summaryWithoutDuplicateUrl = summary;
+  const parts: string[] = [];
+  if (title && (!summaryWithoutDuplicateUrl || !summaryWithoutDuplicateUrl.toLowerCase().includes(title.toLowerCase()))) {
+    parts.push(title);
+  }
+  if (summaryWithoutDuplicateUrl) {
+    parts.push(summaryWithoutDuplicateUrl);
+  }
+  if (url && !parts.some((p) => p.includes(url))) {
+    parts.push(url);
+  }
+
+  const fullText = parts.join('\n\n').trim() || `${title}\n${url}`;
+  const titleAndSummary =
+    summary && !summary.toLowerCase().includes(title.toLowerCase())
+      ? `${title}\n\n${summary}`
+      : summary || title;
+
+  const { waMeUrl } = buildWhatsAppUrls(fullText, payload.phone);
+  const telegramUrl = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(titleAndSummary)}`;
+  const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(titleAndSummary)}&url=${encodeURIComponent(url)}`;
+  const mailtoUrl = `mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(fullText)}`;
+
+  return {
+    title,
+    text: summary || title,
+    url,
+    fullText,
+    phone: payload.phone,
+    waMeUrl,
+    telegramUrl,
+    twitterUrl,
+    mailtoUrl,
+    instagramUrl: 'https://www.instagram.com/'
+  };
+}
+
 export async function copyTextToClipboard(text: string): Promise<boolean> {
   try {
-    if (navigator.clipboard && window.isSecureContext) {
+    if (typeof navigator !== 'undefined' && navigator.clipboard && window.isSecureContext) {
       await navigator.clipboard.writeText(text);
       return true;
     }
   } catch {
-    // Fallback below
+    // Fall through to legacy textarea fallback (important for Android WebView & restricted contexts)
   }
 
   try {
+    if (typeof document === 'undefined') return false;
     const textarea = document.createElement('textarea');
     textarea.value = text;
     textarea.setAttribute('readonly', '');
     textarea.style.position = 'fixed';
     textarea.style.left = '-9999px';
-    textarea.style.top = '-9999px';
+    textarea.style.top = '0';
+    textarea.style.fontSize = '16px';
+    textarea.style.opacity = '0';
     document.body.appendChild(textarea);
-    textarea.focus();
+    textarea.focus({ preventScroll: true });
     textarea.select();
+    textarea.setSelectionRange(0, textarea.value.length);
     const ok = document.execCommand('copy');
     document.body.removeChild(textarea);
     return ok;
   } catch {
     return false;
   }
+}
+
+export function isAndroidWebView(): boolean {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  const win = window as unknown as Record<string, unknown>;
+  const hasNativeBridge = Boolean(
+    win.Android ||
+      win.AndroidBridge ||
+      win.ReactNativeWebView ||
+      win.Capacitor ||
+      win.cordova
+  );
+  const hasWebViewUa =
+    /;\s*wv\)/i.test(ua) ||
+    (/Android/i.test(ua) && /Version\/\d+\.\d+/i.test(ua) && /Chrome\//i.test(ua));
+  return hasWebViewUa || (/Android/i.test(ua) && hasNativeBridge);
+}
+
+export function isMobileBrowserContext(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  return /Android|iPhone|iPad|iPod/i.test(ua) && !isAndroidWebView();
+}
+
+type ShareModalListener = (request: ResolvedSharePayload) => void;
+const shareModalListeners = new Set<ShareModalListener>();
+
+export function subscribeShareModal(listener: ShareModalListener): () => void {
+  shareModalListeners.add(listener);
+  return () => {
+    shareModalListeners.delete(listener);
+  };
+}
+
+export function openShareModal(payload: SharePayload): ResolvedSharePayload {
+  const resolved = resolveSharePayload(payload);
+  shareModalListeners.forEach((listener) => listener(resolved));
+  return resolved;
+}
+
+/**
+ * Reusable app-wide Share function:
+ * 1. Resolves item/page title, summary, and URL (defaulting to current page URL).
+ * 2. Uses navigator.share on secure mobile browser contexts when no specific WhatsApp phone
+ *    recipient is targeted, falling back automatically to the custom ShareModal if
+ *    navigator.share is unavailable, blocked (NotAllowedError), or cancelled (AbortError).
+ * 3. Opens the custom ShareModal directly on desktop browsers & Android WebViews so every
+ *    Share button responds reliably without silently failing or crashing WebView schemes.
+ */
+export async function shareContent(payload: SharePayload): Promise<ResolvedSharePayload> {
+  const resolved = resolveSharePayload(payload);
+
+  const canUseNativeMobileShare =
+    !payload.phone &&
+    isMobileBrowserContext() &&
+    typeof window !== 'undefined' &&
+    window.isSecureContext &&
+    typeof navigator !== 'undefined' &&
+    typeof navigator.share === 'function';
+
+  if (canUseNativeMobileShare) {
+    try {
+      await navigator.share({
+        title: resolved.title,
+        text: resolved.text,
+        url: resolved.url
+      });
+      return resolved;
+    } catch {
+      // AbortError, NotAllowedError, or unsupported field -> open custom ShareModal fallback
+    }
+  }
+
+  openShareModal(payload);
+  return resolved;
 }
 
 export function getWhatsAppLinkProps(text: string, phone?: string): {
@@ -72,41 +252,26 @@ export function getWhatsAppLinkProps(text: string, phone?: string): {
 }
 
 /**
- * Direct WhatsApp share: synchronously opens WhatsApp (`https://wa.me/...`) in a new
- * browsing context (`target="_blank"`) so WhatsApp launches directly to the contact
- * picker with the pre-filled message ready to send.
+ * Unified helper preserved for existing callers; delegates to shareContent so
+ * WhatsApp, Instagram, Telegram, X, Email, and Copy Link all work consistently.
  */
 export async function shareViaWhatsApp(
   text: string,
-  phone?: string
+  phone?: string,
+  options?: { title?: string; url?: string }
 ): Promise<WhatsAppSharePayload> {
-  const { waMeUrl, apiUrl } = buildWhatsAppUrls(text, phone);
-
-  if (typeof document !== 'undefined') {
-    const link = document.createElement('a');
-    link.href = waMeUrl;
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
-    link.style.position = 'fixed';
-    link.style.left = '0';
-    link.style.top = '0';
-    link.style.width = '1px';
-    link.style.height = '1px';
-    link.style.opacity = '0.01';
-    link.style.pointerEvents = 'none';
-    document.body.appendChild(link);
-    link.click();
-    setTimeout(() => {
-      if (link.parentNode) {
-        link.parentNode.removeChild(link);
-      }
-    }, 300);
-  }
+  const resolved = await shareContent({
+    title: options?.title || 'Rathore Rishtey',
+    text,
+    url: options?.url,
+    phone
+  });
+  const { apiUrl } = buildWhatsAppUrls(resolved.fullText, phone);
 
   return {
-    text,
+    text: resolved.fullText,
     phone,
-    waMeUrl,
+    waMeUrl: resolved.waMeUrl,
     apiUrl,
     copied: false
   };

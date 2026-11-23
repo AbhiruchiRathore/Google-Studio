@@ -16,6 +16,7 @@ import { KundaliMilanTab } from './components/KundaliMilanTab';
 import { GuestListTab } from './components/GuestListTab';
 import { AdminDashboardTab } from './components/AdminDashboardTab';
 import { WhatsAppShare } from './components/WhatsAppShare';
+import { ShareModal } from './components/ShareModal';
 import { Footer } from './components/Footer';
 import { PrivacyPolicyTab } from './components/PrivacyPolicyTab';
 import { DeleteAccountTab } from './components/DeleteAccountTab';
@@ -1754,6 +1755,7 @@ export const App: React.FC = () => {
       />
       <OfflineIndicator />
       <WhatsAppShare />
+      <ShareModal />
       <Footer onNavigateTab={navigateToTab} />
     </div>
   );
