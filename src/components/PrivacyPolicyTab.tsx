@@ -4,6 +4,7 @@ import { TabType } from '../types';
 import { useLanguage } from '../context/LanguageContext';
 import {
   buildGmailComposeUrl,
+  getExternalLinkProps,
   isAndroidDevice,
   isAndroidWebView
 } from '../utils/shareAndPrint';
@@ -167,9 +168,9 @@ export const PrivacyPolicyTab: React.FC<PrivacyPolicyTabProps> = ({ onNavigateTa
           <p className="text-xs sm:text-sm font-semibold text-[#6e1628]">
             Email:{' '}
             <a
-              href={supportEmailHref}
-              target={isAndroid ? '_blank' : undefined}
-              rel={isAndroid ? 'noopener noreferrer' : undefined}
+              {...(isAndroid
+                ? getExternalLinkProps(supportEmailHref)
+                : { href: supportEmailHref })}
               className="underline hover:text-[#851834]"
             >
               {PRIVACY_SUPPORT_EMAIL}

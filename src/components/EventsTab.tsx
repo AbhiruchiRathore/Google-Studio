@@ -3,7 +3,7 @@ import { Calendar, MapPin, ExternalLink, PlusCircle, X, CheckCircle2, AlertCircl
 import { SamajEvent, AuthSession } from '../types';
 import { useLanguage } from '../context/LanguageContext';
 import { useAdminConfig } from '../context/AdminConfigContext';
-import { buildAppShareUrl, shareContent } from '../utils/shareAndPrint';
+import { buildAppShareUrl, getExternalLinkProps, shareContent } from '../utils/shareAndPrint';
 
 interface EventsTabProps {
   authSession?: AuthSession | null;
@@ -153,9 +153,7 @@ export const EventsTab: React.FC<EventsTabProps> = ({ authSession, events, onAdd
               <div className="pt-2 flex flex-wrap items-center gap-2">
                 {ev.link && (
                   <a 
-                    href={ev.link} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
+                    {...getExternalLinkProps(ev.link)}
                     className="text-xs bg-gradient-to-r from-amber-400 to-amber-300 text-stone-950 font-bold px-3.5 py-2 rounded-xl inline-flex items-center gap-1.5 shadow-xs cursor-pointer hover:scale-102 transition-transform"
                   >
                     <ExternalLink className="w-3.5 h-3.5" />

@@ -186,17 +186,53 @@ export function isAndroidWebView(): boolean {
       win.AndroidBridge ||
       win.ReactNativeWebView ||
       win.Capacitor ||
-      win.cordova
+      win.cordova ||
+      win.flutter_inappwebview ||
+      win.Median ||
+      win.gonative
   );
   const hasWebViewUa =
     /;\s*wv\)/i.test(ua) ||
     (/Android/i.test(ua) && /Version\/\d+\.\d+/i.test(ua) && /Chrome\//i.test(ua));
-  return hasWebViewUa || (/Android/i.test(ua) && hasNativeBridge);
+  const hasAndroidReferrer =
+    typeof document !== 'undefined' && /^android-app:\/\//i.test(document.referrer || '');
+  return hasWebViewUa || hasAndroidReferrer || (/Android/i.test(ua) && hasNativeBridge);
 }
 
 export function isAndroidDevice(): boolean {
   if (typeof navigator === 'undefined') return false;
   return /Android/i.test(navigator.userAgent || '');
+}
+
+export function shouldUseDirectExternalNavigation(): boolean {
+  return isAndroidDevice() || isAndroidWebView();
+}
+
+export function navigateExternalUrl(url: string): void {
+  if (typeof window === 'undefined' || !url) return;
+  window.location.href = url;
+}
+
+export function getExternalLinkProps(url: string): {
+  href: string;
+  target?: '_blank';
+  rel?: string;
+  onClick?: (e: { preventDefault: () => void }) => void;
+} {
+  if (shouldUseDirectExternalNavigation()) {
+    return {
+      href: url,
+      onClick: (e) => {
+        e.preventDefault();
+        navigateExternalUrl(url);
+      }
+    };
+  }
+  return {
+    href: url,
+    target: '_blank',
+    rel: 'noopener noreferrer'
+  };
 }
 
 export function isMobileBrowserContext(): boolean {
@@ -261,15 +297,12 @@ export async function shareContent(payload: SharePayload): Promise<ResolvedShare
 
 export function getWhatsAppLinkProps(text: string, phone?: string): {
   href: string;
-  target: '_blank';
-  rel: string;
+  target?: '_blank';
+  rel?: string;
+  onClick?: (e: { preventDefault: () => void }) => void;
 } {
   const { waMeUrl } = buildWhatsAppUrls(text, phone);
-  return {
-    href: waMeUrl,
-    target: '_blank',
-    rel: 'noopener noreferrer'
-  };
+  return getExternalLinkProps(waMeUrl);
 }
 
 /**

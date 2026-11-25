@@ -18,6 +18,7 @@ import { TabType } from '../types';
 import { useLanguage } from '../context/LanguageContext';
 import {
   buildGmailComposeUrl,
+  getExternalLinkProps,
   isAndroidDevice,
   isAndroidWebView
 } from '../utils/shareAndPrint';
@@ -328,9 +329,9 @@ export const ChildSafetyTab: React.FC<ChildSafetyTabProps> = ({ onNavigateTab })
               <p className="font-semibold text-[#6e1628]">
                 Email:{' '}
                 <a
-                  href={directEmailHref}
-                  target={isAndroid ? '_blank' : undefined}
-                  rel={isAndroid ? 'noopener noreferrer' : undefined}
+                  {...(isAndroid
+                    ? getExternalLinkProps(directEmailHref)
+                    : { href: directEmailHref })}
                   className="underline hover:text-[#851834]"
                 >
                   {SAFETY_CONTACT_EMAIL}
@@ -349,9 +350,9 @@ export const ChildSafetyTab: React.FC<ChildSafetyTabProps> = ({ onNavigateTab })
               </button>
 
               <a
-                href={primaryEmailHref}
-                target={isAndroid ? '_blank' : undefined}
-                rel={isAndroid ? 'noopener noreferrer' : undefined}
+                {...(isAndroid
+                  ? getExternalLinkProps(primaryEmailHref)
+                  : { href: primaryEmailHref })}
                 className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#6e1628] to-[#851834] text-amber-100 font-bold text-xs shadow-xs hover:opacity-95 transition-opacity"
               >
                 <Flag className="w-3.5 h-3.5" />

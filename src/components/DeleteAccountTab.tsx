@@ -18,6 +18,7 @@ import { AuthSession, TabType } from '../types';
 import { useLanguage } from '../context/LanguageContext';
 import {
   buildGmailComposeUrl,
+  getExternalLinkProps,
   isAndroidDevice,
   isAndroidWebView
 } from '../utils/shareAndPrint';
@@ -251,9 +252,9 @@ export const DeleteAccountTab: React.FC<DeleteAccountTabProps> = ({
                 <div>
                   <span className="text-stone-400 font-medium">{t('Support Email:', 'सहायता ईमेल:')} </span>
                   <a
-                    href={supportEmailHref}
-                    target={isAndroid ? '_blank' : undefined}
-                    rel={isAndroid ? 'noopener noreferrer' : undefined}
+                    {...(isAndroid
+                      ? getExternalLinkProps(supportEmailHref)
+                      : { href: supportEmailHref })}
                     className="font-mono font-bold text-[#6e1628] underline"
                   >
                     {SUPPORT_EMAIL}
@@ -292,9 +293,9 @@ export const DeleteAccountTab: React.FC<DeleteAccountTabProps> = ({
 
             <div>
               <a
-                href={primaryEmailHref}
-                target={isAndroid ? '_blank' : undefined}
-                rel={isAndroid ? 'noopener noreferrer' : undefined}
+                {...(isAndroid
+                  ? getExternalLinkProps(primaryEmailHref)
+                  : { href: primaryEmailHref })}
                 className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-100 hover:bg-amber-200 border border-amber-300 text-[#380812] font-bold text-xs transition-colors"
               >
                 <Mail className="w-3.5 h-3.5" />

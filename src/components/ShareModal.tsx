@@ -14,6 +14,7 @@ import {
 import { useLanguage } from '../context/LanguageContext';
 import {
   copyTextToClipboard,
+  getExternalLinkProps,
   isAndroidDevice,
   isAndroidWebView,
   ResolvedSharePayload,
@@ -27,6 +28,7 @@ export const ShareModal: React.FC = () => {
   const [messageCopied, setMessageCopied] = useState(false);
   const [instagramCopiedNotice, setInstagramCopiedNotice] = useState(false);
   const [emailCopiedNotice, setEmailCopiedNotice] = useState(false);
+  const [nativeShareFallbackNotice, setNativeShareFallbackNotice] = useState(false);
 
   useEffect(() => {
     return subscribeShareModal((next) => {
@@ -35,6 +37,7 @@ export const ShareModal: React.FC = () => {
       setMessageCopied(false);
       setInstagramCopiedNotice(false);
       setEmailCopiedNotice(false);
+      setNativeShareFallbackNotice(false);
     });
   }, []);
 
@@ -76,12 +79,14 @@ export const ShareModal: React.FC = () => {
   const handleInstagramShare = async () => {
     await copyTextToClipboard(request.fullText);
     setEmailCopiedNotice(false);
+    setNativeShareFallbackNotice(false);
     setInstagramCopiedNotice(true);
   };
 
   const handleEmailShare = async () => {
     await copyTextToClipboard(request.fullText);
     setInstagramCopiedNotice(false);
+    setNativeShareFallbackNotice(false);
     setEmailCopiedNotice(true);
 
     // Avoid navigating Android WebView directly to mailto: (prevents net::ERR_UNKNOWN_URL_SCHEME)
@@ -109,8 +114,16 @@ export const ShareModal: React.FC = () => {
         text: request.text,
         url: request.url
       });
-    } catch {
-      // User cancelled or blocked — modal remains open cleanly
+    } catch (err) {
+      const errName = err instanceof Error ? err.name : '';
+      if (errName === 'AbortError') {
+        return;
+      }
+      // WebView blocked or failed navigator.share -> copy message cleanly & prompt user
+      await copyTextToClipboard(request.fullText);
+      setInstagramCopiedNotice(false);
+      setEmailCopiedNotice(false);
+      setNativeShareFallbackNotice(true);
     }
   };
 
@@ -187,9 +200,7 @@ export const ShareModal: React.FC = () => {
                 </span>
               </div>
               <a
-                href={request.instagramUrl}
-                target="_blank"
-                rel="noopener noreferrer"
+                {...getExternalLinkProps(request.instagramUrl)}
                 className="w-full min-h-[44px] bg-gradient-to-r from-[#833ab4] via-[#fd1d1d] to-[#fcb045] text-white font-bold py-2 px-4 rounded-xl text-xs flex items-center justify-center gap-2 shadow-sm hover:opacity-95 transition-opacity"
               >
                 <ExternalLink className="w-4 h-4 shrink-0" />
@@ -211,9 +222,7 @@ export const ShareModal: React.FC = () => {
                 </span>
               </div>
               <a
-                href={request.gmailComposeUrl}
-                target="_blank"
-                rel="noopener noreferrer"
+                {...getExternalLinkProps(request.gmailComposeUrl)}
                 className="w-full min-h-[44px] bg-[#380812] hover:bg-[#540e1b] text-amber-200 font-bold py-2 px-4 rounded-xl text-xs flex items-center justify-center gap-2 shadow-sm transition-colors"
               >
                 <Mail className="w-4 h-4 text-amber-300 shrink-0" />
@@ -223,13 +232,24 @@ export const ShareModal: React.FC = () => {
             </div>
           )}
 
+          {/* Native Share Fallback Notice */}
+          {nativeShareFallbackNotice && (
+            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3.5 flex items-start gap-2 text-xs text-emerald-950 font-semibold">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              <span>
+                {t(
+                  'Message copied! Tap WhatsApp, Telegram, X, or Instagram above to share directly.',
+                  'संदेश कॉपी हो गया! सीधे साझा करने के लिए ऊपर WhatsApp, Telegram, X या Instagram चुनें।'
+                )}
+              </span>
+            </div>
+          )}
+
           {/* Share Destinations Grid */}
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
             {/* WhatsApp */}
             <a
-              href={request.waMeUrl}
-              target="_blank"
-              rel="noopener noreferrer"
+              {...getExternalLinkProps(request.waMeUrl)}
               className="min-h-[48px] bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white font-bold px-3.5 py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
             >
               <MessageCircle className="w-4 h-4 shrink-0" />
@@ -252,9 +272,7 @@ export const ShareModal: React.FC = () => {
 
             {/* Telegram */}
             <a
-              href={request.telegramUrl}
-              target="_blank"
-              rel="noopener noreferrer"
+              {...getExternalLinkProps(request.telegramUrl)}
               className="min-h-[48px] bg-sky-600 hover:bg-sky-700 active:scale-[0.98] text-white font-bold px-3.5 py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
             >
               <Send className="w-4 h-4 shrink-0" />
@@ -263,9 +281,7 @@ export const ShareModal: React.FC = () => {
 
             {/* X / Twitter */}
             <a
-              href={request.twitterUrl}
-              target="_blank"
-              rel="noopener noreferrer"
+              {...getExternalLinkProps(request.twitterUrl)}
               className="min-h-[48px] bg-stone-900 hover:bg-stone-800 active:scale-[0.98] text-white font-bold px-3.5 py-2.5 rounded-xl text-xs flex items-center justify-center gap-2 shadow-xs transition-all cursor-pointer"
             >
               <svg className="w-3.5 h-3.5 shrink-0 fill-current" viewBox="0 0 24 24" aria-hidden="true">
