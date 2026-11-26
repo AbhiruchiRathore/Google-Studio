@@ -223,6 +223,92 @@ service cloud.firestore {
         data.updatedAt == request.time;
     }
 
+    function isValidStringPair(listVal) {
+      return listVal is list &&
+        listVal.size() == 2 &&
+        isValidId(listVal[0]) &&
+        isValidId(listVal[1]) &&
+        listVal[0] < listVal[1];
+    }
+
+    function isValidConversation(data, conversationId) {
+      return data.keys().hasAll([
+          'id', 'participantIds', 'participantNames', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'participantIds', 'participantNames', 'participantPhotos',
+          'profileId', 'profileName', 'profileGotra', 'profileCity', 'profilePhoto',
+          'lastMessage', 'lastMessageSenderId', 'lastMessageSenderName', 'lastMessageAt',
+          'unreadBy', 'createdAt', 'updatedAt'
+        ]) &&
+        data.id is string && data.id == conversationId &&
+        isValidStringPair(data.participantIds) &&
+        (data.participantIds[0] + '__' + data.participantIds[1]) == conversationId &&
+        data.participantNames is map &&
+        data.participantNames.keys().hasAll(data.participantIds) &&
+        data.participantNames.keys().hasOnly(data.participantIds) &&
+        data.participantNames[data.participantIds[0]] is string &&
+        data.participantNames[data.participantIds[0]].size() >= 1 &&
+        data.participantNames[data.participantIds[0]].size() <= 120 &&
+        data.participantNames[data.participantIds[1]] is string &&
+        data.participantNames[data.participantIds[1]].size() >= 1 &&
+        data.participantNames[data.participantIds[1]].size() <= 120 &&
+        (!('participantPhotos' in data) || (
+          data.participantPhotos is map &&
+          data.participantPhotos.keys().hasOnly(data.participantIds) &&
+          optionalString(data.participantPhotos, data.participantIds[0], 350000) &&
+          optionalString(data.participantPhotos, data.participantIds[1], 350000)
+        )) &&
+        (!('profileId' in data) || isValidId(data.profileId)) &&
+        optionalString(data, 'profileName', 120) &&
+        optionalString(data, 'profileGotra', 80) &&
+        optionalString(data, 'profileCity', 100) &&
+        optionalString(data, 'profilePhoto', 350000) &&
+        optionalString(data, 'lastMessage', 2000) &&
+        (!('lastMessageSenderId' in data) || (
+          isValidId(data.lastMessageSenderId) &&
+          data.lastMessageSenderId in data.participantIds
+        )) &&
+        optionalString(data, 'lastMessageSenderName', 120) &&
+        (!('lastMessageAt' in data) || data.lastMessageAt is timestamp) &&
+        (!('unreadBy' in data) || (
+          data.unreadBy is list &&
+          data.unreadBy.size() <= 2 &&
+          data.unreadBy.hasOnly(data.participantIds) &&
+          (data.unreadBy.size() == 0 || data.unreadBy[0] is string)
+        )) &&
+        data.createdAt is timestamp &&
+        data.updatedAt == request.time;
+    }
+
+    function isValidChatMessage(data, conversationId, messageId) {
+      return data.keys().hasAll([
+          'id', 'conversationId', 'participantIds', 'senderId',
+          'senderName', 'text', 'readBy', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'conversationId', 'participantIds', 'senderId',
+          'senderName', 'text', 'profileId', 'readBy', 'createdAt', 'updatedAt'
+        ]) &&
+        data.id is string && data.id == messageId &&
+        data.conversationId is string && data.conversationId == conversationId &&
+        isValidStringPair(data.participantIds) &&
+        (data.participantIds[0] + '__' + data.participantIds[1]) == conversationId &&
+        isValidId(data.senderId) &&
+        data.senderId in data.participantIds &&
+        data.senderName is string && data.senderName.size() >= 1 && data.senderName.size() <= 120 &&
+        data.text is string && data.text.size() >= 1 && data.text.size() <= 2000 &&
+        (!('profileId' in data) || isValidId(data.profileId)) &&
+        data.readBy is list &&
+        data.readBy.size() >= 1 &&
+        data.readBy.size() <= 2 &&
+        data.readBy.hasOnly(data.participantIds) &&
+        data.readBy[0] is string &&
+        data.senderId in data.readBy &&
+        data.createdAt is timestamp &&
+        data.updatedAt == request.time;
+    }
+
     // =========================================================================
     // COLLECTION RULES
     // =========================================================================
@@ -272,6 +358,7 @@ service cloud.firestore {
 
     match /profiles/{profileId} {
       allow get: if isValidId(profileId) && (
+        resource == null ||
         (existing().status == 'active' && existing().verified == true) ||
         (isSignedIn() && existing().ownerUid == request.auth.uid) ||
         isAdmin()
@@ -310,7 +397,8 @@ service cloud.firestore {
         allow get: if isValidId(profileId) && docId == 'contact' && (
           isAdmin() ||
           (isSignedIn() && (
-            get(/databases/$(database)/documents/profiles/$(profileId)).data.ownerUid == request.auth.uid ||
+            (exists(/databases/$(database)/documents/profiles/$(profileId)) &&
+              get(/databases/$(database)/documents/profiles/$(profileId)).data.ownerUid == request.auth.uid) ||
             exists(/databases/$(database)/documents/profiles/$(profileId)/unlocks/$(request.auth.uid))
           ))
         );
@@ -339,6 +427,7 @@ service cloud.firestore {
 
     match /ads/{adId} {
       allow get: if isValidId(adId) && (
+        resource == null ||
         existing().status == 'active' ||
         (isSignedIn() && existing().ownerUid == request.auth.uid) ||
         isAdmin()
@@ -374,6 +463,7 @@ service cloud.firestore {
 
     match /events/{eventId} {
       allow get: if isValidId(eventId) && (
+        resource == null ||
         existing().status == 'active' ||
         (isSignedIn() && existing().ownerUid == request.auth.uid) ||
         isAdmin()
@@ -400,6 +490,79 @@ service cloud.firestore {
 
       allow delete: if isSignedIn() && isValidId(eventId) &&
         (existing().ownerUid == request.auth.uid || isAdmin());
+    }
+
+    match /conversations/{conversationId} {
+      allow get: if isSignedIn() && isValidId(conversationId) && (
+        (resource == null && request.auth.uid in conversationId.split('__')) ||
+        (resource != null && request.auth.uid in existing().participantIds)
+      );
+      allow list: if isSignedIn() && request.auth.uid in resource.data.participantIds;
+
+      allow create: if isSignedIn() && isValidId(conversationId) &&
+        isValidConversation(incoming(), conversationId) &&
+        request.auth.uid in incoming().participantIds &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        (!('lastMessageSenderId' in incoming()) || incoming().lastMessageSenderId == request.auth.uid) &&
+        (!('lastMessageAt' in incoming()) || incoming().lastMessageAt == request.time);
+
+      allow update: if isSignedIn() && isValidId(conversationId) &&
+        isValidConversation(incoming(), conversationId) &&
+        request.auth.uid in existing().participantIds &&
+        incoming().id == existing().id &&
+        incoming().participantIds == existing().participantIds &&
+        incoming().createdAt == existing().createdAt && (
+          (
+            incoming().lastMessageSenderId == request.auth.uid &&
+            incoming().lastMessageAt == request.time &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'participantNames', 'participantPhotos',
+              'profileId', 'profileName', 'profileGotra', 'profileCity', 'profilePhoto',
+              'lastMessage', 'lastMessageSenderId', 'lastMessageSenderName', 'lastMessageAt',
+              'unreadBy', 'updatedAt'
+            ])
+          ) ||
+          (
+            (!('unreadBy' in incoming()) || !(request.auth.uid in incoming().unreadBy)) &&
+            incoming().diff(existing()).affectedKeys().hasOnly(['unreadBy', 'updatedAt'])
+          )
+        );
+
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow get: if isSignedIn() && isValidId(conversationId) && isValidId(messageId) &&
+          request.auth.uid in existing().participantIds &&
+          request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
+        allow list: if isSignedIn() && request.auth.uid in resource.data.participantIds;
+
+        allow create: if isSignedIn() && isValidId(conversationId) && isValidId(messageId) &&
+          isValidChatMessage(incoming(), conversationId, messageId) &&
+          incoming().senderId == request.auth.uid &&
+          request.auth.uid in incoming().participantIds &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          getAfter(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds == incoming().participantIds &&
+          request.auth.uid in getAfter(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds;
+
+        allow update: if isSignedIn() && isValidId(conversationId) && isValidId(messageId) &&
+          isValidChatMessage(incoming(), conversationId, messageId) &&
+          request.auth.uid in existing().participantIds &&
+          request.auth.uid in get(/databases/$(database)/documents/conversations/$(conversationId)).data.participantIds &&
+          incoming().id == existing().id &&
+          incoming().conversationId == existing().conversationId &&
+          incoming().participantIds == existing().participantIds &&
+          incoming().senderId == existing().senderId &&
+          incoming().senderName == existing().senderName &&
+          incoming().text == existing().text &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().readBy.hasAll(existing().readBy) &&
+          request.auth.uid in incoming().readBy &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['readBy', 'updatedAt']);
+
+        allow delete: if false;
+      }
     }
   }
 }

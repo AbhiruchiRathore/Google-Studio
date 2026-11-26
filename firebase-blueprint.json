@@ -489,6 +489,147 @@
         }
       },
       "required": ["id", "ownerUid", "title", "date", "location", "description", "status", "createdAt", "updatedAt"]
+    },
+    "ChatConversationDoc": {
+      "title": "ChatConversationDoc",
+      "description": "Two-way real-time matrimonial conversation metadata between two authenticated Samaj users.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "participantIds": {
+          "type": "array",
+          "description": "Sorted pair of the two participant Firebase UIDs."
+        },
+        "participantNames": {
+          "type": "object",
+          "description": "Display names keyed by participant UID."
+        },
+        "participantPhotos": {
+          "type": "object",
+          "description": "Optional avatar URLs or compressed images keyed by participant UID."
+        },
+        "profileId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "profileName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "profileGotra": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "profileCity": {
+          "type": "string",
+          "maxLength": 100
+        },
+        "profilePhoto": {
+          "type": "string",
+          "maxLength": 350000
+        },
+        "lastMessage": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "lastMessageSenderId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "lastMessageSenderName": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "lastMessageAt": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 64
+        },
+        "unreadBy": {
+          "type": "array",
+          "description": "Participant UIDs who currently have unread messages in this conversation."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 64
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 64
+        }
+      },
+      "required": ["id", "participantIds", "participantNames", "createdAt", "updatedAt"]
+    },
+    "ChatMessageDoc": {
+      "title": "ChatMessageDoc",
+      "description": "Individual chat message within a two-way Firestore conversation.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "conversationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "participantIds": {
+          "type": "array",
+          "description": "Denormalized sorted pair of participant UIDs matching parent conversation."
+        },
+        "senderId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "senderName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "profileId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "readBy": {
+          "type": "array",
+          "description": "Participant UIDs who have read this message."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 64
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "maxLength": 64
+        }
+      },
+      "required": ["id", "conversationId", "participantIds", "senderId", "senderName", "text", "readBy", "createdAt", "updatedAt"]
     }
   },
   "firestore": {
@@ -523,6 +664,14 @@
     "/events/{eventId}": {
       "schema": { "$ref": "#/entities/SamajEventDoc" },
       "description": "Shared community events and Parichay Sammelans."
+    },
+    "/conversations/{conversationId}": {
+      "schema": { "$ref": "#/entities/ChatConversationDoc" },
+      "description": "Private two-way real-time chat conversations between authenticated users."
+    },
+    "/conversations/{conversationId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/ChatMessageDoc" },
+      "description": "Real-time messages inside a private two-way conversation."
     }
   }
 }

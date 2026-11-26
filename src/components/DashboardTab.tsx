@@ -5,11 +5,13 @@ import {
   Eye, Trash2, Globe, Sparkles, Upload, ArrowRight, 
   X, AlertCircle, Phone, FileText, Camera,
   Linkedin, Instagram, Link2, Sliders, Store,
-  Tag, Star, MapPin, Heart, MessageCircle, Compass, Crown, Ban, UserCheck, RefreshCw
+  Tag, Star, MapPin, Heart, MessageCircle, Compass, Crown, Ban, UserCheck, RefreshCw, Loader2, LogIn
 } from 'lucide-react';
+import { onAuthStateChanged, User } from 'firebase/auth';
+import { auth } from '../firebase';
 import { 
   MatrimonyProfile, BusinessAd, TabType, AuthSession, BlockedProfileRecord,
-  UserMediaAsset, VisibilitySetting, ProfileStatus, ProfileAdmirer, ChatMessage 
+  UserMediaAsset, VisibilitySetting, ProfileStatus, ProfileAdmirer, ChatConversation 
 } from '../types';
 import { ChatModal } from './ChatModal';
 import { useLanguage } from '../context/LanguageContext';
@@ -24,6 +26,7 @@ import {
   isAdOwnedBySession,
   isProfileOwnedBySession
 } from '../utils/profileOwnership';
+import { formatChatTimestamp, subscribeUserConversations } from '../utils/firestoreChatSync';
 import { LocationPermissionStatus, UserLocationData } from '../hooks/useUserLocation';
 
 type SaveMutationResult = Promise<{ ok: boolean; error?: string }> | { ok: boolean; error?: string } | boolean | void;
@@ -90,7 +93,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   // User-scoped localStorage keys so new accounts always start cleanly at 0
   const likedStorageKey = getUserStorageKey('samaj_liked_profiles', authSession);
   const admirersStorageKey = getUserStorageKey('samaj_profile_admirers', authSession);
-  const chatStorageKey = getUserStorageKey('samaj_chat_messages', authSession);
   const mediaStorageKey = getUserStorageKey('samaj_media_assets', authSession);
   const notificationsStorageKey = getUserStorageKey('samaj_notifications', authSession);
 
@@ -138,16 +140,57 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     return admirers.filter((adm) => !blockedProfileIds.has(adm.id.toString()));
   }, [admirers, blockedProfileIds]);
 
-  // Stored chat messages & Active Chat Profile
+  // Real-time Firestore conversations & Active Chat Modal state
+  const [firebaseUser, setFirebaseUser] = useState<User | null>(() => auth.currentUser);
   const [activeChatProfile, setActiveChatProfile] = useState<MatrimonyProfile | null>(null);
-  const [chatThreads, setChatThreads] = useState<Record<string, ChatMessage[]>>(() => {
-    try {
-      const stored = localStorage.getItem(chatStorageKey);
-      return stored ? JSON.parse(stored) : {};
-    } catch {
-      return {};
+  const [activeChatConversation, setActiveChatConversation] = useState<ChatConversation | null>(null);
+  const [conversations, setConversations] = useState<ChatConversation[]>([]);
+  const [isLoadingConversations, setIsLoadingConversations] = useState(false);
+  const [conversationsError, setConversationsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (user) => {
+      setFirebaseUser(user);
+    });
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    if (!firebaseUser?.uid) {
+      setConversations([]);
+      setIsLoadingConversations(false);
+      setConversationsError(null);
+      return;
     }
-  });
+
+    setIsLoadingConversations(true);
+    setConversationsError(null);
+
+    const unsub = subscribeUserConversations(
+      firebaseUser.uid,
+      (items) => {
+        setConversations(items);
+        setIsLoadingConversations(false);
+        setConversationsError(null);
+      },
+      (errMessage) => {
+        setConversationsError(errMessage);
+        setIsLoadingConversations(false);
+      }
+    );
+
+    return () => unsub();
+  }, [firebaseUser?.uid]);
+
+  const visibleConversations = useMemo(() => {
+    if (!blockedProfileIds || blockedProfileIds.size === 0) return conversations;
+    return conversations.filter((conv) => !conv.profileId || !blockedProfileIds.has(conv.profileId));
+  }, [conversations, blockedProfileIds]);
+
+  const unreadConversationsCount = useMemo(() => {
+    if (!firebaseUser?.uid) return 0;
+    return visibleConversations.filter((conv) => conv.unreadBy?.includes(firebaseUser.uid)).length;
+  }, [visibleConversations, firebaseUser?.uid]);
 
   // Notifications state (starts empty / 0 for new users)
   const [showNotifications, setShowNotifications] = useState(false);
@@ -221,12 +264,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
       setAdmirers([]);
     }
     try {
-      const storedChats = localStorage.getItem(chatStorageKey);
-      setChatThreads(storedChats ? JSON.parse(storedChats) : {});
-    } catch {
-      setChatThreads({});
-    }
-    try {
       const storedMedia = localStorage.getItem(mediaStorageKey);
       setMediaAssets(storedMedia ? JSON.parse(storedMedia) : []);
     } catch {
@@ -238,7 +275,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     } catch {
       setNotifications([]);
     }
-  }, [likedStorageKey, admirersStorageKey, chatStorageKey, mediaStorageKey, notificationsStorageKey]);
+  }, [likedStorageKey, admirersStorageKey, mediaStorageKey, notificationsStorageKey]);
 
   // New Media Upload Form state
   const [newMediaTitle, setNewMediaTitle] = useState('');
@@ -1035,6 +1072,11 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               >
                 <MessageCircle className={`w-3.5 h-3.5 ${activeSection === 'chats' ? 'text-amber-300' : 'text-emerald-600'}`} />
                 <span>{t('Chats', 'चैट')}</span>
+                {unreadConversationsCount > 0 && (
+                  <span className="text-[10px] px-1.5 py-0.2 rounded-full font-bold bg-emerald-500 text-white">
+                    {unreadConversationsCount}
+                  </span>
+                )}
               </button>
             )}
 
@@ -1260,9 +1302,13 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                   <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
                     activeSection === 'chats'
                       ? 'bg-amber-300 text-[#4c0d1b]'
-                      : 'bg-emerald-100 text-emerald-900'
+                      : unreadConversationsCount > 0
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-emerald-100 text-emerald-900'
                   }`}>
-                    {Object.keys(chatThreads).length || t('Live', 'लाइव')}
+                    {unreadConversationsCount > 0
+                      ? unreadConversationsCount
+                      : visibleConversations.length || t('Live', 'लाइव')}
                   </span>
                 </button>
               )}
@@ -3587,80 +3633,219 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
                       <span>{t('Direct Chat Messages & Inquiries', 'सीधी चैट एवं पूछताछ')}</span>
                     </h3>
                     <p className="text-xs text-stone-500 mt-0.5">
-                      {t('Manage matrimonial alliance conversations with interested Rathore families.', 'इच्छुक राठौर परिवारों के साथ वैवाहिक बातचीत प्रबंधित करें।')}
+                      {t('Real-time matrimonial conversations synced securely with your account.', 'आपके खाते से सुरक्षित रूप से सिंक की गई रियल-टाइम वैवाहिक बातचीत।')}
                     </p>
                   </div>
                   <button
                     onClick={() => onNavigateTab('matrimony')}
                     className="w-full sm:w-auto text-xs bg-[#851834] text-amber-200 font-bold px-3.5 py-2 sm:py-1.5 rounded-xl cursor-pointer"
                   >
-                    {t('+ Start New Chat', '+ नई चैट शुरू करें')}
+                    {t('+ Browse Biodatas to Chat', '+ बायोडाटा देखें और चैट करें')}
                   </button>
                 </div>
 
-                <div className="space-y-3">
-                  {profiles
-                    .filter((p) => !blockedProfileIds?.has(p.id.toString()))
-                    .slice(0, 6)
-                    .map((p) => {
-                    const thread = chatThreads[p.id.toString()] || [];
-                    const lastMsg = thread.length > 0 ? thread[thread.length - 1] : null;
+                {!firebaseUser ? (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-6 text-center space-y-3">
+                    <LogIn className="w-8 h-8 text-amber-700 mx-auto" />
+                    <h4 className="font-serif font-bold text-stone-900 text-base">
+                      {t('Sign In Required for Live Messages', 'लाइव संदेशों के लिए साइन इन आवश्यक है')}
+                    </h4>
+                    <p className="text-xs text-stone-600 max-w-md mx-auto leading-relaxed">
+                      {t(
+                        'Please sign in with Google or your registered Email & Password to send and receive real-time messages.',
+                        'रियल-टाइम संदेश भेजने और प्राप्त करने के लिए कृपया Google या पंजीकृत ईमेल और पासवर्ड से साइन इन करें।'
+                      )}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => onNavigateTab('signup')}
+                      className="inline-flex items-center gap-1.5 bg-gradient-to-r from-[#380812] to-[#540e1b] text-amber-200 text-xs font-bold px-5 py-2.5 rounded-xl cursor-pointer shadow-xs"
+                    >
+                      <LogIn className="w-3.5 h-3.5" />
+                      <span>{t('Sign In / Register', 'साइन इन / पंजीकरण करें')}</span>
+                    </button>
+                  </div>
+                ) : isLoadingConversations ? (
+                  <div className="py-12 flex flex-col items-center justify-center text-stone-500 space-y-2.5">
+                    <Loader2 className="w-7 h-7 animate-spin text-[#851834]" />
+                    <p className="text-xs font-semibold">
+                      {t('Loading live conversations...', 'लाइव बातचीत लोड हो रही है...')}
+                    </p>
+                  </div>
+                ) : conversationsError ? (
+                  <div className="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-center space-y-2">
+                    <AlertCircle className="w-6 h-6 text-rose-600 mx-auto" />
+                    <p className="text-xs font-semibold text-rose-900">{conversationsError}</p>
+                  </div>
+                ) : visibleConversations.length === 0 ? (
+                  <div className="rounded-2xl border border-stone-200 bg-stone-50/70 p-8 text-center space-y-3">
+                    <MessageCircle className="w-9 h-9 text-emerald-600/70 mx-auto" />
+                    <h4 className="font-serif font-bold text-stone-900 text-base">
+                      {t('No Live Conversations Yet', 'अभी कोई लाइव बातचीत नहीं है')}
+                    </h4>
+                    <p className="text-xs text-stone-600 max-w-md mx-auto leading-relaxed">
+                      {t(
+                        'Messages from families interested in your profile — or conversations you start on any member biodata — will appear here in real time.',
+                        'आपकी प्रोफ़ाइल में रुचि रखने वाले परिवारों के संदेश या किसी सदस्य बायोडाटा पर आपकी शुरू की गई बातचीत यहाँ रियल-टाइम में दिखाई देगी।'
+                      )}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => onNavigateTab('matrimony')}
+                      className="inline-flex items-center gap-1.5 bg-gradient-to-r from-[#6e1628] to-[#851834] text-amber-200 text-xs font-bold px-5 py-2.5 rounded-xl cursor-pointer shadow-xs"
+                    >
+                      <span>{t('Explore Matrimony Profiles', 'वैवाहिक प्रोफ़ाइल देखें')}</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {visibleConversations.map((conv) => {
+                      const otherUid = conv.participantIds.find((id) => id !== firebaseUser.uid) || '';
+                      const otherName =
+                        (otherUid && conv.participantNames?.[otherUid]) ||
+                        conv.profileName ||
+                        t('Samaj Member', 'समाज सदस्य');
+                      const linkedProfile = conv.profileId
+                        ? profiles.find((p) => p.id.toString() === conv.profileId) || null
+                        : null;
+                      const avatar =
+                        (otherUid && conv.participantPhotos?.[otherUid]) ||
+                        linkedProfile?.photo ||
+                        conv.profilePhoto ||
+                        'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80';
+                      const isUnread = Boolean(conv.unreadBy?.includes(firebaseUser.uid));
+                      const sentByMe = conv.lastMessageSenderId === firebaseUser.uid;
+                      const previewPrefix = sentByMe ? `${t('You', 'आप')}: ` : '';
 
-                    return (
-                      <div
-                        key={p.id}
-                        onClick={() => setActiveChatProfile(p)}
-                        className="p-3 sm:p-4 rounded-2xl border border-stone-200/90 hover:border-amber-400 bg-stone-50/50 hover:bg-amber-50/20 transition-all flex items-center justify-between gap-2.5 sm:gap-4 cursor-pointer group"
-                      >
-                        <div className="flex items-center gap-3 min-w-0 flex-1">
-                          <img 
-                            src={p.photo && p.photo.trim() !== '' ? p.photo : "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80"}
-                            alt={p.name}
-                            className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl object-cover object-top border border-amber-300 shrink-0" 
-                          />
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <h4 className="font-serif font-bold text-stone-900 text-sm group-hover:text-[#851834] transition-colors truncate">
-                                {p.name}
-                              </h4>
-                              <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.2 rounded-full shrink-0">{t('Active', 'सक्रिय')}</span>
+                      return (
+                        <div
+                          key={conv.id}
+                          onClick={() => {
+                            setActiveChatConversation(conv);
+                            setActiveChatProfile(linkedProfile);
+                          }}
+                          className={`p-3 sm:p-4 rounded-2xl border transition-all flex items-center justify-between gap-2.5 sm:gap-4 cursor-pointer group ${
+                            isUnread
+                              ? 'border-emerald-300 bg-emerald-50/40 hover:bg-emerald-50/70'
+                              : 'border-stone-200/90 hover:border-amber-400 bg-stone-50/50 hover:bg-amber-50/20'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <div className="relative shrink-0">
+                              <img
+                                src={avatar}
+                                alt={otherName}
+                                className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl object-cover object-top border border-amber-300"
+                              />
+                              {isUnread && (
+                                <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-emerald-600 border-2 border-white" />
+                              )}
                             </div>
-                            <p className="text-xs text-stone-500 truncate">
-                              {t('Gotra:', 'गोत्र:')} {p.gotra} · {p.city}
-                            </p>
-                            <p className="text-xs text-stone-700 truncate mt-0.5 font-medium">
-                              {lastMsg
-                                ? `${lastMsg.senderName}: ${lastMsg.text}`
-                                : t(`Start conversation with ${p.name}'s family...`, `${p.name} के परिवार से बातचीत शुरू करें...`)}
-                            </p>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <h4 className="font-serif font-bold text-stone-900 text-sm group-hover:text-[#851834] transition-colors truncate">
+                                  {otherName}
+                                </h4>
+                                {isUnread && (
+                                  <span className="text-[10px] bg-emerald-600 text-white font-bold px-1.5 py-0.2 rounded-full shrink-0">
+                                    {t('New', 'नया')}
+                                  </span>
+                                )}
+                              </div>
+                              {(conv.profileName || conv.profileGotra || conv.profileCity) && (
+                                <p className="text-[11px] text-stone-500 truncate">
+                                  {[
+                                    conv.profileName,
+                                    conv.profileGotra ? `${t('Gotra:', 'गोत्र:')} ${conv.profileGotra}` : '',
+                                    conv.profileCity
+                                  ]
+                                    .filter(Boolean)
+                                    .join(' · ')}
+                                </p>
+                              )}
+                              <p className={`text-xs truncate mt-0.5 ${isUnread ? 'text-stone-900 font-bold' : 'text-stone-700 font-medium'}`}>
+                                {conv.lastMessage
+                                  ? `${previewPrefix}${conv.lastMessage}`
+                                  : t('Open conversation...', 'बातचीत खोलें...')}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="text-[11px] text-stone-400 hidden sm:inline">
+                              {formatChatTimestamp(conv.lastMessageAtMs) || t('Recent', 'हाल ही में')}
+                            </span>
+                            {linkedProfile && authSession && onBlockProfile && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onBlockProfile(linkedProfile);
+                                }}
+                                title={t(`Block ${linkedProfile.name}`, `${linkedProfile.name} को ब्लॉक करें`)}
+                                aria-label={t(`Block ${linkedProfile.name}`, `${linkedProfile.name} को ब्लॉक करें`)}
+                                className="p-2 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 cursor-pointer transition-colors"
+                              >
+                                <Ban className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            <button className="bg-gradient-to-r from-[#6e1628] to-[#851834] text-amber-200 text-xs font-semibold py-2 px-2.5 sm:px-3 rounded-xl flex items-center gap-1 shadow-xs whitespace-nowrap cursor-pointer">
+                              <MessageCircle className="w-3.5 h-3.5 shrink-0" />
+                              <span>{t('Reply', 'उत्तर दें')}</span>
+                            </button>
                           </div>
                         </div>
+                      );
+                    })}
+                  </div>
+                )}
 
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className="text-[11px] text-stone-400 hidden sm:inline">{lastMsg ? lastMsg.timestamp : t('Recent', 'हाल ही में')}</span>
-                          {authSession && onBlockProfile && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onBlockProfile(p);
-                              }}
-                              title={t(`Block ${p.name}`, `${p.name} को ब्लॉक करें`)}
-                              aria-label={t(`Block ${p.name}`, `${p.name} को ब्लॉक करें`)}
-                              className="p-2 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 cursor-pointer transition-colors"
-                            >
-                              <Ban className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                          <button className="bg-gradient-to-r from-[#6e1628] to-[#851834] text-amber-200 text-xs font-semibold py-2 px-2.5 sm:px-3 rounded-xl flex items-center gap-1 shadow-xs whitespace-nowrap">
-                            <MessageCircle className="w-3.5 h-3.5 shrink-0" />
-                            <span>{t('Open', 'खोलें')}</span>
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                {/* Quick-start real two-way chat with registered Samaj member profiles */}
+                {firebaseUser && profiles.some((p) => p.ownerUid && p.ownerUid !== firebaseUser.uid && !blockedProfileIds?.has(p.id.toString())) && (
+                  <div className="pt-4 border-t border-rose-100 space-y-3">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-stone-500">
+                      {t('Registered Members Available for Live Chat', 'लाइव चैट के लिए उपलब्ध पंजीकृत सदस्य')}
+                    </h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      {profiles
+                        .filter(
+                          (p) =>
+                            Boolean(p.ownerUid) &&
+                            p.ownerUid !== firebaseUser.uid &&
+                            !blockedProfileIds?.has(p.id.toString())
+                        )
+                        .slice(0, 4)
+                        .map((p) => (
+                          <div
+                            key={p.id}
+                            onClick={() => {
+                              setActiveChatConversation(null);
+                              setActiveChatProfile(p);
+                            }}
+                            className="p-3 rounded-2xl border border-stone-200 hover:border-amber-400 bg-stone-50/70 hover:bg-amber-50/30 transition-all flex items-center justify-between gap-2.5 cursor-pointer"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <img
+                                src={p.photo && p.photo.trim() !== '' ? p.photo : 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80'}
+                                alt={p.name}
+                                className="w-9 h-9 rounded-xl object-cover object-top border border-amber-300 shrink-0"
+                              />
+                              <div className="min-w-0">
+                                <p className="font-serif font-bold text-xs text-stone-900 truncate">{p.name}</p>
+                                <p className="text-[11px] text-stone-500 truncate">
+                                  {p.gotra} · {p.city}
+                                </p>
+                              </div>
+                            </div>
+                            <span className="text-[11px] font-bold text-[#851834] shrink-0">
+                              {t('Chat →', 'चैट →')}
+                            </span>
+                          </div>
+                        ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -4124,24 +4309,37 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
       )}
 
       {/* CHAT MODAL */}
-      {activeChatProfile && (
+      {(activeChatProfile || activeChatConversation) && (
         <ChatModal
           profile={activeChatProfile}
+          conversation={activeChatConversation}
           authSession={authSession}
           onClose={() => {
             setActiveChatProfile(null);
-            try {
-              const stored = localStorage.getItem(chatStorageKey);
-              setChatThreads(stored ? JSON.parse(stored) : {});
-            } catch {
-              setChatThreads({});
-            }
+            setActiveChatConversation(null);
           }}
           onSelectKundaliProfile={onSelectKundaliProfile}
-          isBlocked={blockedProfileIds?.has(activeChatProfile.id.toString()) ?? false}
-          onBlockProfile={authSession && onBlockProfile ? (profile) => {
+          onNavigateToSignIn={() => {
+            setActiveChatProfile(null);
+            setActiveChatConversation(null);
+            onNavigateTab('signup');
+          }}
+          onOpenInbox={() => {
+            setActiveChatProfile(null);
+            setActiveChatConversation(null);
+            setActiveSection('chats');
+          }}
+          isBlocked={
+            activeChatProfile
+              ? blockedProfileIds?.has(activeChatProfile.id.toString()) ?? false
+              : activeChatConversation?.profileId
+                ? blockedProfileIds?.has(activeChatConversation.profileId) ?? false
+                : false
+          }
+          onBlockProfile={authSession && onBlockProfile && activeChatProfile ? (profile) => {
             onBlockProfile(profile);
             setActiveChatProfile(null);
+            setActiveChatConversation(null);
           } : undefined}
           onUnblockProfile={authSession ? onUnblockProfile : undefined}
         />

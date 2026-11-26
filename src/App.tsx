@@ -860,6 +860,7 @@ export const App: React.FC = () => {
     const ownedProfile: MatrimonyProfile = {
       ...newProfile,
       verified: !config.requireAdminVerification,
+      ownerUid: authCheck.user.uid,
       ownerId: authCheck.ownerKey,
       ownerName:
         activeSession.name || activeSession.username || activeSession.email || 'Member'
@@ -1549,6 +1550,10 @@ export const App: React.FC = () => {
                 onNavigateTab={navigateToTab}
                 onAddQuickProfile={handleAddQuickProfile}
                 onSelectKundaliProfile={handleSelectKundaliProfile}
+                onOpenDashboardChats={() => {
+                  setDashboardNavRequest({ section: 'chats', nonce: Date.now() });
+                  navigateToTab('dashboard');
+                }}
               />
             ) : (
               renderFeatureDisabledCard('Matrimony Directory', 'वैवाहिक बायोडाटा निर्देशिका')

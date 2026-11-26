@@ -168,6 +168,7 @@ function mapDocToProfile(docId: string, data: Record<string, unknown>): Matrimon
         ? data.visibility
         : 'public',
     verified: typeof data.verified === 'boolean' ? data.verified : true,
+    ownerUid: typeof data.ownerUid === 'string' ? data.ownerUid : undefined,
     ownerId: typeof data.ownerId === 'string' ? data.ownerId : undefined,
     ownerName: typeof data.ownerName === 'string' ? data.ownerName : undefined,
     contact: cachedContact?.contact || '',

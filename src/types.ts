@@ -60,6 +60,7 @@ export interface MatrimonyProfile {
   about?: string;
   native?: string;
   location?: string;
+  ownerUid?: string;
   ownerId?: string;
   ownerName?: string;
   createdAt?: string;
@@ -137,11 +138,36 @@ export interface UserAccount {
 
 export interface ChatMessage {
   id: string;
-  profileId: number | string;
-  sender: 'user' | 'candidate';
+  conversationId: string;
+  profileId?: number | string;
+  senderId: string;
   senderName: string;
   text: string;
+  createdAt: string;
+  createdAtMs?: number;
   timestamp: string;
+  readBy?: string[];
+  status?: 'sending' | 'sent' | 'read';
+}
+
+export interface ChatConversation {
+  id: string;
+  participantIds: string[];
+  participantNames: Record<string, string>;
+  participantPhotos?: Record<string, string>;
+  profileId?: string;
+  profileName?: string;
+  profileGotra?: string;
+  profileCity?: string;
+  profilePhoto?: string;
+  lastMessage?: string;
+  lastMessageSenderId?: string;
+  lastMessageSenderName?: string;
+  lastMessageAt?: string;
+  lastMessageAtMs?: number;
+  unreadBy?: string[];
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface ProfileAdmirer {

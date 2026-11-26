@@ -33,6 +33,7 @@ interface MatrimonyTabProps {
   onNavigateTab: (tab: TabType) => void;
   onAddQuickProfile: (profile: Partial<MatrimonyProfile>) => Promise<{ ok: boolean; error?: string }> | { ok: boolean; error?: string } | boolean | void;
   onSelectKundaliProfile?: (profileId: number | string, gender: 'Male' | 'Female') => void;
+  onOpenDashboardChats?: () => void;
 }
 
 const FREE_LIMIT = 3;
@@ -68,7 +69,8 @@ export const MatrimonyTab: React.FC<MatrimonyTabProps> = ({
   onUnlockProfile,
   onNavigateTab,
   onAddQuickProfile,
-  onSelectKundaliProfile
+  onSelectKundaliProfile,
+  onOpenDashboardChats
 }) => {
   const { lang, t } = useLanguage();
   const { config, userSubscription, activateUserSubscription } = useAdminConfig();
@@ -1653,6 +1655,18 @@ ${p.about ? `*About:* ${p.about}\n` : ''}${p.contact ? `*Contact:* ${p.contact}`
           authSession={authSession}
           onClose={() => setActiveChatProfile(null)}
           onSelectKundaliProfile={config.featureKundaliEnabled ? onSelectKundaliProfile : undefined}
+          onNavigateToSignIn={() => {
+            setActiveChatProfile(null);
+            onNavigateTab('signup');
+          }}
+          onOpenInbox={() => {
+            setActiveChatProfile(null);
+            if (onOpenDashboardChats) {
+              onOpenDashboardChats();
+            } else {
+              onNavigateTab('dashboard');
+            }
+          }}
           isBlocked={blockedProfileIds?.has(activeChatProfile.id.toString()) ?? false}
           onBlockProfile={authSession && onBlockProfile ? executeBlockProfile : undefined}
           onUnblockProfile={authSession ? onUnblockProfile : undefined}
