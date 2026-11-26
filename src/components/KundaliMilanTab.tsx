@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Sparkles, Heart, ShieldCheck, Share2, Printer, 
   ArrowRight, Users, CheckCircle2, AlertTriangle, Info,
-  Flame, RefreshCw, Star, Compass, Award, Lock, UserPlus, Download, X, Search
+  Flame, RefreshCw, Star, Compass, Award, Lock, UserPlus, Download, FileText, X, Search
 } from 'lucide-react';
 import { MatrimonyProfile, TabType, AuthSession } from '../types';
 import { 
@@ -12,6 +12,7 @@ import {
 import { useLanguage } from '../context/LanguageContext';
 import { useAdminConfig } from '../context/AdminConfigContext';
 import { buildAppShareUrl, shareContent, printHtmlDocument, downloadPrintableHtml, escapeHtml } from '../utils/shareAndPrint';
+import { generateAndDownloadKundaliPdf } from '../utils/bookletPdfGenerator';
 
 interface KundaliMilanTabProps {
   authSession: AuthSession | null;
@@ -32,6 +33,9 @@ export const KundaliMilanTab: React.FC<KundaliMilanTabProps> = ({
   const { config } = useAdminConfig();
   const [matchMode, setMatchMode] = useState<'samaj' | 'custom'>('samaj');
   const [showPrintModal, setShowPrintModal] = useState(false);
+  const [printFallbackNotice, setPrintFallbackNotice] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [downloadStatusMsg, setDownloadStatusMsg] = useState<string | null>(null);
 
   // Grooms & Brides from Samaj Profiles
   const grooms = useMemo(() => profiles.filter(p => p.gender === 'Male'), [profiles]);
@@ -316,18 +320,53 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
       </div>
     `;
 
+    const sanitizeSlug = (val: string) =>
+      val.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24);
+    const boySlug = sanitizeSlug(targetReport.boyName) || 'groom';
+    const girlSlug = sanitizeSlug(targetReport.girlName) || 'bride';
+
     return {
       title: `${targetReport.boyName} & ${targetReport.girlName} - Vedic Kundali Milan`,
       subtitle: t('Vedic Ashtakoot 36-Guna Matching Certificate', 'वैदिक अष्टकूट 36-गुण मिलान प्रमाणपत्र'),
       bodyHtml,
-      filename: `kundali-milan-${targetReport.boyName.replace(/\s+/g, '-').toLowerCase()}-${targetReport.girlName.replace(/\s+/g, '-').toLowerCase()}`
+      filename: `kundali-milan-${boySlug}-${girlSlug}`
     };
   };
 
   const handlePrint = () => {
     if (!report) return;
+    setDownloadStatusMsg(null);
     setShowPrintModal(true);
-    printHtmlDocument(buildCertificatePrintOptions(report));
+    const printed = printHtmlDocument(buildCertificatePrintOptions(report));
+    setPrintFallbackNotice(!printed);
+  };
+
+  const handleDownloadKundaliPdf = async () => {
+    if (!report || downloadingPdf) return;
+    setDownloadingPdf(true);
+    setDownloadStatusMsg(null);
+    try {
+      const opts = buildCertificatePrintOptions(report);
+      const res = await generateAndDownloadKundaliPdf(report, lang, opts.filename);
+      if (res === 'shared') {
+        setDownloadStatusMsg(t('PDF shared / saved!', 'PDF साझा / सेव हो गई!'));
+      } else if (res === 'downloaded') {
+        setDownloadStatusMsg(t('PDF downloaded!', 'PDF डाउनलोड हो गई!'));
+      }
+    } catch {
+      setDownloadStatusMsg(t('Could not create PDF. Please try Download Sheet.', 'PDF नहीं बन सकी। कृपया शीट डाउनलोड करें।'));
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
+  const handleDownloadKundaliHtml = async () => {
+    if (!report) return;
+    setDownloadStatusMsg(null);
+    const res = await downloadPrintableHtml(buildCertificatePrintOptions(report));
+    if (res !== 'cancelled') {
+      setDownloadStatusMsg(t('Printable sheet saved!', 'प्रिंट शीट सेव हो गई!'));
+    }
   };
 
   if (!authSession) {
@@ -1162,19 +1201,50 @@ ${report.doshaSummary.manglikCheck.isCompatible ? '✅ Manglik Compatibility: Fa
               <p className="text-amber-900 font-semibold">{report.totalGunas} / 36 {t('Gunas', 'गुण')} ({report.percentage}%)</p>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
+            {printFallbackNotice && (
+              <div className="bg-amber-50 border border-amber-300 rounded-2xl p-3 text-xs text-amber-950 flex items-start gap-2">
+                <Info className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                <span>
+                  {t(
+                    'System print dialog is unavailable in this Android app view. Tap Download PDF or Download Sheet below to save or print.',
+                    'इस ऐप व्यू में सीधा प्रिंटर डायलॉग उपलब्ध नहीं है। सेव या प्रिंट करने के लिए नीचे Download PDF या शीट डाउनलोड पर टैप करें।'
+                  )}
+                </span>
+              </div>
+            )}
+
+            {downloadStatusMsg && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3 text-xs text-emerald-900 font-semibold flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{downloadStatusMsg}</span>
+              </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row flex-wrap gap-2.5 pt-1">
               <button
                 type="button"
-                onClick={() => printHtmlDocument(buildCertificatePrintOptions(report))}
-                className="flex-1 bg-[#380812] hover:bg-[#24050b] text-amber-200 font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                onClick={() => {
+                  const ok = printHtmlDocument(buildCertificatePrintOptions(report));
+                  setPrintFallbackNotice(!ok);
+                }}
+                className="flex-1 min-w-[130px] bg-[#380812] hover:bg-[#24050b] text-amber-200 font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <Printer className="w-4 h-4" />
                 <span>{t('Print Now', 'अभी प्रिंट करें')}</span>
               </button>
               <button
                 type="button"
-                onClick={() => downloadPrintableHtml(buildCertificatePrintOptions(report))}
-                className="flex-1 bg-amber-100 hover:bg-amber-200 text-amber-950 border border-amber-300 font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                onClick={() => void handleDownloadKundaliPdf()}
+                disabled={downloadingPdf}
+                className="flex-1 min-w-[130px] bg-gradient-to-r from-amber-400 to-amber-300 hover:from-amber-300 hover:to-amber-200 disabled:opacity-60 text-stone-950 font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <FileText className="w-4 h-4" />
+                <span>{downloadingPdf ? t('Creating PDF...', 'PDF बन रही है...') : t('Download PDF', 'PDF डाउनलोड')}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleDownloadKundaliHtml()}
+                className="flex-1 min-w-[140px] bg-amber-100 hover:bg-amber-200 text-amber-950 border border-amber-300 font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <Download className="w-4 h-4" />
                 <span>{t('Download Sheet (.html)', 'शीट डाउनलोड (.html)')}</span>

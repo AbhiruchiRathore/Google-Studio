@@ -68,3 +68,14 @@ html[data-android-edge="true"] {
   border-color: rgba(217, 119, 6, 0.25);
 }
 
+@media print {
+  body {
+    background: #ffffff !important;
+    padding: 0 !important;
+  }
+  nav, header, footer, .fixed {
+    display: none !important;
+  }
+}
+
+

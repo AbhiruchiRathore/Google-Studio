@@ -481,29 +481,130 @@ export function escapeHtml(str: string): string {
     .replace(/'/g, '&#39;');
 }
 
+export async function saveOrShareBlobFile(
+  blob: Blob,
+  filename: string,
+  mimeType: string,
+  shareTitle?: string
+): Promise<'downloaded' | 'shared' | 'cancelled'> {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return 'downloaded';
+  }
+
+  // Inside Android WebView, blob: URLs often fail in DownloadManager; try Web Share File API first
+  if (isAndroidWebView() && typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
+    try {
+      const file = new File([blob], filename, { type: mimeType });
+      if (typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: shareTitle || filename
+        });
+        return 'shared';
+      }
+    } catch (err) {
+      const errName = err instanceof Error ? err.name : '';
+      if (errName === 'AbortError') {
+        return 'cancelled';
+      }
+      // Fall through to data-URI / blob download fallback
+    }
+  }
+
+  // On Android WebView without file share support, data: URIs are handled better than blob: URIs by WebView DownloadListeners
+  if (isAndroidWebView()) {
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(reader.error || new Error('FileReader failed'));
+        reader.readAsDataURL(blob);
+      });
+      if (dataUrl) {
+        const a = document.createElement('a');
+        a.href = dataUrl;
+        a.download = filename;
+        a.rel = 'noopener';
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        return 'downloaded';
+      }
+    } catch {
+      // Fall through to standard blob URL download
+    }
+  }
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.rel = 'noopener';
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.setTimeout(() => URL.revokeObjectURL(url), 30000);
+  return 'downloaded';
+}
+
 /**
- * Prints structured HTML via a hidden temporary iframe (works reliably even when window.print()
- * is clipped or blocked on main shell), falling back to window.print() if needed.
+ * Prints structured HTML via an off-screen A4-sized iframe (avoiding visibility:hidden or 0x0
+ * which cause blank print previews, and running synchronously to preserve mobile user-gesture).
+ * Returns false inside Android WebView when system print is unavailable so the UI can guide
+ * the user to Download PDF / Download Sheet.
  */
 export function printHtmlDocument(options: PrintableDocumentOptions): boolean {
-  if (typeof document === 'undefined') return false;
+  if (typeof document === 'undefined' || typeof window === 'undefined') return false;
+
+  // Standard Android WebView ignores window.print() silently unless a native bridge handles it
+  if (isAndroidWebView()) {
+    const win = window as unknown as Record<string, { print?: () => void } | undefined>;
+    if (typeof win.Android?.print === 'function') {
+      try {
+        win.Android.print();
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    if (typeof win.AndroidBridge?.print === 'function') {
+      try {
+        win.AndroidBridge.print();
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  }
+
   const fullHtml = buildFullPrintableHtml(options);
 
   try {
+    const existing = document.getElementById('app-print-iframe');
+    if (existing && existing.parentNode) {
+      existing.parentNode.removeChild(existing);
+    }
+
     const iframe = document.createElement('iframe');
+    iframe.id = 'app-print-iframe';
     iframe.style.position = 'fixed';
-    iframe.style.right = '0';
-    iframe.style.bottom = '0';
-    iframe.style.width = '0';
-    iframe.style.height = '0';
+    iframe.style.left = '-10000px';
+    iframe.style.top = '0';
+    iframe.style.width = '794px';
+    iframe.style.height = '1123px';
     iframe.style.border = '0';
-    iframe.style.visibility = 'hidden';
+    iframe.style.opacity = '0';
+    iframe.style.pointerEvents = 'none';
     iframe.setAttribute('aria-hidden', 'true');
     document.body.appendChild(iframe);
 
-    const frameDoc = iframe.contentDocument || iframe.contentWindow?.document;
-    if (!frameDoc || !iframe.contentWindow) {
-      document.body.removeChild(iframe);
+    const frameWin = iframe.contentWindow;
+    const frameDoc = iframe.contentDocument || frameWin?.document;
+    if (!frameDoc || !frameWin) {
+      if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
       window.print();
       return true;
     }
@@ -512,27 +613,25 @@ export function printHtmlDocument(options: PrintableDocumentOptions): boolean {
     frameDoc.write(fullHtml);
     frameDoc.close();
 
-    const triggerPrint = () => {
-      try {
-        iframe.contentWindow?.focus();
-        iframe.contentWindow?.print();
-      } catch {
-        try {
-          window.print();
-        } catch {
-          // ignore
-        }
-      } finally {
-        setTimeout(() => {
-          if (iframe.parentNode) {
-            iframe.parentNode.removeChild(iframe);
-          }
-        }, 2500);
+    let cleanedUp = false;
+    const cleanup = () => {
+      if (cleanedUp) return;
+      cleanedUp = true;
+      if (iframe.parentNode) {
+        iframe.parentNode.removeChild(iframe);
       }
     };
 
-    // Wait briefly for iframe layout
-    setTimeout(triggerPrint, 250);
+    try {
+      frameWin.addEventListener('afterprint', cleanup, { once: true });
+    } catch {
+      // ignore if cross-browser listener fails
+    }
+    // Generous safety timeout so slow print dialogs are never torn down mid-preview
+    window.setTimeout(cleanup, 120000);
+
+    frameWin.focus();
+    frameWin.print();
     return true;
   } catch {
     try {
@@ -544,20 +643,20 @@ export function printHtmlDocument(options: PrintableDocumentOptions): boolean {
   }
 }
 
-export function downloadPrintableHtml(options: PrintableDocumentOptions): void {
+export async function downloadPrintableHtml(
+  options: PrintableDocumentOptions
+): Promise<'downloaded' | 'shared' | 'cancelled'> {
   const fullHtml = buildFullPrintableHtml(options);
   const blob = new Blob([fullHtml], { type: 'text/html;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${options.filename || 'rathore-rishtey-document'}.html`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 10000);
+  const safeBase = (options.filename || 'rathore-rishtey-document').replace(/[\\/:*?"<>|]+/g, '-');
+  return saveOrShareBlobFile(blob, `${safeBase}.html`, 'text/html', options.title);
 }
 
-export function downloadCsvFile(filename: string, headers: string[], rows: (string | number)[][]): void {
+export async function downloadCsvFile(
+  filename: string,
+  headers: string[],
+  rows: (string | number)[][]
+): Promise<'downloaded' | 'shared' | 'cancelled'> {
   const escapeCsv = (val: string | number) => {
     const s = String(val ?? '');
     if (/[",\n\r]/.test(s)) {
@@ -572,12 +671,6 @@ export function downloadCsvFile(filename: string, headers: string[], rows: (stri
 
   // Include UTF-8 BOM so Hindi text renders cleanly in Excel
   const blob = new Blob(['\uFEFF' + csvLines], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${filename}.csv`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 10000);
+  const safeBase = filename.replace(/[\\/:*?"<>|]+/g, '-') || 'export';
+  return saveOrShareBlobFile(blob, `${safeBase}.csv`, 'text/csv', safeBase);
 }

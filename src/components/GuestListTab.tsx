@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Users, UserPlus, Search, Edit3, Trash2, Share2, 
   Printer, CheckCircle2, Clock, X, Send, 
-  Calendar, AlertCircle, Lock, Download, FileSpreadsheet,
+  Calendar, AlertCircle, Lock, Download, FileSpreadsheet, FileText,
   ChevronLeft, ChevronRight
 } from 'lucide-react';
 import { GuestItem, GuestListOccasion, TabType, AuthSession } from '../types';
@@ -17,6 +17,7 @@ import {
   downloadCsvFile,
   escapeHtml
 } from '../utils/shareAndPrint';
+import { generateAndDownloadGuestListPdf } from '../utils/bookletPdfGenerator';
 
 interface GuestListTabProps {
   authSession: AuthSession | null;
@@ -127,6 +128,9 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({ authSession, onNavig
   const { lang, t } = useLanguage();
   const { config } = useAdminConfig();
   const [showPrintModal, setShowPrintModal] = useState(false);
+  const [printFallbackNotice, setPrintFallbackNotice] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [exportStatusMsg, setExportStatusMsg] = useState<string | null>(null);
   const [confirmDeleteGuest, setConfirmDeleteGuest] = useState<{ id: string; name: string } | null>(null);
 
   const [occasions, setOccasions] = useState<GuestListOccasion[]>(() => {
@@ -484,20 +488,64 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({ authSession, onNavig
       </table>
     `;
 
+    const titleSlug = activeOccasion.title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 36);
+    const filename = titleSlug ? `guest-list-${titleSlug}` : 'guest-list';
+
     return {
       title: activeOccasion.title,
       subtitle: subtitleParts,
       bodyHtml,
-      filename: `guest-list-${activeOccasion.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 36)}`
+      filename
     };
   };
 
   const handlePrint = () => {
+    setExportStatusMsg(null);
     setShowPrintModal(true);
-    printHtmlDocument(buildGuestListPrintOptions());
+    const printed = printHtmlDocument(buildGuestListPrintOptions());
+    setPrintFallbackNotice(!printed);
   };
 
-  const handleExportCsv = () => {
+  const handleDownloadGuestPdf = async () => {
+    if (!activeOccasion || downloadingPdf) return;
+    setDownloadingPdf(true);
+    setExportStatusMsg(null);
+    try {
+      const opts = buildGuestListPrintOptions();
+      const res = await generateAndDownloadGuestListPdf({
+        title: activeOccasion.title,
+        date: activeOccasion.date,
+        venue: activeOccasion.venue,
+        guests: filteredGuests,
+        lang,
+        filenameBase: opts.filename
+      });
+      if (res === 'shared') {
+        setExportStatusMsg(t('PDF shared / saved!', 'PDF साझा / सेव हो गई!'));
+      } else if (res === 'downloaded') {
+        setExportStatusMsg(t('PDF downloaded!', 'PDF डाउनलोड हो गई!'));
+      }
+    } catch {
+      setExportStatusMsg(t('Could not create PDF. Please try Download Sheet.', 'PDF नहीं बन सकी। कृपया शीट डाउनलोड करें।'));
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
+  const handleDownloadGuestHtml = async () => {
+    setExportStatusMsg(null);
+    const res = await downloadPrintableHtml(buildGuestListPrintOptions());
+    if (res !== 'cancelled') {
+      setExportStatusMsg(t('Printable sheet saved!', 'प्रिंट शीट सेव हो गई!'));
+    }
+  };
+
+  const handleExportCsv = async () => {
+    setExportStatusMsg(null);
     const headers = ['#', 'Guest Name', 'Relation', 'Phone', 'Address', 'City', 'Members', 'Status', 'Notes'];
     const rows = filteredGuests.map((g, idx) => [
       idx + 1,
@@ -510,11 +558,19 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({ authSession, onNavig
       g.status,
       g.notes || ''
     ]);
-    downloadCsvFile(
-      `guest-list-${activeOccasion.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 36)}`,
+    const titleSlug = activeOccasion.title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 36);
+    const res = await downloadCsvFile(
+      titleSlug ? `guest-list-${titleSlug}` : 'guest-list',
       headers,
       rows
     );
+    if (res !== 'cancelled') {
+      setExportStatusMsg(t('CSV / Excel file saved!', 'CSV / एक्सेल फ़ाइल सेव हो गई!'));
+    }
   };
 
   if (!authSession) {
@@ -1297,11 +1353,33 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({ authSession, onNavig
               </table>
             </div>
 
+            {printFallbackNotice && (
+              <div className="bg-amber-50 border border-amber-300 rounded-2xl p-3 text-xs text-amber-950 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                <span>
+                  {t(
+                    'System print dialog is unavailable in this Android app view. Tap Download PDF, Download Sheet, or Excel/CSV below to save or print.',
+                    'इस ऐप व्यू में सीधा प्रिंटर डायलॉग उपलब्ध नहीं है। सेव या प्रिंट करने के लिए नीचे Download PDF, शीट डाउनलोड या Excel/CSV चुनें।'
+                  )}
+                </span>
+              </div>
+            )}
+
+            {exportStatusMsg && (
+              <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3 text-xs text-emerald-900 font-semibold flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{exportStatusMsg}</span>
+              </div>
+            )}
+
             <div className="flex flex-wrap items-center gap-2.5 pt-1">
               <button
                 type="button"
-                onClick={() => printHtmlDocument(buildGuestListPrintOptions())}
-                className="flex-1 min-w-[140px] bg-[#380812] hover:bg-[#24050b] text-amber-200 font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+                onClick={() => {
+                  const ok = printHtmlDocument(buildGuestListPrintOptions());
+                  setPrintFallbackNotice(!ok);
+                }}
+                className="flex-1 min-w-[130px] bg-[#380812] hover:bg-[#24050b] text-amber-200 font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <Printer className="w-4 h-4" />
                 <span>{t('Print Sheet', 'सीधे प्रिंट करें')}</span>
@@ -1309,7 +1387,17 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({ authSession, onNavig
 
               <button
                 type="button"
-                onClick={() => downloadPrintableHtml(buildGuestListPrintOptions())}
+                onClick={() => void handleDownloadGuestPdf()}
+                disabled={downloadingPdf}
+                className="flex-1 min-w-[130px] bg-gradient-to-r from-amber-400 to-amber-300 hover:from-amber-300 hover:to-amber-200 disabled:opacity-60 text-stone-950 font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <FileText className="w-4 h-4" />
+                <span>{downloadingPdf ? t('Creating PDF...', 'PDF बन रही है...') : t('Download PDF', 'PDF डाउनलोड')}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => void handleDownloadGuestHtml()}
                 className="flex-1 min-w-[140px] bg-amber-100 hover:bg-amber-200 text-amber-950 border border-amber-300 font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <Download className="w-4 h-4" />
@@ -1318,7 +1406,7 @@ export const GuestListTab: React.FC<GuestListTabProps> = ({ authSession, onNavig
 
               <button
                 type="button"
-                onClick={handleExportCsv}
+                onClick={() => void handleExportCsv()}
                 className="bg-stone-100 hover:bg-stone-200 text-stone-800 border border-stone-300 font-bold py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer"
               >
                 <FileSpreadsheet className="w-4 h-4 text-emerald-700" />
