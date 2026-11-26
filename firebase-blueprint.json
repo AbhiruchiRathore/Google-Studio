@@ -630,6 +630,83 @@
         }
       },
       "required": ["id", "conversationId", "participantIds", "senderId", "senderName", "text", "readBy", "createdAt", "updatedAt"]
+    },
+    "UserNotificationDoc": {
+      "title": "UserNotificationDoc",
+      "description": "User-targeted real-time notification for messages and profile likes.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "recipientUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "actorUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "actorName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "actorPhoto": { "type": "string", "maxLength": 200000 },
+        "type": { "type": "string", "enum": ["message", "like", "event", "update"] },
+        "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "titleHi": { "type": "string", "maxLength": 200 },
+        "body": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "bodyHi": { "type": "string", "maxLength": 600 },
+        "read": { "type": "boolean" },
+        "conversationId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "profileId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "actorProfileId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "targetTab": { "type": "string", "enum": ["matrimony", "kundali", "guest-list", "directory", "booklet", "events", "dashboard"] },
+        "createdAt": { "type": "string", "format": "date-time", "maxLength": 64 },
+        "updatedAt": { "type": "string", "format": "date-time", "maxLength": 64 }
+      },
+      "required": ["id", "recipientUid", "actorUid", "actorName", "type", "title", "body", "read", "createdAt", "updatedAt"]
+    },
+    "PortalAnnouncementDoc": {
+      "title": "PortalAnnouncementDoc",
+      "description": "Shared cross-user notification for new Samaj events and app feature/version updates.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "type": { "type": "string", "enum": ["event", "update"] },
+        "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "titleHi": { "type": "string", "maxLength": 200 },
+        "body": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "bodyHi": { "type": "string", "maxLength": 1200 },
+        "version": { "type": "string", "maxLength": 40 },
+        "eventId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "eventDate": { "type": "string", "maxLength": 80 },
+        "targetTab": { "type": "string", "enum": ["matrimony", "kundali", "guest-list", "directory", "booklet", "events", "dashboard"] },
+        "authorUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "authorName": { "type": "string", "maxLength": 120 },
+        "status": { "type": "string", "enum": ["active", "archived"] },
+        "createdAt": { "type": "string", "format": "date-time", "maxLength": 64 },
+        "updatedAt": { "type": "string", "format": "date-time", "maxLength": 64 }
+      },
+      "required": ["id", "type", "title", "body", "authorUid", "status", "createdAt", "updatedAt"]
+    },
+    "UserNotificationStateDoc": {
+      "title": "UserNotificationStateDoc",
+      "description": "Per-user synced read and cleared announcement IDs across devices.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "readIds": { "type": "array" },
+        "clearedIds": { "type": "array" },
+        "updatedAt": { "type": "string", "format": "date-time", "maxLength": 64 }
+      },
+      "required": ["uid", "readIds", "clearedIds", "updatedAt"]
+    },
+    "ProfileLikeDoc": {
+      "title": "ProfileLikeDoc",
+      "description": "Cross-device like record on a matrimonial profile.",
+      "type": "object",
+      "properties": {
+        "likerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "likerName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "likerCity": { "type": "string", "maxLength": 100 },
+        "likerGotra": { "type": "string", "maxLength": 80 },
+        "likerProfileId": { "type": "string", "maxLength": 128 },
+        "likerPhoto": { "type": "string", "maxLength": 200000 },
+        "profileId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "profileOwnerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "createdAt": { "type": "string", "format": "date-time", "maxLength": 64 }
+      },
+      "required": ["likerUid", "likerName", "profileId", "profileOwnerUid", "createdAt"]
     }
   },
   "firestore": {
@@ -640,6 +717,10 @@
     "/users/{userId}": {
       "schema": { "$ref": "#/entities/UserAccountProfile" },
       "description": "Private user account metadata and PII."
+    },
+    "/users/{userId}/notificationState/{docId}": {
+      "schema": { "$ref": "#/entities/UserNotificationStateDoc" },
+      "description": "Synced read and cleared global announcement state per authenticated user."
     },
     "/usernames/{username}": {
       "schema": { "$ref": "#/entities/UsernameLookup" },
@@ -657,6 +738,10 @@
       "schema": { "$ref": "#/entities/ProfileUnlock" },
       "description": "Per-user contact unlock receipts gating access to private contact info."
     },
+    "/profiles/{profileId}/likes/{userId}": {
+      "schema": { "$ref": "#/entities/ProfileLikeDoc" },
+      "description": "Cross-device like records per user on matrimonial profiles."
+    },
     "/ads/{adId}": {
       "schema": { "$ref": "#/entities/BusinessAdDoc" },
       "description": "Shared community business directory advertisements."
@@ -672,6 +757,14 @@
     "/conversations/{conversationId}/messages/{messageId}": {
       "schema": { "$ref": "#/entities/ChatMessageDoc" },
       "description": "Real-time messages inside a private two-way conversation."
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/UserNotificationDoc" },
+      "description": "Targeted cross-user notifications (messages and profile likes)."
+    },
+    "/announcements/{announcementId}": {
+      "schema": { "$ref": "#/entities/PortalAnnouncementDoc" },
+      "description": "Shared event and app update announcements broadcast across devices."
     }
   }
 }

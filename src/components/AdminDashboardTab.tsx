@@ -5,9 +5,11 @@ import {
   HeartHandshake, MessageCircle, Heart, ClipboardList, BookOpen, Calendar,
   FileText, UserPlus, Share2, Star, Crown, RotateCcw, Check, Sparkles
 } from 'lucide-react';
-import { MatrimonyProfile, BusinessAd, TabType, AdminRuntimeConfig } from '../types';
+import { MatrimonyProfile, BusinessAd, TabType, AdminRuntimeConfig, NotificationTargetTab } from '../types';
 import { useLanguage } from '../context/LanguageContext';
 import { useAdminConfig, DEFAULT_ADMIN_CONFIG } from '../context/AdminConfigContext';
+import { auth } from '../firebase';
+import { publishAppUpdateAnnouncement } from '../utils/firestoreNotifications';
 
 export { DEFAULT_ADMIN_CONFIG };
 
@@ -45,6 +47,49 @@ export const AdminDashboardTab: React.FC<AdminDashboardTabProps> = ({
 }) => {
   const { t } = useLanguage();
   const { config, updateConfig, resetConfig } = useAdminConfig();
+
+  const [updateVersion, setUpdateVersion] = useState('v2.7');
+  const [updateTitle, setUpdateTitle] = useState('');
+  const [updateBody, setUpdateBody] = useState('');
+  const [updateTargetTab, setUpdateTargetTab] = useState<NotificationTargetTab>('matrimony');
+  const [isPublishingUpdate, setIsPublishingUpdate] = useState(false);
+  const [updateStatusMsg, setUpdateStatusMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const handlePublishAppUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!auth.currentUser) {
+      setUpdateStatusMsg({
+        ok: false,
+        text: t(
+          'Please sign in with your Google Admin account to publish live update alerts.',
+          'लाइव अपडेट सूचना भेजने के लिए कृपया अपने गूगल एडमिन खाते से लॉग इन करें।'
+        )
+      });
+      return;
+    }
+    setIsPublishingUpdate(true);
+    setUpdateStatusMsg(null);
+    const res = await publishAppUpdateAnnouncement({
+      title: updateTitle,
+      body: updateBody,
+      version: updateVersion,
+      targetTab: updateTargetTab,
+      authUser: auth.currentUser,
+      authorName: auth.currentUser.displayName || 'Samaj Admin'
+    });
+    setIsPublishingUpdate(false);
+    if (res.ok) {
+      setUpdateTitle('');
+      setUpdateBody('');
+      setUpdateStatusMsg({
+        ok: true,
+        text: t('App update notification pushed to all users!', 'ऐप अपडेट सूचना सभी उपयोगकर्ताओं को भेज दी गई है!')
+      });
+      setTimeout(() => setUpdateStatusMsg(null), 4000);
+    } else {
+      setUpdateStatusMsg({ ok: false, text: res.error || 'Failed to publish.' });
+    }
+  };
 
   // Authentication State
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => {
@@ -759,6 +804,74 @@ export const AdminDashboardTab: React.FC<AdminDashboardTabProps> = ({
               placeholder={t('Enter announcement to display at top of portal...', 'पोर्टल के शीर्ष पर दिखाने हेतु घोषणा लिखें...')}
             />
           </div>
+
+          {/* Push Live App Update Notification to Bell Feed */}
+          <form onSubmit={handlePublishAppUpdate} className="p-5 rounded-2xl border border-rose-200 bg-rose-50/40 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-bold text-stone-900 flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-[#851834]" />
+                {t('Push Live App Update Notification (Bell Icon Feed)', 'लाइव ऐप अपडेट सूचना भेजें (घंटी आइकन)')}
+              </span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+              <input
+                type="text"
+                value={updateVersion}
+                onChange={(e) => setUpdateVersion(e.target.value)}
+                placeholder={t('Version (e.g. v2.7)', 'संस्करण (जैसे v2.7)')}
+                className="text-xs bg-white border border-stone-300 rounded-xl px-3 py-2 focus:outline-hidden focus:border-[#851834] text-stone-900"
+              />
+              <input
+                type="text"
+                required
+                value={updateTitle}
+                onChange={(e) => setUpdateTitle(e.target.value)}
+                placeholder={t('Update Title (e.g. New Kundali Feature)', 'अपडेट शीर्षक')}
+                className="sm:col-span-2 text-xs bg-white border border-stone-300 rounded-xl px-3 py-2 focus:outline-hidden focus:border-[#851834] text-stone-900"
+              />
+            </div>
+            <textarea
+              rows={2}
+              required
+              value={updateBody}
+              onChange={(e) => setUpdateBody(e.target.value)}
+              placeholder={t('Describe the new app feature or Samaj update...', 'नए फीचर या अपडेट का विवरण लिखें...')}
+              className="w-full text-xs bg-white border border-stone-300 rounded-xl p-3 focus:outline-hidden focus:border-[#851834] text-stone-900"
+            />
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <label className="text-[11px] font-semibold text-stone-600">
+                  {t('Open tab on click:', 'क्लिक पर टैब खोलें:')}
+                </label>
+                <select
+                  value={updateTargetTab}
+                  onChange={(e) => setUpdateTargetTab(e.target.value as NotificationTargetTab)}
+                  className="text-xs bg-white border border-stone-300 rounded-lg px-2 py-1 text-stone-800"
+                >
+                  <option value="matrimony">{t('Matrimony', 'वैवाहिक')}</option>
+                  <option value="events">{t('Events', 'कार्यक्रम')}</option>
+                  <option value="directory">{t('Business Directory', 'व्यापार निर्देशिका')}</option>
+                  <option value="kundali">{t('Kundali Milan', 'कुंडली मिलान')}</option>
+                  <option value="booklet">{t('E-Booklet', 'ई-पत्रिका')}</option>
+                  <option value="dashboard">{t('Dashboard', 'डैशबोर्ड')}</option>
+                </select>
+              </div>
+              <button
+                type="submit"
+                disabled={isPublishingUpdate}
+                className="bg-gradient-to-r from-[#6e1628] to-[#851834] text-amber-200 font-bold px-4 py-2 rounded-xl text-xs shadow cursor-pointer disabled:opacity-60"
+              >
+                {isPublishingUpdate
+                  ? t('Publishing...', 'भेजा जा रहा है...')
+                  : t('Send Update Notification', 'अपडेट सूचना भेजें')}
+              </button>
+            </div>
+            {updateStatusMsg && (
+              <p className={`text-xs font-semibold ${updateStatusMsg.ok ? 'text-emerald-700' : 'text-rose-700'}`}>
+                {updateStatusMsg.text}
+              </p>
+            )}
+          </form>
         </div>
       )}
 

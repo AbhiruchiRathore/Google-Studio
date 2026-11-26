@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { TabType, MatrimonyProfile, BusinessAd, SamajEvent, AuthSession } from './types';
+import { TabType, MatrimonyProfile, BusinessAd, SamajEvent, AuthSession, AppNotification, ChatConversation } from './types';
 import { INITIAL_PROFILES, INITIAL_ADS, INITIAL_EVENTS } from './data/mockData';
 import { Header } from './components/Header';
 import { HeroBanner } from './components/HeroBanner';
@@ -24,6 +24,8 @@ import { ChildSafetyTab } from './components/ChildSafetyTab';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { FoundingOfferCard } from './components/FoundingOfferCard';
 import { LocationPermissionModal } from './components/LocationPermissionModal';
+import { ChatModal } from './components/ChatModal';
+import { AppUpdateDetailsModal } from './components/NotificationCenter';
 import { useUserLocation } from './hooks/useUserLocation';
 import { useBlockedProfiles } from './hooks/useBlockedProfiles';
 import { auth, db } from './firebase';
@@ -69,6 +71,20 @@ import {
   extractReadableFirestoreError,
   toValidDocId
 } from './utils/firestoreDirectorySync';
+import {
+  clearReadNotifications,
+  DEFAULT_APP_UPDATE_ANNOUNCEMENTS,
+  fetchConversationById,
+  loadLocalAnnouncementState,
+  markAllNotificationsAsRead,
+  markNotificationAsRead,
+  NotificationReadClearState,
+  saveLocalAnnouncementState,
+  subscribeGlobalAnnouncements,
+  subscribeUserAnnouncementState,
+  subscribeUserNotifications
+} from './utils/firestoreNotifications';
+import { buildConversationId } from './utils/firestoreChatSync';
 
 const VALID_TABS = new Set<TabType>([
   'matrimony',
@@ -404,6 +420,18 @@ export const App: React.FC = () => {
   authSessionRef.current = authSession;
   const prevAuthSessionRef = useRef<AuthSession | null>(authSession);
 
+  // Unified Notifications State (Messages, Profile Likes, Samaj Events, App Updates)
+  const [userNotifications, setUserNotifications] = useState<AppNotification[]>([]);
+  const [cloudAnnouncements, setCloudAnnouncements] = useState<AppNotification[]>([]);
+  const [announcementState, setAnnouncementState] = useState<NotificationReadClearState>(() =>
+    loadLocalAnnouncementState(authSession)
+  );
+  const [activeUpdateModalNotif, setActiveUpdateModalNotif] = useState<AppNotification | null>(null);
+  const [notificationChatConversation, setNotificationChatConversation] =
+    useState<ChatConversation | null>(null);
+  const [notificationChatProfile, setNotificationChatProfile] =
+    useState<MatrimonyProfile | null>(null);
+
   if (firestoreFatalError) {
     throw firestoreFatalError;
   }
@@ -580,6 +608,44 @@ export const App: React.FC = () => {
       unsubEvents();
     };
   }, [firebaseAuthUser, isFirebaseAdmin]);
+
+  // Live Cloud Firestore subscriptions for notifications & global announcements
+  useEffect(() => {
+    setAnnouncementState(loadLocalAnnouncementState(authSession));
+  }, [authSession]);
+
+  useEffect(() => {
+    const unsubAnnouncements = subscribeGlobalAnnouncements((items) => {
+      setCloudAnnouncements(items);
+    });
+
+    if (!firebaseAuthUser?.uid) {
+      setUserNotifications([]);
+      return () => {
+        unsubAnnouncements();
+      };
+    }
+
+    const unsubUserNotifs = subscribeUserNotifications(firebaseAuthUser.uid, (items) => {
+      setUserNotifications(items);
+    });
+
+    const unsubAnnState = subscribeUserAnnouncementState(firebaseAuthUser.uid, (cloudState) => {
+      const localState = loadLocalAnnouncementState(authSessionRef.current);
+      const merged: NotificationReadClearState = {
+        readIds: Array.from(new Set([...cloudState.readIds, ...localState.readIds])).slice(0, 100),
+        clearedIds: Array.from(new Set([...cloudState.clearedIds, ...localState.clearedIds])).slice(0, 100)
+      };
+      setAnnouncementState(merged);
+      saveLocalAnnouncementState(authSessionRef.current, merged);
+    });
+
+    return () => {
+      unsubAnnouncements();
+      unsubUserNotifs();
+      unsubAnnState();
+    };
+  }, [firebaseAuthUser?.uid]);
 
   // Backfill any pre-cloud locally-owned items to Cloud Firestore once signed in
   useEffect(() => {
@@ -1426,6 +1492,128 @@ export const App: React.FC = () => {
     [clearLocation, navigateToTab]
   );
 
+  // Merged real-time notifications sorted newest-first with read/cleared state applied
+  const appNotifications = useMemo(() => {
+    const readSet = new Set(announcementState.readIds);
+    const clearedSet = new Set(announcementState.clearedIds);
+    const mergedMap = new Map<string, AppNotification>();
+
+    for (const seed of DEFAULT_APP_UPDATE_ANNOUNCEMENTS) {
+      if (!clearedSet.has(seed.id)) {
+        mergedMap.set(seed.id, { ...seed, read: readSet.has(seed.id) });
+      }
+    }
+
+    for (const ann of cloudAnnouncements) {
+      if (!clearedSet.has(ann.id)) {
+        mergedMap.set(ann.id, { ...ann, read: readSet.has(ann.id) });
+      }
+    }
+
+    for (const item of userNotifications) {
+      if (item.actorProfileId && blockedProfileIds.has(item.actorProfileId)) continue;
+      if (item.profileId && blockedProfileIds.has(item.profileId)) continue;
+      mergedMap.set(item.id, item);
+    }
+
+    return Array.from(mergedMap.values()).sort((a, b) => b.createdAtMs - a.createdAtMs);
+  }, [userNotifications, cloudAnnouncements, announcementState, blockedProfileIds]);
+
+  const unreadNotificationCount = useMemo(
+    () => appNotifications.filter((n) => !n.read).length,
+    [appNotifications]
+  );
+
+  const handleMarkAllNotificationsReadClick = useCallback(() => {
+    void markAllNotificationsAsRead(
+      appNotifications,
+      firebaseAuthUser,
+      authSession,
+      announcementState,
+      setAnnouncementState
+    );
+  }, [appNotifications, firebaseAuthUser, authSession, announcementState]);
+
+  const handleClearReadNotificationsClick = useCallback(() => {
+    void clearReadNotifications(
+      appNotifications,
+      firebaseAuthUser,
+      authSession,
+      announcementState,
+      setAnnouncementState
+    );
+  }, [appNotifications, firebaseAuthUser, authSession, announcementState]);
+
+  const handleSelectNotificationClick = useCallback(
+    async (notification: AppNotification) => {
+      void markNotificationAsRead(
+        notification,
+        firebaseAuthUser,
+        authSession,
+        announcementState,
+        setAnnouncementState
+      );
+
+      if (notification.type === 'message') {
+        const matchedProfile = notification.profileId
+          ? profilesRef.current.find((p) => toValidDocId(p.id) === notification.profileId) || null
+          : null;
+
+        if (firebaseAuthUser?.uid) {
+          const convId =
+            notification.conversationId ||
+            (notification.actorUid
+              ? buildConversationId(firebaseAuthUser.uid, notification.actorUid)
+              : null);
+
+          let resolvedConv: ChatConversation | null = null;
+          if (convId) {
+            resolvedConv = await fetchConversationById(convId);
+          }
+          if (!resolvedConv && convId && notification.actorUid) {
+            resolvedConv = {
+              id: convId,
+              participantIds: [firebaseAuthUser.uid, notification.actorUid].sort(),
+              participantNames: {
+                [firebaseAuthUser.uid]:
+                  authSession?.name || firebaseAuthUser.displayName || 'You',
+                [notification.actorUid]: notification.actorName || 'Samaj Member'
+              },
+              ...(notification.actorPhoto
+                ? { participantPhotos: { [notification.actorUid]: notification.actorPhoto } }
+                : {}),
+              profileId: notification.profileId
+            };
+          }
+
+          if (resolvedConv) {
+            setNotificationChatProfile(matchedProfile);
+            setNotificationChatConversation(resolvedConv);
+            return;
+          }
+        }
+
+        setDashboardNavRequest({ section: 'chats', nonce: Date.now() });
+        navigateToTab('dashboard');
+        return;
+      }
+
+      if (notification.type === 'like') {
+        setDashboardNavRequest({ section: 'who_liked_me', nonce: Date.now() });
+        navigateToTab('dashboard');
+        return;
+      }
+
+      if (notification.type === 'event') {
+        navigateToTab('events');
+        return;
+      }
+
+      setActiveUpdateModalNotif(notification);
+    },
+    [firebaseAuthUser, authSession, announcementState, navigateToTab]
+  );
+
   // Live broadcast banner from Admin config
   const broadcastMessage = config.isBroadcastActive && config.bannerBroadcastMessage
     ? config.bannerBroadcastMessage
@@ -1473,6 +1661,11 @@ export const App: React.FC = () => {
         onSelectTab={navigateToTab} 
         authSession={authSession} 
         onLogout={handleLogout}
+        notifications={appNotifications}
+        unreadNotificationCount={unreadNotificationCount}
+        onSelectNotification={handleSelectNotificationClick}
+        onMarkAllNotificationsRead={handleMarkAllNotificationsReadClick}
+        onClearReadNotifications={handleClearReadNotificationsClick}
       />
 
       {backNotice && (
@@ -1599,6 +1792,11 @@ export const App: React.FC = () => {
             onUnblockProfile={unblockProfile}
             requestedNav={dashboardNavRequest}
             onDeleteAccount={handleDeleteAccount}
+            notifications={appNotifications}
+            unreadNotificationCount={unreadNotificationCount}
+            onSelectNotification={handleSelectNotificationClick}
+            onMarkAllNotificationsRead={handleMarkAllNotificationsReadClick}
+            onClearReadNotifications={handleClearReadNotificationsClick}
           />
         )}
 
@@ -1761,6 +1959,41 @@ export const App: React.FC = () => {
       <OfflineIndicator />
       <WhatsAppShare />
       <ShareModal />
+      <AppUpdateDetailsModal
+        notification={activeUpdateModalNotif}
+        onClose={() => setActiveUpdateModalNotif(null)}
+        onNavigateTab={(tab) => navigateToTab(tab)}
+      />
+      {(notificationChatConversation || notificationChatProfile) && (
+        <ChatModal
+          profile={notificationChatProfile}
+          conversation={notificationChatConversation}
+          authSession={authSession}
+          onClose={() => {
+            setNotificationChatConversation(null);
+            setNotificationChatProfile(null);
+          }}
+          onSelectKundaliProfile={handleSelectKundaliProfile}
+          onNavigateToSignIn={() => {
+            setNotificationChatConversation(null);
+            setNotificationChatProfile(null);
+            navigateToTab('signup');
+          }}
+          onOpenInbox={() => {
+            setNotificationChatConversation(null);
+            setNotificationChatProfile(null);
+            setDashboardNavRequest({ section: 'chats', nonce: Date.now() });
+            navigateToTab('dashboard');
+          }}
+          isBlocked={
+            notificationChatProfile
+              ? blockedProfileIds.has(notificationChatProfile.id.toString())
+              : false
+          }
+          onBlockProfile={blockProfile}
+          onUnblockProfile={unblockProfile}
+        />
+      )}
       <Footer onNavigateTab={navigateToTab} />
     </div>
   );

@@ -263,4 +263,39 @@ export interface AdminRuntimeConfig {
   isBroadcastActive: boolean;
 }
 
+export type NotificationType = 'message' | 'like' | 'event' | 'update';
+
+export type NotificationTargetTab =
+  | 'matrimony'
+  | 'kundali'
+  | 'guest-list'
+  | 'directory'
+  | 'booklet'
+  | 'events'
+  | 'dashboard';
+
+export interface AppNotification {
+  id: string;
+  source: 'user' | 'announcement' | 'seed';
+  type: NotificationType;
+  title: string;
+  titleHi?: string;
+  body: string;
+  bodyHi?: string;
+  read: boolean;
+  createdAt: string;
+  createdAtMs: number;
+  actorUid?: string;
+  actorName?: string;
+  actorPhoto?: string;
+  conversationId?: string;
+  profileId?: string;
+  actorProfileId?: string;
+  eventId?: string;
+  eventDate?: string;
+  version?: string;
+  targetTab?: NotificationTargetTab;
+}
+
+
 

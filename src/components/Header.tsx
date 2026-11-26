@@ -4,21 +4,38 @@ import {
   UserPlus, PlusCircle, Menu, X, UserCheck, LogOut, HeartHandshake,
   LayoutDashboard, Compass, ClipboardList, Languages, Lock
 } from 'lucide-react';
-import { TabType, AuthSession } from '../types';
+import { TabType, AuthSession, AppNotification } from '../types';
 import { useLanguage } from '../context/LanguageContext';
 import { useAdminConfig } from '../context/AdminConfigContext';
 import { BrandLogo } from './BrandLogo';
 import { PWAInstallButton } from './PWAInstallButton';
+import { NotificationBell } from './NotificationCenter';
 
 interface HeaderProps {
   currentTab: TabType;
   onSelectTab: (tab: TabType) => void;
   authSession: AuthSession | null;
   onLogout?: () => void;
+  notifications?: AppNotification[];
+  unreadNotificationCount?: number;
+  onSelectNotification?: (notification: AppNotification) => void;
+  onMarkAllNotificationsRead?: () => void;
+  onClearReadNotifications?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSession, onLogout }) => {
+export const Header: React.FC<HeaderProps> = ({
+  currentTab,
+  onSelectTab,
+  authSession,
+  onLogout,
+  notifications = [],
+  unreadNotificationCount = 0,
+  onSelectNotification,
+  onMarkAllNotificationsRead,
+  onClearReadNotifications
+}) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [openBellPlacement, setOpenBellPlacement] = useState<'desktop' | 'mobile' | null>(null);
   const { lang, setLang, t } = useLanguage();
   const { config } = useAdminConfig();
 
@@ -216,9 +233,25 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
             )}
           </nav>
 
-          {/* Language Switcher & Account Actions (Desktop) */}
+          {/* Language Switcher, Notifications & Account Actions (Desktop) */}
           <div className="hidden xl:flex items-center space-x-2 shrink-0">
             <PWAInstallButton />
+            {onSelectNotification && onMarkAllNotificationsRead && onClearReadNotifications && (
+              <NotificationBell
+                notifications={notifications}
+                unreadCount={unreadNotificationCount}
+                isOpen={openBellPlacement === 'desktop'}
+                onToggle={() => {
+                  setMobileMenuOpen(false);
+                  setOpenBellPlacement((prev) => (prev === 'desktop' ? null : 'desktop'));
+                }}
+                onClose={() => setOpenBellPlacement(null)}
+                onSelectNotification={onSelectNotification}
+                onMarkAllRead={onMarkAllNotificationsRead}
+                onClearRead={onClearReadNotifications}
+                variant="header"
+              />
+            )}
             {/* Hindi / English Language Switcher */}
             <div 
               className="flex items-center bg-black/25 border border-amber-400/40 rounded-xl p-0.5 text-[11px] font-bold shadow-inner"
@@ -306,8 +339,24 @@ export const Header: React.FC<HeaderProps> = ({ currentTab, onSelectTab, authSes
             )}
           </div>
 
-          {/* Mobile & Tablet: Logged-in Indicator / Sign-In + Quick Language Switcher + Hamburger */}
+          {/* Mobile & Tablet: Notification Bell + Logged-in Indicator / Sign-In + Quick Language Switcher + Hamburger */}
           <div className="xl:hidden flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {onSelectNotification && onMarkAllNotificationsRead && onClearReadNotifications && (
+              <NotificationBell
+                notifications={notifications}
+                unreadCount={unreadNotificationCount}
+                isOpen={openBellPlacement === 'mobile'}
+                onToggle={() => {
+                  setMobileMenuOpen(false);
+                  setOpenBellPlacement((prev) => (prev === 'mobile' ? null : 'mobile'));
+                }}
+                onClose={() => setOpenBellPlacement(null)}
+                onSelectNotification={onSelectNotification}
+                onMarkAllRead={onMarkAllNotificationsRead}
+                onClearRead={onClearReadNotifications}
+                variant="header"
+              />
+            )}
             {authSession ? (
               <button
                 type="button"

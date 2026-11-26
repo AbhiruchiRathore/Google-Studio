@@ -866,16 +866,23 @@ function mapDocToEvent(docId: string, data: Record<string, unknown>): SamajEvent
   };
 }
 
-export async function saveEventToFirestore(event: SamajEvent, authUser: User): Promise<void> {
+export async function saveEventToFirestore(
+  event: SamajEvent,
+  authUser: User,
+  options?: { createAnnouncement?: boolean }
+): Promise<void> {
   const docId = toValidDocId(event.id || Date.now());
   const eventPath = `events/${docId}`;
   const eventRef = doc(db, 'events', docId);
+  const cleanTitle = (event.title || 'Samaj Event').trim().slice(0, 180) || 'Samaj Event';
+  const cleanDate = (event.date || 'Upcoming').trim().slice(0, 80) || 'Upcoming';
+  const shouldCreateAnnouncement = options?.createAnnouncement !== false;
 
   const payload: Record<string, unknown> = {
     id: docId,
     ownerUid: authUser.uid,
-    title: (event.title || 'Samaj Event').trim().slice(0, 180) || 'Samaj Event',
-    date: (event.date || 'Upcoming').trim().slice(0, 80) || 'Upcoming',
+    title: cleanTitle,
+    date: cleanDate,
     location: (event.location || 'Indore').trim().slice(0, 200) || 'Indore',
     description:
       (event.description || event.title || 'Community Samaj Event').trim().slice(0, 2000) ||
@@ -896,7 +903,31 @@ export async function saveEventToFirestore(event: SamajEvent, authUser: User): P
   if (optBadge) payload.badge = optBadge;
 
   try {
-    await setDoc(eventRef, payload);
+    const existingEventSnap = await getDoc(eventRef);
+    const batch = writeBatch(db);
+    batch.set(eventRef, payload);
+
+    if (shouldCreateAnnouncement && !existingEventSnap.exists()) {
+      const annId = `ann_evt_${docId}`.slice(0, 128);
+      batch.set(doc(db, 'announcements', annId), {
+        id: annId,
+        type: 'event',
+        title: `New Event: ${cleanTitle}`.slice(0, 160),
+        titleHi: `नया कार्यक्रम: ${cleanTitle}`.slice(0, 200),
+        body: `New event: ${cleanTitle} on ${cleanDate}`.slice(0, 1000),
+        bodyHi: `नया कार्यक्रम: ${cleanTitle} (${cleanDate})`.slice(0, 1200),
+        eventId: docId,
+        eventDate: cleanDate,
+        targetTab: 'events',
+        authorUid: authUser.uid,
+        ...(authUser.displayName ? { authorName: authUser.displayName.trim().slice(0, 120) } : {}),
+        status: 'active',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+    }
+
+    await batch.commit();
   } catch (error) {
     handleFirestoreError(error, OperationType.CREATE, eventPath, auth);
   }
@@ -1029,7 +1060,7 @@ export async function backfillLocalOwnedItemsToFirestore(
             continue;
           }
           if (!existing.exists()) {
-            await saveEventToFirestore(ev, authUser).catch(
+            await saveEventToFirestore(ev, authUser, { createAnnouncement: false }).catch(
               (err) => {
                 hadFailure = true;
                 console.warn('Event backfill skipped:', err);

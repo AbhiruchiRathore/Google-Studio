@@ -309,6 +309,99 @@ service cloud.firestore {
         data.updatedAt == request.time;
     }
 
+    function isValidIdList(listVal, maxLen) {
+      return listVal is list &&
+        listVal.size() <= maxLen &&
+        (listVal.size() == 0 || isValidId(listVal[0]));
+    }
+
+    function isValidNotificationTab(tab) {
+      return tab is string && tab in [
+        'matrimony', 'kundali', 'guest-list', 'directory', 'booklet', 'events', 'dashboard'
+      ];
+    }
+
+    function isValidUserNotification(data, notificationId) {
+      return data.keys().hasAll([
+          'id', 'recipientUid', 'actorUid', 'actorName', 'type',
+          'title', 'body', 'read', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'recipientUid', 'actorUid', 'actorName', 'actorPhoto', 'type',
+          'title', 'titleHi', 'body', 'bodyHi', 'read', 'conversationId',
+          'profileId', 'actorProfileId', 'targetTab', 'createdAt', 'updatedAt'
+        ]) &&
+        data.id is string && data.id == notificationId &&
+        isValidId(data.recipientUid) &&
+        isValidId(data.actorUid) &&
+        data.actorName is string && data.actorName.size() >= 1 && data.actorName.size() <= 120 &&
+        optionalString(data, 'actorPhoto', 200000) &&
+        data.type is string && data.type in ['message', 'like', 'event', 'update'] &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 160 &&
+        optionalString(data, 'titleHi', 200) &&
+        data.body is string && data.body.size() >= 1 && data.body.size() <= 500 &&
+        optionalString(data, 'bodyHi', 600) &&
+        data.read is bool &&
+        (!('conversationId' in data) || isValidId(data.conversationId)) &&
+        (!('profileId' in data) || isValidId(data.profileId)) &&
+        (!('actorProfileId' in data) || isValidId(data.actorProfileId)) &&
+        (!('targetTab' in data) || isValidNotificationTab(data.targetTab)) &&
+        data.createdAt is timestamp &&
+        data.updatedAt == request.time;
+    }
+
+    function isValidPortalAnnouncement(data, announcementId) {
+      return data.keys().hasAll([
+          'id', 'type', 'title', 'body', 'authorUid', 'status', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'type', 'title', 'titleHi', 'body', 'bodyHi', 'version',
+          'eventId', 'eventDate', 'targetTab', 'authorUid', 'authorName',
+          'status', 'createdAt', 'updatedAt'
+        ]) &&
+        data.id is string && data.id == announcementId &&
+        data.type is string && data.type in ['event', 'update'] &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 160 &&
+        optionalString(data, 'titleHi', 200) &&
+        data.body is string && data.body.size() >= 1 && data.body.size() <= 1000 &&
+        optionalString(data, 'bodyHi', 1200) &&
+        optionalString(data, 'version', 40) &&
+        (!('eventId' in data) || isValidId(data.eventId)) &&
+        optionalString(data, 'eventDate', 80) &&
+        (!('targetTab' in data) || isValidNotificationTab(data.targetTab)) &&
+        isValidId(data.authorUid) &&
+        optionalString(data, 'authorName', 120) &&
+        data.status is string && data.status in ['active', 'archived'] &&
+        data.createdAt is timestamp &&
+        data.updatedAt == request.time;
+    }
+
+    function isValidNotificationState(data, userId) {
+      return data.keys().hasAll(['uid', 'readIds', 'clearedIds', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'readIds', 'clearedIds', 'updatedAt']) &&
+        data.uid is string && data.uid == userId &&
+        isValidIdList(data.readIds, 100) &&
+        isValidIdList(data.clearedIds, 100) &&
+        data.updatedAt == request.time;
+    }
+
+    function isValidProfileLike(data, profileId, userId) {
+      return data.keys().hasAll(['likerUid', 'likerName', 'profileId', 'profileOwnerUid', 'createdAt']) &&
+        data.keys().hasOnly([
+          'likerUid', 'likerName', 'likerCity', 'likerGotra',
+          'likerProfileId', 'likerPhoto', 'profileId', 'profileOwnerUid', 'createdAt'
+        ]) &&
+        data.likerUid is string && data.likerUid == userId &&
+        data.likerName is string && data.likerName.size() >= 1 && data.likerName.size() <= 120 &&
+        optionalString(data, 'likerCity', 100) &&
+        optionalString(data, 'likerGotra', 80) &&
+        (!('likerProfileId' in data) || isValidId(data.likerProfileId)) &&
+        optionalString(data, 'likerPhoto', 200000) &&
+        data.profileId is string && data.profileId == profileId &&
+        isValidId(data.profileOwnerUid) &&
+        data.createdAt is timestamp;
+    }
+
     // =========================================================================
     // COLLECTION RULES
     // =========================================================================
@@ -337,6 +430,14 @@ service cloud.firestore {
           'fullName', 'username', 'phone', 'gender', 'photoUrl', 'emailVerified', 'lastSignedInAt'
         ]);
       allow delete: if isSignedIn() && isValidId(userId) && (isOwner(userId) || isAdmin());
+
+      match /notificationState/{docId} {
+        allow get: if isValidId(userId) && docId == 'global' && (isOwner(userId) || isAdmin());
+        allow list: if isValidId(userId) && (isOwner(userId) || isAdmin());
+        allow create, update: if isSignedIn() && isValidId(userId) && docId == 'global' &&
+          isOwner(userId) && isValidNotificationState(incoming(), userId);
+        allow delete: if isSignedIn() && isValidId(userId) && docId == 'global' && (isOwner(userId) || isAdmin());
+      }
     }
 
     match /usernames/{username} {
@@ -422,6 +523,29 @@ service cloud.firestore {
           exists(/databases/$(database)/documents/profiles/$(profileId)) &&
           isValidUnlock(incoming(), userId);
         allow update, delete: if isAdmin() || (isSignedIn() && isValidId(profileId) && isValidId(userId) && isOwner(userId));
+      }
+
+      match /likes/{userId} {
+        allow get: if isSignedIn() && isValidId(profileId) && isValidId(userId) && (
+          isOwner(userId) ||
+          isAdmin() ||
+          (exists(/databases/$(database)/documents/profiles/$(profileId)) &&
+            get(/databases/$(database)/documents/profiles/$(profileId)).data.ownerUid == request.auth.uid)
+        );
+        allow list: if isSignedIn() && (
+          resource.data.likerUid == request.auth.uid ||
+          resource.data.profileOwnerUid == request.auth.uid ||
+          isAdmin()
+        );
+        allow create: if isSignedIn() && isValidId(profileId) && isValidId(userId) &&
+          isOwner(userId) &&
+          isValidProfileLike(incoming(), profileId, userId) &&
+          exists(/databases/$(database)/documents/profiles/$(profileId)) &&
+          get(/databases/$(database)/documents/profiles/$(profileId)).data.ownerUid == incoming().profileOwnerUid &&
+          incoming().createdAt == request.time;
+        allow update: if false;
+        allow delete: if isSignedIn() && isValidId(profileId) && isValidId(userId) &&
+          (isOwner(userId) || isAdmin());
       }
     }
 
@@ -563,6 +687,85 @@ service cloud.firestore {
 
         allow delete: if false;
       }
+    }
+
+    match /notifications/{notificationId} {
+      allow get: if isSignedIn() && isValidId(notificationId) && (
+        existing().recipientUid == request.auth.uid ||
+        existing().actorUid == request.auth.uid ||
+        isAdmin()
+      );
+      allow list: if isSignedIn() && (
+        resource.data.recipientUid == request.auth.uid ||
+        isAdmin()
+      );
+      allow create: if isSignedIn() && isValidId(notificationId) &&
+        isValidUserNotification(incoming(), notificationId) &&
+        incoming().actorUid == request.auth.uid &&
+        incoming().recipientUid != request.auth.uid &&
+        incoming().read == false &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time && (
+          isAdmin() ||
+          (
+            incoming().type == 'message' &&
+            'conversationId' in incoming() &&
+            existsAfter(/databases/$(database)/documents/conversations/$(incoming().conversationId)) &&
+            request.auth.uid in getAfter(/databases/$(database)/documents/conversations/$(incoming().conversationId)).data.participantIds &&
+            incoming().recipientUid in getAfter(/databases/$(database)/documents/conversations/$(incoming().conversationId)).data.participantIds
+          ) ||
+          (
+            incoming().type == 'like' &&
+            'profileId' in incoming() &&
+            exists(/databases/$(database)/documents/profiles/$(incoming().profileId)) &&
+            get(/databases/$(database)/documents/profiles/$(incoming().profileId)).data.ownerUid == incoming().recipientUid
+          )
+        );
+      allow update: if isSignedIn() && isValidId(notificationId) &&
+        isValidUserNotification(incoming(), notificationId) &&
+        (existing().recipientUid == request.auth.uid || isAdmin()) &&
+        incoming().id == existing().id &&
+        incoming().recipientUid == existing().recipientUid &&
+        incoming().actorUid == existing().actorUid &&
+        incoming().actorName == existing().actorName &&
+        incoming().type == existing().type &&
+        incoming().title == existing().title &&
+        incoming().body == existing().body &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['read', 'updatedAt']);
+      allow delete: if isSignedIn() && isValidId(notificationId) && (
+        existing().recipientUid == request.auth.uid ||
+        isAdmin()
+      );
+    }
+
+    match /announcements/{announcementId} {
+      allow get: if isValidId(announcementId) && (
+        resource == null ||
+        existing().status == 'active' ||
+        isAdmin()
+      );
+      allow list: if resource.data.status == 'active' || isAdmin();
+      allow create: if isSignedIn() && isValidId(announcementId) &&
+        isValidPortalAnnouncement(incoming(), announcementId) &&
+        incoming().authorUid == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time && (
+          isAdmin() ||
+          (
+            incoming().type == 'event' &&
+            incoming().status == 'active' &&
+            'eventId' in incoming() &&
+            existsAfter(/databases/$(database)/documents/events/$(incoming().eventId)) &&
+            getAfter(/databases/$(database)/documents/events/$(incoming().eventId)).data.ownerUid == request.auth.uid
+          )
+        );
+      allow update: if isAdmin() && isValidId(announcementId) &&
+        isValidPortalAnnouncement(incoming(), announcementId) &&
+        incoming().id == existing().id &&
+        incoming().authorUid == existing().authorUid &&
+        incoming().createdAt == existing().createdAt;
+      allow delete: if isAdmin() && isValidId(announcementId);
     }
   }
 }

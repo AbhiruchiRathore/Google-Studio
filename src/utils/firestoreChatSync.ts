@@ -368,6 +368,30 @@ export async function sendRealChatMessage(params: SendChatMessageParams): Promis
       updatedAt: serverTimestamp()
     });
 
+    const notifId = `notif_msg_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const snippet = cleanText.length > 90 ? `${cleanText.slice(0, 87)}...` : cleanText;
+    const notifBody = `${cleanSenderName} sent you a message: "${snippet}"`.slice(0, 500);
+    const notifBodyHi = `${cleanSenderName} ने आपको संदेश भेजा है: "${snippet}"`.slice(0, 600);
+
+    batch.set(doc(db, 'notifications', notifId), {
+      id: notifId,
+      recipientUid,
+      actorUid: senderUid,
+      actorName: cleanSenderName,
+      ...(sPhoto ? { actorPhoto: sPhoto } : {}),
+      type: 'message',
+      title: `${cleanSenderName} sent you a message`.slice(0, 160),
+      titleHi: `${cleanSenderName} ने आपको संदेश भेजा है`.slice(0, 200),
+      body: notifBody,
+      bodyHi: notifBodyHi,
+      read: false,
+      conversationId,
+      ...(profileId ? { profileId } : {}),
+      targetTab: 'dashboard',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+
     await batch.commit();
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, `conversations/${conversationId}/messages/${messageId}`, auth);

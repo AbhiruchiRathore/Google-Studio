@@ -17,6 +17,13 @@ import {
 } from '../utils/locationMatcher';
 import { getUserStorageKey, isProfileOwnedBySession } from '../utils/profileOwnership';
 import { FOUNDING_PROFILE_LIMIT } from './FoundingOfferCard';
+import { onAuthStateChanged, User } from 'firebase/auth';
+import { auth } from '../firebase';
+import {
+  recordProfileLikeAndNotify,
+  removeProfileLikeRecord,
+  subscribeProfileLikesForOwner
+} from '../utils/firestoreNotifications';
 
 interface MatrimonyTabProps {
   authSession: AuthSession | null;
@@ -144,6 +151,14 @@ export const MatrimonyTab: React.FC<MatrimonyTabProps> = ({
     return ((numId * 13 + 17) % 38) + 8;
   };
 
+  const [firebaseUser, setFirebaseUser] = useState<User | null>(() => auth.currentUser);
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (u) => setFirebaseUser(u));
+    return () => unsub();
+  }, []);
+
+  const [cloudAdmirers, setCloudAdmirers] = useState<ProfileAdmirer[]>([]);
+
   const toggleLikeProfile = (id: number | string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     const key = id.toString();
@@ -155,9 +170,21 @@ export const MatrimonyTab: React.FC<MatrimonyTabProps> = ({
     if (isLiked) {
       newSet.delete(key);
       newCounts[key] = Math.max(0, currentCount - 1);
+      if (auth.currentUser) {
+        void removeProfileLikeRecord(id, auth.currentUser);
+      }
     } else {
       newSet.add(key);
       newCounts[key] = currentCount + 1;
+      const targetProfile = profiles.find((p) => p.id.toString() === key);
+      if (targetProfile && auth.currentUser) {
+        void recordProfileLikeAndNotify({
+          targetProfile,
+          authUser: auth.currentUser,
+          authSession,
+          likerProfile: userOwnedProfile
+        });
+      }
     }
 
     setLikedProfiles(newSet);
@@ -224,6 +251,19 @@ ${p.about ? `*About:* ${p.about}\n` : ''}${p.contact ? `*Contact:* ${p.contact}`
     return profiles.find((p) => isProfileOwnedBySession(p, authSession)) || null;
   }, [profiles, authSession]);
 
+  useEffect(() => {
+    if (!firebaseUser?.uid || !userOwnedProfile?.id) {
+      setCloudAdmirers([]);
+      return;
+    }
+    const unsub = subscribeProfileLikesForOwner(
+      userOwnedProfile.id,
+      firebaseUser.uid,
+      (list) => setCloudAdmirers(list)
+    );
+    return () => unsub();
+  }, [firebaseUser?.uid, userOwnedProfile?.id]);
+
   const candidateGender: 'Male' | 'Female' | null = isAdminUser
     ? null
     : userOwnedProfile?.gender || authSession?.gender || storedCandidateGender || null;
@@ -245,10 +285,21 @@ ${p.about ? `*About:* ${p.about}\n` : ''}${p.contact ? `*Contact:* ${p.contact}`
     onUpdateSessionGender?.(gender);
   };
 
+  const mergedAdmirers = useMemo(() => {
+    const map = new Map<string, ProfileAdmirer>();
+    for (const adm of admirers) {
+      map.set(adm.id.toString(), adm);
+    }
+    for (const adm of cloudAdmirers) {
+      map.set(adm.id.toString(), adm);
+    }
+    return Array.from(map.values());
+  }, [admirers, cloudAdmirers]);
+
   const visibleAdmirers = useMemo(() => {
-    if (!blockedProfileIds || blockedProfileIds.size === 0) return admirers;
-    return admirers.filter((adm) => !blockedProfileIds.has(adm.id.toString()));
-  }, [admirers, blockedProfileIds]);
+    if (!blockedProfileIds || blockedProfileIds.size === 0) return mergedAdmirers;
+    return mergedAdmirers.filter((adm) => !blockedProfileIds.has(adm.id.toString()));
+  }, [mergedAdmirers, blockedProfileIds]);
 
   const unblockedProfiles = useMemo(() => {
     if (!blockedProfileIds || blockedProfileIds.size === 0) return profiles;

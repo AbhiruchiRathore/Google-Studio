@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   LayoutDashboard, Users, Image as ImageIcon, Settings, Plus, Search, 
-  Bell, ChevronDown, CheckCircle2, ShieldCheck, ExternalLink, Edit3, 
+  ChevronDown, CheckCircle2, ShieldCheck, ExternalLink, Edit3, 
   Eye, Trash2, Globe, Sparkles, Upload, ArrowRight, 
   X, AlertCircle, Phone, FileText, Camera,
   Linkedin, Instagram, Link2, Sliders, Store,
@@ -11,9 +11,10 @@ import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth } from '../firebase';
 import { 
   MatrimonyProfile, BusinessAd, TabType, AuthSession, BlockedProfileRecord,
-  UserMediaAsset, VisibilitySetting, ProfileStatus, ProfileAdmirer, ChatConversation 
+  UserMediaAsset, VisibilitySetting, ProfileStatus, ProfileAdmirer, ChatConversation, AppNotification 
 } from '../types';
 import { ChatModal } from './ChatModal';
+import { NotificationBell } from './NotificationCenter';
 import { useLanguage } from '../context/LanguageContext';
 import { useAdminConfig } from '../context/AdminConfigContext';
 import { BrandLogo } from './BrandLogo';
@@ -27,6 +28,7 @@ import {
   isProfileOwnedBySession
 } from '../utils/profileOwnership';
 import { formatChatTimestamp, subscribeUserConversations } from '../utils/firestoreChatSync';
+import { subscribeProfileLikesForOwner } from '../utils/firestoreNotifications';
 import { LocationPermissionStatus, UserLocationData } from '../hooks/useUserLocation';
 
 type SaveMutationResult = Promise<{ ok: boolean; error?: string }> | { ok: boolean; error?: string } | boolean | void;
@@ -54,6 +56,11 @@ interface DashboardTabProps {
   onUnblockProfile?: (id: number | string) => void;
   requestedNav?: { section: DashboardNavSection; settingsTab?: 'preferences' | 'account'; nonce: number } | null;
   onDeleteAccount?: (reauthPassword?: string) => Promise<{ ok: boolean; requiresRecentLogin?: boolean; error?: string }>;
+  notifications?: AppNotification[];
+  unreadNotificationCount?: number;
+  onSelectNotification?: (notification: AppNotification) => void;
+  onMarkAllNotificationsRead?: () => void;
+  onClearReadNotifications?: () => void;
 }
 
 type DashboardNavSection = 'overview' | 'profiles' | 'ads' | 'liked_by_me' | 'who_liked_me' | 'chats' | 'media' | 'settings';
@@ -80,7 +87,12 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   onBlockProfile,
   onUnblockProfile,
   requestedNav = null,
-  onDeleteAccount
+  onDeleteAccount,
+  notifications = [],
+  unreadNotificationCount = 0,
+  onSelectNotification,
+  onMarkAllNotificationsRead,
+  onClearReadNotifications
 }) => {
   const { lang, t } = useLanguage();
   const { config, userSubscription } = useAdminConfig();
@@ -94,7 +106,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   const likedStorageKey = getUserStorageKey('samaj_liked_profiles', authSession);
   const admirersStorageKey = getUserStorageKey('samaj_profile_admirers', authSession);
   const mediaStorageKey = getUserStorageKey('samaj_media_assets', authSession);
-  const notificationsStorageKey = getUserStorageKey('samaj_notifications', authSession);
 
   // Liked Profiles State
   const [likedProfiles, setLikedProfiles] = useState<Set<string>>(() => {
@@ -135,10 +146,20 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     return [];
   });
 
+  const [cloudAdmirers, setCloudAdmirers] = useState<ProfileAdmirer[]>([]);
+
   const visibleAdmirers = useMemo(() => {
-    if (!blockedProfileIds || blockedProfileIds.size === 0) return admirers;
-    return admirers.filter((adm) => !blockedProfileIds.has(adm.id.toString()));
-  }, [admirers, blockedProfileIds]);
+    const map = new Map<string, ProfileAdmirer>();
+    for (const adm of admirers) {
+      map.set(adm.id.toString(), adm);
+    }
+    for (const adm of cloudAdmirers) {
+      map.set(adm.id.toString(), adm);
+    }
+    const merged = Array.from(map.values());
+    if (!blockedProfileIds || blockedProfileIds.size === 0) return merged;
+    return merged.filter((adm) => !blockedProfileIds.has(adm.id.toString()));
+  }, [admirers, cloudAdmirers, blockedProfileIds]);
 
   // Real-time Firestore conversations & Active Chat Modal state
   const [firebaseUser, setFirebaseUser] = useState<User | null>(() => auth.currentUser);
@@ -192,16 +213,8 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     return visibleConversations.filter((conv) => conv.unreadBy?.includes(firebaseUser.uid)).length;
   }, [visibleConversations, firebaseUser?.uid]);
 
-  // Notifications state (starts empty / 0 for new users)
+  // Notifications Drawer state
   const [showNotifications, setShowNotifications] = useState(false);
-  const [notifications, setNotifications] = useState<Array<{ id: number; title: string; description: string; time: string; read: boolean }>>(() => {
-    try {
-      const stored = localStorage.getItem(notificationsStorageKey);
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
-    }
-  });
 
   // User Profile Dropdown state
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -269,13 +282,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     } catch {
       setMediaAssets([]);
     }
-    try {
-      const storedNotifications = localStorage.getItem(notificationsStorageKey);
-      setNotifications(storedNotifications ? JSON.parse(storedNotifications) : []);
-    } catch {
-      setNotifications([]);
-    }
-  }, [likedStorageKey, admirersStorageKey, mediaStorageKey, notificationsStorageKey]);
+  }, [likedStorageKey, admirersStorageKey, mediaStorageKey]);
 
   // New Media Upload Form state
   const [newMediaTitle, setNewMediaTitle] = useState('');
@@ -327,6 +334,20 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   }, [profiles, authSession]);
 
   const hasOwnProfile = userProfiles.length >= 1;
+  const primaryOwnProfileId = userProfiles[0]?.id;
+
+  useEffect(() => {
+    if (!firebaseUser?.uid || !primaryOwnProfileId) {
+      setCloudAdmirers([]);
+      return;
+    }
+    const unsub = subscribeProfileLikesForOwner(
+      primaryOwnProfileId,
+      firebaseUser.uid,
+      (list) => setCloudAdmirers(list)
+    );
+    return () => unsub();
+  }, [firebaseUser?.uid, primaryOwnProfileId]);
 
   const filteredUserProfiles = useMemo(() => {
     return userProfiles.filter(p => {
@@ -373,7 +394,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   const draftProfilesCount = useMemo(() => userProfiles.filter(p => p.status === 'draft').length, [userProfiles]);
   const activeAdsCount = useMemo(() => userAds.filter(a => a.status === 'active').length, [userAds]);
   const featuredAdsCount = useMemo(() => userAds.filter(a => a.isFeatured).length, [userAds]);
-  const unreadNotificationCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications]);
 
   // Handler: Start Editing Profile
   const handleStartEditProfile = (profile: MatrimonyProfile) => {
@@ -703,19 +723,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     setTimeout(() => setSettingsSavedToast(false), 3000);
   };
 
-  // Handler: Mark all notifications read
-  const handleMarkAllNotificationsRead = () => {
-    setNotifications(prev => {
-      const next = prev.map(n => ({ ...n, read: true }));
-      try {
-        localStorage.setItem(notificationsStorageKey, JSON.stringify(next));
-      } catch (err) {
-        console.error(err);
-      }
-      return next;
-    });
-  };
-
   return (
     <div className="space-y-6">
       
@@ -780,82 +787,22 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
           </button>
 
           {/* Notifications Popover */}
-          <div className="relative">
-            <button
-              onClick={() => {
-                setShowNotifications(!showNotifications);
+          {onSelectNotification && onMarkAllNotificationsRead && onClearReadNotifications && (
+            <NotificationBell
+              notifications={notifications}
+              unreadCount={unreadNotificationCount}
+              isOpen={showNotifications}
+              onToggle={() => {
+                setShowNotifications((prev) => !prev);
                 setShowProfileMenu(false);
               }}
-              className="relative p-2 sm:p-2.5 rounded-xl border border-stone-200 hover:bg-stone-50 text-stone-600 transition-colors cursor-pointer"
-              aria-label={t('Notifications', 'सूचनाएं')}
-            >
-              <Bell className="w-4 h-4" />
-              {unreadNotificationCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#851834] text-white text-[10px] font-bold rounded-full flex items-center justify-center shadow-xs">
-                  {unreadNotificationCount}
-                </span>
-              )}
-            </button>
-
-            {/* Notifications Dropdown Modal */}
-            {showNotifications && (
-              <div 
-                className="fixed inset-x-3 top-[calc(5.25rem+var(--sat))] sm:inset-x-auto sm:top-full sm:right-0 sm:mt-2 sm:w-96 max-w-md mx-auto sm:mx-0 bg-white rounded-3xl shadow-2xl border border-rose-100 z-50 p-4 space-y-3 animate-in fade-in"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="flex items-center justify-between border-b border-stone-100 pb-2">
-                  <div className="flex items-center gap-1.5">
-                    <Bell className="w-4 h-4 text-[#851834]" />
-                    <span className="font-serif font-bold text-sm text-stone-900">{t('Notifications', 'सूचनाएं')}</span>
-                  </div>
-                  {unreadNotificationCount > 0 && (
-                    <button
-                      onClick={handleMarkAllNotificationsRead}
-                      className="text-[11px] text-[#851834] font-semibold hover:underline cursor-pointer"
-                    >
-                      {t('Mark all as read', 'सभी को पढ़ा हुआ मानें')}
-                    </button>
-                  )}
-                </div>
-
-                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                  {notifications.length === 0 ? (
-                    <div className="py-6 text-center text-xs text-stone-400">
-                      {t('No new notifications yet.', 'अभी कोई नई सूचना नहीं है।')}
-                    </div>
-                  ) : (
-                    notifications.map((n) => (
-                      <div 
-                        key={n.id} 
-                        className={`p-3 rounded-2xl border transition-all text-xs space-y-1 ${
-                          n.read 
-                            ? 'bg-stone-50/60 border-stone-100 text-stone-600' 
-                            : 'bg-rose-50/50 border-rose-200/70 text-stone-900 shadow-xs'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <strong className="font-serif font-bold">{n.title}</strong>
-                          <span className="text-[10px] text-stone-400 shrink-0">{n.time}</span>
-                        </div>
-                        <p className="text-[11px] text-stone-600 font-light leading-relaxed">
-                          {n.description}
-                        </p>
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                <div className="pt-1 text-center">
-                  <button
-                    onClick={() => setShowNotifications(false)}
-                    className="text-xs text-stone-500 hover:text-stone-800 font-semibold cursor-pointer"
-                  >
-                    {t('Close', 'बंद करें')}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
+              onClose={() => setShowNotifications(false)}
+              onSelectNotification={onSelectNotification}
+              onMarkAllRead={onMarkAllNotificationsRead}
+              onClearRead={onClearReadNotifications}
+              variant="surface"
+            />
+          )}
 
           {/* User Profile Dropdown Button */}
           <div className="relative">
